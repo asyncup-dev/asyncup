@@ -1,0 +1,38 @@
+{
+  "name": "asyncup",
+  "version": "0.1.0",
+  "description": "AsyncUp — open-source, self-hosted async daily standups for Google Chat (Slack and Teams planned).",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "dependencies": {
+    "@googleapis/chat": "^45.0.0",
+    "better-sqlite3": "^11.10.0",
+    "express": "^4.21.2",
+    "google-auth-library": "^9.15.1",
+    "luxon": "^3.6.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^4.17.21",
+    "@types/luxon": "^3.6.2",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitepress": "^1.6.4",
+    "vitest": "^3.1.3"
+  }
+}

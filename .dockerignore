@@ -1,0 +1,10 @@
+node_modules
+dist
+data
+*.db
+.env
+service-account.json
+.git
+tests
+docs
+README.md
