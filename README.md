@@ -49,7 +49,7 @@ Prereq: a one-time Google Chat app configuration (~15 min) — see
 
 ```bash
 cp .env.example .env       # fill in GOOGLE_CHAT_AUDIENCE, mount your service account key
-docker compose up -d
+docker compose up -d       # pulls ghcr.io/asyncup-dev/asyncup (amd64 + arm64)
 ```
 
 Expose `POST /chat/events` via HTTPS, point the Chat app at it, then in your team space:

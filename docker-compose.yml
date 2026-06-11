@@ -1,6 +1,8 @@
 services:
   asyncup:
-    build: .
+    image: ghcr.io/asyncup-dev/asyncup:latest
+    # To build from source instead, comment out `image:` and uncomment:
+    # build: .
     restart: unless-stopped
     ports:
       - "8080:8080"
