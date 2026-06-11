@@ -6,8 +6,8 @@ import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 let close: (() => void) | null = null;
 
-function startServer(dashboardToken = 'dash-secret') {
-  const stack = makeStack();
+async function startServer(dashboardToken = 'dash-secret') {
+  const stack = await makeStack();
   const router = new EventRouter(stack.commands, stack.service, stack.repo, TENANT);
   const app = createServer({
     router,
@@ -34,12 +34,12 @@ afterEach(() => {
 
 describe('dashboard', () => {
   it('is disabled entirely without a token', async () => {
-    const { url } = startServer('');
+    const { url } = await startServer('');
     expect((await fetch(`${url}/dashboard`)).status).toBe(404);
   });
 
   it('rejects missing/wrong credentials and accepts the token via query or cookie', async () => {
-    const { url, get } = startServer();
+    const { url, get } = await startServer();
     expect((await get('/dashboard', false)).status).toBe(401);
     expect(
       (await fetch(`${url}/dashboard`, { headers: { cookie: 'asyncup_dash=wrong' } })).status,
@@ -53,9 +53,9 @@ describe('dashboard', () => {
   });
 
   it('lists standups and shows the detail page with history and blockers', async () => {
-    const { repo, service, get, clock } = startServer();
-    const standup = seedStandup(repo);
-    const run = repo.createRun(standup.id, '2026-06-10', 'k');
+    const { repo, service, get, clock } = await startServer();
+    const standup = await seedStandup(repo);
+    const run = await repo.createRun(standup.id, '2026-06-10', 'k');
     await service.submit(run.id, 'users/alice', 'Alice', {
       ...ANSWERS,
       answers: [...ANSWERS.answers.slice(0, 2), { question: 'Any blockers?', answer: 'Stuck on VPN' }],
@@ -78,8 +78,8 @@ describe('dashboard', () => {
   });
 
   it('updates configuration via the form and validates input', async () => {
-    const { repo, url, get } = startServer();
-    const standup = seedStandup(repo);
+    const { repo, url, get } = await startServer();
+    const standup = await seedStandup(repo);
     const post = (body: Record<string, string>) =>
       fetch(`${url}/dashboard/standup/${standup.id}`, {
         method: 'POST',
@@ -106,7 +106,7 @@ describe('dashboard', () => {
     const ok = await post(valid);
     expect(ok.status).toBe(302);
 
-    const updated = repo.getStandupById(standup.id)!;
+    const updated = (await repo.getStandupById(standup.id))!;
     expect(updated.name).toBe('Renamed Standup');
     expect(updated.promptTime).toBe('08:15');
     expect(updated.timezone).toBe('Europe/Berlin');
@@ -119,7 +119,7 @@ describe('dashboard', () => {
     const bad = await post({ ...valid, promptTime: '25:99' });
     expect(bad.status).toBe(400);
     expect(await bad.text()).toContain('HH:MM');
-    expect(repo.getStandupById(standup.id)!.promptTime).toBe('08:15');
+    expect((await repo.getStandupById(standup.id))!.promptTime).toBe('08:15');
 
     // config write requires auth
     const unauthed = await fetch(`${url}/dashboard/standup/${standup.id}`, {

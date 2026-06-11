@@ -32,8 +32,13 @@ export function createServer(deps: ServerDeps): Express {
 
   registerDashboard(app, { repo, token: deps.dashboardToken, now: deps.now });
 
-  app.get('/healthz', (_req, res) => {
-    res.json({ ok: true });
+  app.get('/healthz', async (_req, res) => {
+    try {
+      await repo.ping();
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ ok: false });
+    }
   });
 
   app.post('/chat/events', async (req, res) => {
@@ -62,7 +67,7 @@ export function createServer(deps: ServerDeps): Express {
 
   // CSV export — disabled unless EXPORT_TOKEN is configured (the data is
   // your team's standup answers; never expose it unauthenticated).
-  app.get('/export', (req, res) => {
+  app.get('/export', async (req, res) => {
     if (!exportToken) {
       res.status(404).json({ error: 'export disabled — set EXPORT_TOKEN to enable' });
       return;
@@ -71,14 +76,14 @@ export function createServer(deps: ServerDeps): Express {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
-    const standup = findStandup(repo, Number(req.query.standupId));
+    const standup = await findStandup(repo, Number(req.query.standupId));
     if (!standup) {
       res.status(404).json({ error: 'unknown standupId' });
       return;
     }
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
     const today = now().setZone(standup.timezone);
-    const csv = buildCsv(repo, standup, today.minus({ days }).toISODate()!, today.toISODate()!);
+    const csv = await buildCsv(repo, standup, today.minus({ days }).toISODate()!, today.toISODate()!);
     res
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', `attachment; filename="standup-${standup.id}-last-${days}d.csv"`)
@@ -88,6 +93,6 @@ export function createServer(deps: ServerDeps): Express {
   return app;
 }
 
-function findStandup(repo: Repo, id: number) {
+async function findStandup(repo: Repo, id: number) {
   return Number.isInteger(id) ? repo.getStandupById(id) : null;
 }

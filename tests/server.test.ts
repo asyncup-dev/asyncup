@@ -6,8 +6,8 @@ import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 let close: (() => void) | null = null;
 
-function startServer(opts: { tickToken?: string; exportToken?: string; dashboardToken?: string } = {}) {
-  const stack = makeStack();
+async function startServer(opts: { tickToken?: string; exportToken?: string; dashboardToken?: string } = {}) {
+  const stack = await makeStack();
   const router = new EventRouter(stack.commands, stack.service, stack.repo, TENANT);
   const app = createServer({
     router,
@@ -32,15 +32,15 @@ afterEach(() => {
 
 describe('server', () => {
   it('responds to health checks', async () => {
-    const { url } = startServer();
+    const { url } = await startServer();
     const res = await fetch(`${url}/healthz`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
 
   it('drives the scheduler via POST /tick', async () => {
-    const { url, repo, adapter, clock } = startServer();
-    seedStandup(repo);
+    const { url, repo, adapter, clock } = await startServer();
+    await seedStandup(repo);
     clock.set('2026-06-10T09:30');
 
     const res = await fetch(`${url}/tick`, { method: 'POST' });
@@ -49,7 +49,7 @@ describe('server', () => {
   });
 
   it('protects /tick when TICK_TOKEN is configured', async () => {
-    const { url } = startServer({ tickToken: 's3cret' });
+    const { url } = await startServer({ tickToken: 's3cret' });
     expect((await fetch(`${url}/tick`, { method: 'POST' })).status).toBe(401);
     expect(
       (
@@ -70,7 +70,7 @@ describe('server', () => {
   });
 
   it('routes chat events', async () => {
-    const { url } = startServer();
+    const { url } = await startServer();
     const res = await fetch(`${url}/chat/events`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -86,13 +86,13 @@ describe('server', () => {
   });
 
   it('disables /export without EXPORT_TOKEN and guards it with one', async () => {
-    const disabled = startServer();
+    const disabled = await startServer();
     expect((await fetch(`${disabled.url}/export?standupId=1`)).status).toBe(404);
     close?.();
 
-    const { url, repo, service, clock } = startServer({ exportToken: 'csv-secret' });
-    const standup = seedStandup(repo);
-    const run = repo.createRun(standup.id, '2026-06-09', 'k');
+    const { url, repo, service, clock } = await startServer({ exportToken: 'csv-secret' });
+    const standup = await seedStandup(repo);
+    const run = await repo.createRun(standup.id, '2026-06-09', 'k');
     await service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
     clock.set('2026-06-10T12:00');
 

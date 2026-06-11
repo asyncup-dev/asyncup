@@ -16,8 +16,15 @@ import { createServer } from './server.js';
 
 const config = loadConfig();
 
-mkdirSync(dirname(config.dbPath), { recursive: true });
-const repo = new Repo(config.dbPath);
+let repo: Repo;
+if (config.databaseUrl) {
+  repo = await Repo.postgres(config.databaseUrl);
+  console.log('[db] using PostgreSQL (DATABASE_URL)');
+} else {
+  mkdirSync(dirname(config.dbPath), { recursive: true });
+  repo = await Repo.sqlite(config.dbPath);
+  console.log(`[db] using embedded SQLite at ${config.dbPath}`);
+}
 
 const adapter =
   config.adapter === 'google'
@@ -56,7 +63,7 @@ if (config.calendarOoo) {
 }
 
 const scheduler = new Scheduler(repo, adapter, service, undefined, undefined, summarizer, oooChecker);
-scheduler.start();
+const timer = scheduler.start();
 scheduler.tick().catch((err) => console.error('[scheduler] initial tick failed:', err));
 
 const app = createServer({
@@ -69,6 +76,19 @@ const app = createServer({
   dashboardToken: config.dashboardToken,
 });
 if (config.dashboardToken) console.log('[dashboard] enabled at /dashboard');
-app.listen(config.port, () => {
-  console.log(`asyncup listening on :${config.port} (adapter: ${config.adapter}, db: ${config.dbPath})`);
+const server = app.listen(config.port, () => {
+  console.log(`asyncup listening on :${config.port} (adapter: ${config.adapter}, db: ${config.databaseUrl ? 'postgres' : config.dbPath})`);
 });
+
+function shutdown(signal: string): void {
+  console.log(`[server] received ${signal}, shutting down`);
+  clearInterval(timer);
+  server.close(async () => {
+    await repo.close();
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

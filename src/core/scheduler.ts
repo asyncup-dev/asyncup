@@ -47,7 +47,7 @@ export class Scheduler {
 
   async tick(): Promise<void> {
     const now = this.now();
-    for (const standup of this.repo.listActiveStandups()) {
+    for (const standup of await this.repo.listActiveStandups()) {
       try {
         await this.tickStandup(standup, now);
       } catch (err) {
@@ -63,7 +63,7 @@ export class Scheduler {
 
     // Runs left open from previous days (e.g. downtime past the deadline):
     // close them so the report still goes out.
-    for (const stale of this.repo.listOpenRuns(standup.id)) {
+    for (const stale of await this.repo.listOpenRuns(standup.id)) {
       if (stale.date < today) await this.closeRun(standup, stale);
     }
 
@@ -73,11 +73,11 @@ export class Scheduler {
     const deadlineAt = timeOn(today, standup.deadlineTime, zone);
     const remindAt = deadlineAt.minus({ minutes: standup.reminderMinutesBefore });
 
-    let run = this.repo.getRun(standup.id, today);
+    let run = await this.repo.getRun(standup.id, today);
     if (!run && now >= promptAt) {
-      const roster = this.repo.listParticipants(standup.id);
+      const roster = await this.repo.listParticipants(standup.id);
       if (roster.filter((p) => !p.onVacation).length === 0) return;
-      run = this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
+      run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
       this.log(`opened run ${run.id} for "${standup.name}" ${today}`);
       await this.applyCalendarOoo(standup, run);
       try {
@@ -89,8 +89,8 @@ export class Scheduler {
     }
     if (!run || run.status !== 'open') return;
 
-    const submitted = new Set(this.repo.listSubmissions(run.id).map((s) => s.userName));
-    const participants = this.repo.listRunParticipants(run.id);
+    const submitted = new Set((await this.repo.listSubmissions(run.id)).map((s) => s.userName));
+    const participants = await this.repo.listRunParticipants(run.id);
     const skipPrompt = (p: (typeof participants)[number]) =>
       p.onVacation || p.skippedAt !== null || submitted.has(p.userName);
 
@@ -101,7 +101,7 @@ export class Scheduler {
       if (now < pPromptAt) continue;
       try {
         await this.adapter.sendStandupPrompt(rp.userName, standup, run);
-        this.repo.markPrompted(run.id, rp.userName, now.toISO()!);
+        await this.repo.markPrompted(run.id, rp.userName, now.toISO()!);
       } catch (err) {
         this.log(`prompt to ${rp.userName} failed: ${err}`);
       }
@@ -112,7 +112,7 @@ export class Scheduler {
         if (rp.remindedAt || !rp.promptedAt || skipPrompt(rp)) continue;
         try {
           await this.adapter.sendReminder(rp.userName, standup, run);
-          this.repo.markReminded(run.id, rp.userName, now.toISO()!);
+          await this.repo.markReminded(run.id, rp.userName, now.toISO()!);
         } catch (err) {
           this.log(`reminder to ${rp.userName} failed: ${err}`);
         }
@@ -125,13 +125,13 @@ export class Scheduler {
   /** Marks participants with a calendar OOO event today as away for this run only. */
   private async applyCalendarOoo(standup: Standup, run: Run): Promise<void> {
     if (!this.ooo) return;
-    for (const rp of this.repo.listRunParticipants(run.id)) {
+    for (const rp of await this.repo.listRunParticipants(run.id)) {
       if (rp.onVacation) continue;
-      const email = this.repo.getUserEmail(rp.userName);
+      const email = await this.repo.getUserEmail(rp.userName);
       if (!email) continue;
       try {
         if (await this.ooo.isOoo(email, run.date, standup.timezone)) {
-          this.repo.markRunVacation(run.id, rp.userName);
+          await this.repo.markRunVacation(run.id, rp.userName);
           this.log(`calendar OOO: ${rp.displayName} is away for run ${run.id}`);
         }
       } catch (err) {
@@ -141,10 +141,10 @@ export class Scheduler {
   }
 
   private async closeRun(standup: Standup, run: Run): Promise<void> {
-    this.repo.closeRun(run.id);
+    await this.repo.closeRun(run.id);
     this.log(`closed run ${run.id} for "${standup.name}" ${run.date}`);
     try {
-      await this.adapter.postSummary(standup, run, this.service.buildSummary(run.id));
+      await this.adapter.postSummary(standup, run, await this.service.buildSummary(run.id));
     } catch (err) {
       this.log(`postSummary failed for run ${run.id}: ${err}`);
     }
@@ -159,7 +159,7 @@ export class Scheduler {
 
     if (standup.aiEnabled && this.ai) {
       try {
-        const submissions = this.repo.listSubmissions(run.id);
+        const submissions = await this.repo.listSubmissions(run.id);
         if (submissions.length > 0) {
           const text = await this.ai.dailySummary(standup, run, submissions);
           await this.adapter.postText(standup.spaceName, `🤖 *AI summary*\n${text}`, run.threadKey);
@@ -173,10 +173,10 @@ export class Scheduler {
       const weekday = DateTime.fromISO(run.date).weekday;
       if (weekday === lastConfiguredWeekday(standup)) {
         try {
-          const digest = buildWeeklyDigest(this.repo, standup, run.date);
+          const digest = await buildWeeklyDigest(this.repo, standup, run.date);
           let text = digestText(digest);
           if (standup.aiEnabled && this.ai) {
-            const submissions = this.repo.listSubmissionsBetween(standup.id, digest.weekStart, digest.weekEnd);
+            const submissions = await this.repo.listSubmissionsBetween(standup.id, digest.weekStart, digest.weekEnd);
             if (submissions.length > 0) {
               text += `\n\n🤖 *AI week in review*\n${await this.ai.weeklySummary(standup, digest, submissions)}`;
             }
@@ -192,7 +192,7 @@ export class Scheduler {
 
   private async escalateStaleBlockers(standup: Standup, run: Run): Promise<void> {
     const today = DateTime.fromISO(run.date);
-    const stale = this.repo.listOpenBlockers(standup.id).filter((b) => {
+    const stale = (await this.repo.listOpenBlockers(standup.id)).filter((b) => {
       if (b.escalatedAt) return false;
       const age = Math.floor(today.diff(DateTime.fromISO(b.openedDate), 'days').days);
       return age >= standup.escalateAfterDays;
@@ -208,7 +208,7 @@ export class Scheduler {
       `🚨 *${standup.name}*: ${stale.length} blocker${stale.length === 1 ? '' : 's'} open for ${standup.escalateAfterDays}+ days:\n${lines.join('\n')}\nBlockers auto-resolve when the person submits a blocker-free standup.`,
     );
     const at = this.now().toISO()!;
-    for (const b of stale) this.repo.markBlockerEscalated(b.id, at);
+    for (const b of stale) await this.repo.markBlockerEscalated(b.id, at);
     this.log(`escalated ${stale.length} blocker(s) for "${standup.name}" to ${standup.escalateDisplayName}`);
   }
 }

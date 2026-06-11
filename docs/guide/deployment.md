@@ -1,8 +1,36 @@
 # Deployment
 
-AsyncUp is one small container with SQLite inside — no external database, no
-queue, no other moving parts. Google Chat needs to reach it on a public
+AsyncUp is one small container — by default with SQLite inside, so there are
+no external moving parts at all. Google Chat needs to reach it on a public
 HTTPS URL.
+
+## Database: embedded or bring your own
+
+| Mode | Configuration | When to choose it |
+| --- | --- | --- |
+| **Embedded SQLite** (default) | `DB_PATH` on a persistent volume | Simplest possible ops: one container, one file to back up. Plenty for any team size AsyncUp serves |
+| **Bring your own PostgreSQL** | `DATABASE_URL=postgres://…` | You already run managed Postgres (RDS, Cloud SQL, Neon, Supabase, …) and want its backups/HA, or your platform has no persistent volumes (e.g. some scale-to-zero setups) |
+| **Postgres on the same machine** | `docker compose --profile postgres up -d` + `DATABASE_URL=postgres://asyncup:…@postgres:5432/asyncup` | Postgres semantics without leaving the box |
+
+Setting `DATABASE_URL` skips SQLite entirely; the schema is created and
+migrated automatically on startup in both modes. The full test suite runs
+against both engines in CI on every change.
+
+## System requirements
+
+AsyncUp idles at a once-a-minute scheduler tick; load is a few webhook calls
+per person per day. CPU architecture: amd64 or arm64.
+
+| Setup | Minimum | Recommended |
+| --- | --- | --- |
+| App + SQLite | 1 vCPU (shared is fine), 256 MB RAM, 1 GB disk | 1 vCPU, **512 MB RAM**, 5 GB disk |
+| App + bundled Postgres | 1 vCPU, 768 MB RAM, 3 GB disk | **2 vCPU, 2 GB RAM**, 10 GB disk |
+| App with external/managed DB | 1 vCPU, 256 MB RAM | 1 vCPU, 512 MB RAM |
+
+Realistic sizing: the Node process uses ~100–150 MB RSS; the image is ~300 MB;
+a year of standups for a 50-person team is well under 100 MB of data. The
+smallest VPS tier (or Cloud Run's 512 MB default) is comfortably enough —
+teams into the hundreds of users don't change this picture.
 
 ## Prebuilt image
 
