@@ -78,7 +78,7 @@ describe('dashboard', () => {
   });
 
   it('updates configuration via the form and validates input', async () => {
-    const { repo, url, get } = await startServer();
+    const { repo, url } = await startServer();
     const standup = await seedStandup(repo);
     const post = (body: Record<string, string>) =>
       fetch(`${url}/dashboard/standup/${standup.id}`, {

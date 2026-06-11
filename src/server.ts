@@ -1,4 +1,5 @@
 import express, { type Express, type Request } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import { DateTime } from 'luxon';
 import type { EventRouter } from './adapters/gchat/events.js';
 import type { ChatRequestVerifier } from './adapters/gchat/auth.js';
@@ -28,7 +29,13 @@ export function createServer(deps: ServerDeps): Express {
   const { router, verifier, scheduler, repo, tickToken, exportToken } = deps;
   const now = deps.now ?? (() => DateTime.utc());
   const app = express();
+  // First reverse-proxy hop is trusted so rate limiting sees real client IPs.
+  app.set('trust proxy', 1);
   app.use(express.json());
+
+  // Brute-force protection for every token-checking endpoint.
+  const authLimiter = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
+  app.use(['/dashboard', '/export', '/tick'], authLimiter);
 
   registerDashboard(app, { repo, token: deps.dashboardToken, now: deps.now });
 
