@@ -22,6 +22,16 @@ function timeOn(date: string, time: string, zone: string): DateTime {
 }
 
 /**
+ * Lazily resolved integrations — settings can change at runtime via the
+ * dashboard, so the scheduler asks for fresh instances instead of holding
+ * boot-time ones.
+ */
+export interface SchedulerProviders {
+  summarizer?: () => Promise<AiSummarizer | null>;
+  ooo?: () => Promise<OooChecker | null>;
+}
+
+/**
  * Drives the standup lifecycle off a periodic tick (call every ~minute).
  * All state lives in the DB (prompted_at / reminded_at / run status), so
  * ticks are idempotent and the process can restart at any point.
@@ -33,8 +43,7 @@ export class Scheduler {
     private service: StandupService,
     private now: () => DateTime = () => DateTime.utc(),
     private log: (msg: string) => void = (msg) => console.log(`[scheduler] ${msg}`),
-    private ai: AiSummarizer | null = null,
-    private ooo: OooChecker | null = null,
+    private providers: SchedulerProviders = {},
   ) {}
 
   start(intervalMs = 60_000): NodeJS.Timeout {
@@ -124,13 +133,14 @@ export class Scheduler {
 
   /** Marks participants with a calendar OOO event today as away for this run only. */
   private async applyCalendarOoo(standup: Standup, run: Run): Promise<void> {
-    if (!this.ooo) return;
+    const ooo = await this.providers.ooo?.();
+    if (!ooo) return;
     for (const rp of await this.repo.listRunParticipants(run.id)) {
       if (rp.onVacation) continue;
       const email = await this.repo.getUserEmail(rp.userName);
       if (!email) continue;
       try {
-        if (await this.ooo.isOoo(email, run.date, standup.timezone)) {
+        if (await ooo.isOoo(email, run.date, standup.timezone)) {
           await this.repo.markRunVacation(run.id, rp.userName);
           this.log(`calendar OOO: ${rp.displayName} is away for run ${run.id}`);
         }
@@ -163,11 +173,12 @@ export class Scheduler {
       this.log(`blocker nudges failed for run ${run.id}: ${err}`);
     }
 
-    if (standup.aiEnabled && this.ai) {
+    const ai = standup.aiEnabled ? ((await this.providers.summarizer?.()) ?? null) : null;
+    if (ai) {
       try {
         const submissions = await this.repo.listSubmissions(run.id);
         if (submissions.length > 0) {
-          const text = await this.ai.dailySummary(standup, run, submissions);
+          const text = await ai.dailySummary(standup, run, submissions);
           await this.adapter.postText(standup.spaceName, `🤖 *AI summary*\n${text}`, run.threadKey);
         }
       } catch (err) {
@@ -181,10 +192,10 @@ export class Scheduler {
         try {
           const digest = await buildWeeklyDigest(this.repo, standup, run.date);
           let text = digestText(digest);
-          if (standup.aiEnabled && this.ai) {
+          if (ai) {
             const submissions = await this.repo.listSubmissionsBetween(standup.id, digest.weekStart, digest.weekEnd);
             if (submissions.length > 0) {
-              text += `\n\n🤖 *AI week in review*\n${await this.ai.weeklySummary(standup, digest, submissions)}`;
+              text += `\n\n🤖 *AI week in review*\n${await ai.weeklySummary(standup, digest, submissions)}`;
             }
           }
           await this.adapter.postText(standup.spaceName, text, `digest-${standup.id}-${digest.weekStart}`);

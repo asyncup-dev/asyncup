@@ -3,7 +3,9 @@ import { FakeAdapter } from '../src/adapters/fake/adapter.js';
 import { AiSummarizer } from '../src/ai/summarizer.js';
 import { BlockerService } from '../src/core/blocker-service.js';
 import { CommandHandler } from '../src/core/commands.js';
+import type { OooChecker } from '../src/core/ooo.js';
 import { Scheduler } from '../src/core/scheduler.js';
+import { SettingsService } from '../src/core/settings.js';
 import { StandupService } from '../src/core/standup-service.js';
 import { DEFAULT_QUESTIONS, type SubmissionInput } from '../src/core/types.js';
 import { Repo } from '../src/db/repo.js';
@@ -13,7 +15,7 @@ export const TENANT = 'default';
 
 let schemaCounter = 0;
 
-export async function makeStack(opts: { summarizer?: AiSummarizer | null } = {}) {
+export async function makeStack(opts: { summarizer?: AiSummarizer | null; ooo?: OooChecker | null } = {}) {
   let repo: Repo;
   if (process.env.TEST_DATABASE_URL) {
     const schema = `t_${process.pid}_${Date.now()}_${schemaCounter++}`;
@@ -32,12 +34,17 @@ export async function makeStack(opts: { summarizer?: AiSummarizer | null } = {})
     },
   };
 
+  const settings = new SettingsService(repo, 'test-secret-key', clock.now);
+  await settings.update({ defaultTimezone: TZ });
   const service = new StandupService(repo, adapter, clock.now);
   const blockers = new BlockerService(repo, adapter, clock.now);
-  const scheduler = new Scheduler(repo, adapter, service, clock.now, () => {}, opts.summarizer ?? null);
-  const commands = new CommandHandler(repo, TZ, clock.now, blockers);
+  const scheduler = new Scheduler(repo, adapter, service, clock.now, () => {}, {
+    summarizer: async () => opts.summarizer ?? null,
+    ooo: async () => opts.ooo ?? null,
+  });
+  const commands = new CommandHandler(repo, settings, clock.now, blockers);
 
-  return { repo, adapter, service, blockers, scheduler, commands, clock };
+  return { repo, adapter, service, blockers, settings, scheduler, commands, clock };
 }
 
 export async function seedStandup(repo: Repo, opts: { deadlineTime?: string; spaceName?: string } = {}) {

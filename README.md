@@ -56,7 +56,7 @@ Prereq: a one-time Google Chat app configuration (~15 min) — see
 **[docs/guide/google-chat-setup.md](docs/guide/google-chat-setup.md)**.
 
 ```bash
-cp .env.example .env       # fill in GOOGLE_CHAT_AUDIENCE, mount your service account key
+cp .env.example .env       # set DASHBOARD_TOKEN + SECRET_KEY (openssl rand -hex 32)
 docker compose up -d       # pulls ghcr.io/asyncup-dev/asyncup (amd64 + arm64)
 ```
 

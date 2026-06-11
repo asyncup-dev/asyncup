@@ -2,7 +2,8 @@ import express, { type Express, type Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { DateTime } from 'luxon';
 import type { EventRouter } from './adapters/gchat/events.js';
-import type { ChatRequestVerifier } from './adapters/gchat/auth.js';
+import { ChatRequestVerifier } from './adapters/gchat/auth.js';
+import type { SettingsService } from './core/settings.js';
 import type { Scheduler } from './core/scheduler.js';
 import type { Repo } from './db/repo.js';
 import { buildCsv } from './core/export.js';
@@ -10,14 +11,13 @@ import { registerDashboard } from './dashboard/dashboard.js';
 
 export interface ServerDeps {
   router: EventRouter;
-  verifier: ChatRequestVerifier | null;
   scheduler: Scheduler;
   repo: Repo;
-  tickToken: string;
-  /** Empty string disables the /export endpoint. */
-  exportToken: string;
+  settings: SettingsService;
   /** Empty string disables the /dashboard pages. */
   dashboardToken: string;
+  /** Skip Chat webhook verification (fake adapter / local development). */
+  skipVerification?: boolean;
   now?: () => DateTime;
 }
 
@@ -26,8 +26,29 @@ function bearerToken(req: Request): string | undefined {
 }
 
 export function createServer(deps: ServerDeps): Express {
-  const { router, verifier, scheduler, repo, tickToken, exportToken } = deps;
+  const { router, scheduler, repo, settings } = deps;
   const now = deps.now ?? (() => DateTime.utc());
+
+  // The audience lives in DB settings and can change at runtime.
+  let verifierCache: { audience: string; verifier: ChatRequestVerifier } | null = null;
+  let warnedUnverified = false;
+  const getVerifier = async (): Promise<ChatRequestVerifier | null> => {
+    if (deps.skipVerification) return null;
+    const { chatAudience } = await settings.get();
+    if (!chatAudience) {
+      if (!warnedUnverified) {
+        warnedUnverified = true;
+        console.warn(
+          '[server] Chat webhook verification is OFF — set the GCP project number in dashboard settings.',
+        );
+      }
+      return null;
+    }
+    if (verifierCache?.audience !== chatAudience) {
+      verifierCache = { audience: chatAudience, verifier: new ChatRequestVerifier(chatAudience) };
+    }
+    return verifierCache.verifier;
+  };
   const app = express();
   // First reverse-proxy hop is trusted so rate limiting sees real client IPs.
   app.set('trust proxy', 1);
@@ -37,7 +58,7 @@ export function createServer(deps: ServerDeps): Express {
   const authLimiter = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
   app.use(['/dashboard', '/export', '/tick'], authLimiter);
 
-  registerDashboard(app, { repo, token: deps.dashboardToken, now: deps.now });
+  registerDashboard(app, { repo, settings, token: deps.dashboardToken, now: deps.now });
 
   app.get('/healthz', async (_req, res) => {
     try {
@@ -49,6 +70,7 @@ export function createServer(deps: ServerDeps): Express {
   });
 
   app.post('/chat/events', async (req, res) => {
+    const verifier = await getVerifier();
     if (verifier && !(await verifier.verify(req.header('authorization')))) {
       res.status(401).json({ error: 'unauthorized' });
       return;
@@ -64,6 +86,7 @@ export function createServer(deps: ServerDeps): Express {
   // For scale-to-zero deployments (Cloud Run + Cloud Scheduler, etc.) where
   // the in-process interval doesn't run while the instance is suspended.
   app.post('/tick', async (req, res) => {
+    const { tickToken } = await settings.get();
     if (tickToken && bearerToken(req) !== tickToken) {
       res.status(401).json({ error: 'unauthorized' });
       return;
@@ -75,8 +98,9 @@ export function createServer(deps: ServerDeps): Express {
   // CSV export — disabled unless EXPORT_TOKEN is configured (the data is
   // your team's standup answers; never expose it unauthenticated).
   app.get('/export', async (req, res) => {
+    const { exportToken } = await settings.get();
     if (!exportToken) {
-      res.status(404).json({ error: 'export disabled — set EXPORT_TOKEN to enable' });
+      res.status(404).json({ error: 'export disabled — generate an export token in dashboard settings' });
       return;
     }
     if (bearerToken(req) !== exportToken) {

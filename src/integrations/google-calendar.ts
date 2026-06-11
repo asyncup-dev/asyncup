@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { JWT } from 'google-auth-library';
 import { DateTime } from 'luxon';
 import type { OooChecker } from '../core/ooo.js';
@@ -7,15 +6,15 @@ const SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
 
 /**
  * Looks for "Out of office" events in the user's primary Google Calendar.
- * Requires domain-wide delegation for the service account with the
- * calendar.events.readonly scope (see docs/guide/google-chat-setup.md).
+ * Requires a service-account key (pasted in dashboard settings) with
+ * domain-wide delegation for the calendar.events.readonly scope.
  */
 export class GoogleCalendarOoo implements OooChecker {
   private clientEmail: string;
   private privateKey: string;
 
-  constructor(keyPath: string) {
-    const creds = JSON.parse(readFileSync(keyPath, 'utf8'));
+  constructor(credentialsJson: string) {
+    const creds = JSON.parse(credentialsJson);
     this.clientEmail = creds.client_email;
     this.privateKey = creds.private_key;
   }

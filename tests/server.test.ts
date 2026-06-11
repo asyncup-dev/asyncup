@@ -8,15 +8,16 @@ let close: (() => void) | null = null;
 
 async function startServer(opts: { tickToken?: string; exportToken?: string; dashboardToken?: string } = {}) {
   const stack = await makeStack();
+  if (opts.tickToken) await stack.settings.update({ tickToken: opts.tickToken });
+  if (opts.exportToken) await stack.settings.update({ exportToken: opts.exportToken });
   const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT);
   const app = createServer({
     router,
-    verifier: null,
     scheduler: stack.scheduler,
     repo: stack.repo,
-    tickToken: opts.tickToken ?? '',
-    exportToken: opts.exportToken ?? '',
+    settings: stack.settings,
     dashboardToken: opts.dashboardToken ?? '',
+    skipVerification: true,
     now: stack.clock.now,
   });
   const server = app.listen(0);

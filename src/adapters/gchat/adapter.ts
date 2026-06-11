@@ -1,5 +1,6 @@
 import { auth as chatAuth, chat, type chat_v1 } from '@googleapis/chat';
 import type { ChatAdapter } from '../../core/adapter.js';
+import type { SettingsService } from '../../core/settings.js';
 import type { Repo } from '../../db/repo.js';
 import type { Blocker, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import {
@@ -12,21 +13,37 @@ import {
 } from './cards.js';
 
 export class GoogleChatAdapter implements ChatAdapter {
-  private client: chat_v1.Chat;
+  private client: chat_v1.Chat | null = null;
 
-  constructor(private repo: Repo) {
-    const auth = new chatAuth.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/chat.bot'] });
+  constructor(
+    private repo: Repo,
+    private settings: SettingsService,
+  ) {
+    settings.onChange(() => {
+      this.client = null;
+    });
+  }
+
+  /** Auth comes from the pasted service-account JSON, falling back to ADC. */
+  private async getClient(): Promise<chat_v1.Chat> {
+    if (this.client) return this.client;
+    const { serviceAccountJson } = await this.settings.get();
+    const scopes = ['https://www.googleapis.com/auth/chat.bot'];
+    const auth = serviceAccountJson
+      ? new chatAuth.GoogleAuth({ credentials: JSON.parse(serviceAccountJson), scopes })
+      : new chatAuth.GoogleAuth({ scopes });
     this.client = chat({ version: 'v1', auth });
+    return this.client;
   }
 
   async sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
-    await this.client.spaces.messages.create({ parent: dm, requestBody: promptMessage(standup, run) });
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: promptMessage(standup, run) });
   }
 
   async sendReminder(userName: string, standup: Standup, run: Run): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
-    await this.client.spaces.messages.create({ parent: dm, requestBody: reminderMessage(standup, run) });
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: reminderMessage(standup, run) });
   }
 
   async postThreadParent(standup: Standup, run: Run): Promise<void> {
@@ -42,7 +59,7 @@ export class GoogleChatAdapter implements ChatAdapter {
   }
 
   async updateSubmission(standup: Standup, submission: Submission): Promise<void> {
-    await this.client.spaces.messages.update({
+    await (await this.getClient()).spaces.messages.update({
       name: submission.messageName!,
       updateMask: 'cardsV2',
       requestBody: submissionMessage(submission, standup.moodAnonymous),
@@ -58,17 +75,17 @@ export class GoogleChatAdapter implements ChatAdapter {
       await this.postInThread(spaceName, threadKey, { text });
       return;
     }
-    await this.client.spaces.messages.create({ parent: spaceName, requestBody: { text } });
+    await (await this.getClient()).spaces.messages.create({ parent: spaceName, requestBody: { text } });
   }
 
   async sendDm(userName: string, text: string): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
-    await this.client.spaces.messages.create({ parent: dm, requestBody: { text } });
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: { text } });
   }
 
   async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
-    await this.client.spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note) });
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note) });
   }
 
   private async postInThread(
@@ -76,7 +93,7 @@ export class GoogleChatAdapter implements ChatAdapter {
     threadKey: string,
     body: chat_v1.Schema$Message,
   ): Promise<string | null> {
-    const res = await this.client.spaces.messages.create({
+    const res = await (await this.getClient()).spaces.messages.create({
       parent: spaceName,
       messageReplyOption: 'REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD',
       requestBody: { ...body, thread: { threadKey } },
@@ -93,7 +110,7 @@ export class GoogleChatAdapter implements ChatAdapter {
     const cached = await this.repo.getDmSpace(userName);
     if (cached) return cached;
     try {
-      const res = await this.client.spaces.findDirectMessage({ name: userName });
+      const res = await (await this.getClient()).spaces.findDirectMessage({ name: userName });
       const spaceName = res.data.name!;
       await this.repo.setDmSpace(userName, spaceName);
       return spaceName;

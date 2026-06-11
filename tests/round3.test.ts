@@ -27,16 +27,8 @@ describe('Calendar OOO sync', () => {
 
   it('marks participants with an OOO event as away for the run', async () => {
     const checker = makeChecker(['bob@org.com']);
-    const stack = await makeStack();
-    const scheduler = new (await import('../src/core/scheduler.js')).Scheduler(
-      stack.repo,
-      stack.adapter,
-      stack.service,
-      stack.clock.now,
-      () => {},
-      null,
-      checker,
-    );
+    const stack = await makeStack({ ooo: checker });
+    const scheduler = stack.scheduler;
     const standup = await seedStandup(stack.repo);
     await stack.repo.setUserEmail('users/alice', 'alice@org.com');
     await stack.repo.setUserEmail('users/bob', 'bob@org.com');
@@ -66,21 +58,13 @@ describe('Calendar OOO sync', () => {
   });
 
   it('treats checker failures as not-OOO', async () => {
-    const stack = await makeStack();
     const failing: OooChecker = {
       async isOoo() {
         throw new Error('DWD not configured');
       },
     };
-    const scheduler = new (await import('../src/core/scheduler.js')).Scheduler(
-      stack.repo,
-      stack.adapter,
-      stack.service,
-      stack.clock.now,
-      () => {},
-      null,
-      failing,
-    );
+    const stack = await makeStack({ ooo: failing });
+    const scheduler = stack.scheduler;
     await seedStandup(stack.repo);
     await stack.repo.setUserEmail('users/alice', 'alice@org.com');
     stack.clock.set('2026-06-10T09:30');
