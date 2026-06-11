@@ -5,6 +5,9 @@ export default defineConfig({
   description: 'Open-source, self-hosted async daily standups for Google Chat',
   base: process.env.DOCS_BASE || '/',
   themeConfig: {
+    search: {
+      provider: 'local',
+    },
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'GitHub', link: 'https://github.com/asyncup-dev/asyncup' },
