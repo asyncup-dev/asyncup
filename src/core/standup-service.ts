@@ -5,6 +5,7 @@ import {
   blockerAnswers,
   isTodayQuestion,
   isYesterdayQuestion,
+  MOOD_SCORE,
   standupQuestions,
   type Run,
   type RunSummary,
@@ -132,6 +133,15 @@ export class StandupService {
       else missing.push(p.displayName);
     }
 
+    // With anonymous mood, the wrap-up shows the aggregate instead of per-person emoji.
+    let teamMood: number | null = null;
+    if (standup.moodAnonymous) {
+      const moods = submissions.filter((s) => s.mood !== null).map((s) => MOOD_SCORE[s.mood!]);
+      if (moods.length > 0) {
+        teamMood = Math.round((moods.reduce((a, b) => a + b, 0) / moods.length) * 10) / 10;
+      }
+    }
+
     return {
       standupName: standup.name,
       date: run.date,
@@ -144,6 +154,7 @@ export class StandupService {
       ).length,
       lateCount: submissions.filter((s) => s.late).length,
       openBlockers: this.repo.listOpenBlockers(standup.id).length,
+      teamMood,
     };
   }
 }

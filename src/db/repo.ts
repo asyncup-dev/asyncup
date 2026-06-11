@@ -154,6 +154,18 @@ CREATE TABLE blockers (
 );
 CREATE INDEX idx_blockers_open ON blockers(standup_id) WHERE resolved_run_id IS NULL;
 `,
+  // 3 — calendar OOO sync, anonymous mood, blocker escalation
+  `
+CREATE TABLE user_emails (
+  user_name TEXT PRIMARY KEY,
+  email TEXT NOT NULL
+);
+ALTER TABLE standups ADD COLUMN mood_anonymous INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE standups ADD COLUMN escalate_user_name TEXT;
+ALTER TABLE standups ADD COLUMN escalate_display_name TEXT;
+ALTER TABLE standups ADD COLUMN escalate_after_days INTEGER NOT NULL DEFAULT 2;
+ALTER TABLE blockers ADD COLUMN escalated_at TEXT;
+`,
 ];
 
 function toStandup(row: any): Standup {
@@ -169,8 +181,12 @@ function toStandup(row: any): Standup {
     days: row.days,
     questions: row.questions ? JSON.parse(row.questions) : null,
     moodEnabled: !!row.mood_enabled,
+    moodAnonymous: !!row.mood_anonymous,
     digestEnabled: !!row.digest_enabled,
     aiEnabled: !!row.ai_enabled,
+    escalateUserName: row.escalate_user_name ?? null,
+    escalateDisplayName: row.escalate_display_name ?? null,
+    escalateAfterDays: row.escalate_after_days,
     active: !!row.active,
   };
 }
@@ -237,6 +253,7 @@ function toBlocker(row: any): Blocker {
     openedDate: row.opened_date,
     resolvedRunId: row.resolved_run_id ?? null,
     resolvedDate: row.resolved_date ?? null,
+    escalatedAt: row.escalated_at ?? null,
   };
 }
 
@@ -323,8 +340,12 @@ export class Repo {
         | 'days'
         | 'questions'
         | 'moodEnabled'
+        | 'moodAnonymous'
         | 'digestEnabled'
         | 'aiEnabled'
+        | 'escalateUserName'
+        | 'escalateDisplayName'
+        | 'escalateAfterDays'
         | 'active'
       >
     >,
@@ -338,8 +359,12 @@ export class Repo {
       days: 'days',
       questions: 'questions',
       moodEnabled: 'mood_enabled',
+      moodAnonymous: 'mood_anonymous',
       digestEnabled: 'digest_enabled',
       aiEnabled: 'ai_enabled',
+      escalateUserName: 'escalate_user_name',
+      escalateDisplayName: 'escalate_display_name',
+      escalateAfterDays: 'escalate_after_days',
       active: 'active',
     };
     const sets: string[] = [];
@@ -531,6 +556,13 @@ export class Repo {
       .run(at, runId, userName);
   }
 
+  /** Marks the run-level snapshot only (e.g. calendar OOO for a single day). */
+  markRunVacation(runId: number, userName: string): void {
+    this.db
+      .prepare('UPDATE run_participants SET on_vacation = 1 WHERE run_id = ? AND user_name = ?')
+      .run(runId, userName);
+  }
+
   markSkipped(runId: number, userName: string, at: string): boolean {
     return (
       this.db
@@ -685,6 +717,35 @@ export class Repo {
         )
         .get(standupId, fromDate, toDate) as { n: number }
     ).n;
+  }
+
+  markBlockerEscalated(id: number, at: string): void {
+    this.db.prepare('UPDATE blockers SET escalated_at = ? WHERE id = ?').run(at, id);
+  }
+
+  // --- user emails (learned from Chat interaction events) ---
+
+  setUserEmail(userName: string, email: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO user_emails (user_name, email) VALUES (?, ?)
+         ON CONFLICT (user_name) DO UPDATE SET email = excluded.email`,
+      )
+      .run(userName, email);
+  }
+
+  getUserEmail(userName: string): string | null {
+    const row = this.db.prepare('SELECT email FROM user_emails WHERE user_name = ?').get(userName) as
+      | { email: string }
+      | undefined;
+    return row?.email ?? null;
+  }
+
+  listRecentRuns(standupId: number, limit: number): Run[] {
+    return this.db
+      .prepare('SELECT * FROM runs WHERE standup_id = ? ORDER BY date DESC LIMIT ?')
+      .all(standupId, limit)
+      .map(toRun);
   }
 
   // --- DM space cache (used by the Google Chat adapter) ---

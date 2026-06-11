@@ -18,6 +18,7 @@ export default defineConfig({
           { text: 'Commands', link: '/guide/commands' },
           { text: 'Configuration', link: '/guide/configuration' },
           { text: 'AI summaries', link: '/guide/ai' },
+          { text: 'Web dashboard', link: '/guide/dashboard' },
           { text: 'Deployment', link: '/guide/deployment' },
         ],
       },

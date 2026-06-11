@@ -28,4 +28,7 @@ export interface ChatAdapter {
 
   /** Post plain text to a space — weekly digests, AI summaries, etc. */
   postText(spaceName: string, text: string, threadKey?: string): Promise<void>;
+
+  /** Plain-text direct message — used for blocker escalation pings. */
+  sendDm(userName: string, text: string): Promise<void>;
 }

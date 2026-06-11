@@ -51,8 +51,14 @@ export interface Standup {
   /** null = DEFAULT_QUESTIONS */
   questions: string[] | null;
   moodEnabled: boolean;
+  /** Hide per-person mood on cards; the wrap-up shows the team aggregate instead. */
+  moodAnonymous: boolean;
   digestEnabled: boolean;
   aiEnabled: boolean;
+  /** Who gets DMed about stale blockers; null = escalation off. */
+  escalateUserName: string | null;
+  escalateDisplayName: string | null;
+  escalateAfterDays: number;
   active: boolean;
 }
 
@@ -135,6 +141,7 @@ export interface Blocker {
   openedDate: string;
   resolvedRunId: number | null;
   resolvedDate: string | null;
+  escalatedAt: string | null;
 }
 
 export interface RunSummary {
@@ -148,6 +155,8 @@ export interface RunSummary {
   optionalSubmitted: number;
   lateCount: number;
   openBlockers: number;
+  /** Average mood (1-5) of today's submissions — only set when mood is anonymous. */
+  teamMood: number | null;
 }
 
 export interface WeeklyDigest {

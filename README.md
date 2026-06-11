@@ -29,10 +29,12 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **Dialog form, not a chat interrogation** — all questions in one modal, one submit. **Edit until the deadline**; the posted card updates in place.
 - **Custom questions** per standup (`questions set …`), with the mood dropdown toggleable.
 - **Mandatory vs optional participants** — the report counts only who you choose.
-- **Vacation & skip** — DM `vacation`/`back` for yourself, a 🏖️ *Skip today* button on every prompt; away people aren't nagged or counted as missing.
+- **Vacation & skip** — DM `vacation`/`back` for yourself, a 🏖️ *Skip today* button on every prompt; away people aren't nagged or counted as missing. Optional **Google Calendar OOO sync** marks people away automatically.
 - **Pre-fill** — "yesterday" starts as your previous "today".
 - **Per-participant timezones** — prompts go out at 09:30 *their* time, reminder nudge before the deadline, late submissions flagged.
-- **Blocker tracking** — blockers open automatically from answers, resolve on the next clean submission, and surface via `blockers`, the wrap-up, and the digest.
+- **Blocker tracking & escalation** — blockers open automatically from answers, resolve on the next clean submission, surface via `blockers`/wrap-up/digest, and **DM a configured contact** when they stay open too long.
+- **Anonymous mood** (`mood anon`) — cards hide who felt what; the wrap-up shows the team average.
+- **Web dashboard** — token-gated, server-rendered config + history UI baked into the same container (`DASHBOARD_TOKEN`).
 - **Insights** — `trends` (participation + mood over 4 weeks), weekly digest (`digest on`), CSV export endpoint.
 - **AI summaries, bring your own key** — opt-in daily TL;DR and week-in-review via your Anthropic/OpenAI key; nothing leaves your infra otherwise.
 - **Team admins & multiple standups per space** — config restricted to admins; address standups by `#id`.
@@ -79,9 +81,6 @@ Adding a platform means implementing the `ChatAdapter` interface in
 ## Roadmap
 
 - **Slack adapter**, then **Microsoft Teams**
-- Google Calendar OOO sync (auto-vacation)
-- Anonymous mood option, blocker escalation pings
-- Lightweight web dashboard for config and history
 
 ## Contributing
 

@@ -71,6 +71,22 @@ So the bot can DM people without each person adding it manually:
 
 Prompts go out at the configured time the next working day. 🎉
 
+## Optional: Calendar OOO sync {#calendar-ooo}
+
+To auto-mark people as away when their Google Calendar has an *Out of office*
+event, the service account needs **domain-wide delegation**:
+
+1. **IAM & Admin → Service Accounts → your account** → copy the **OAuth 2 Client ID** (a long number).
+2. [admin.google.com](https://admin.google.com) → **Security → Access and data control → API controls → Domain-wide delegation → Add new**:
+   - Client ID: the number from step 1
+   - Scope: `https://www.googleapis.com/auth/calendar.events.readonly`
+3. Enable the **Google Calendar API** in your GCP project.
+4. Set `GOOGLE_CALENDAR_OOO=true` in your `.env` and restart.
+
+AsyncUp learns each person's email the first time they interact with the bot,
+then checks their primary calendar for OOO events when a run opens. People who
+are OOO are listed as 🏖️ away — never as missing.
+
 ## Troubleshooting
 
 - **"No DM space with users/…"** in logs → that user doesn't have the app installed; see step 5.

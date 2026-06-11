@@ -13,6 +13,8 @@ Everything is configured via environment variables (see `.env.example`).
 | `TENANT_ID` | `default` | Tenant identifier — leave as is for self-hosted installs |
 | `TICK_TOKEN` | *(empty)* | Shared secret for `POST /tick` (see [Deployment](./deployment#scale-to-zero-cloud-run)) |
 | `EXPORT_TOKEN` | *(empty)* | Shared secret for `GET /export`. **Endpoint disabled while empty** |
+| `DASHBOARD_TOKEN` | *(empty)* | Shared secret for the [web dashboard](./dashboard). **Disabled while empty** |
+| `GOOGLE_CALENDAR_OOO` | `false` | Auto-mark participants away when their Google Calendar has an *Out of office* event (needs [domain-wide delegation](./google-chat-setup#calendar-ooo)) |
 | `LLM_PROVIDER` | *(empty)* | `anthropic` or `openai` — enables [AI summaries](./ai) |
 | `LLM_API_KEY` | — | Your LLM provider API key |
 | `LLM_MODEL` | `claude-opus-4-7` (anthropic) | Model override; required for openai |
@@ -24,6 +26,7 @@ Everything is configured via environment variables (see `.env.example`).
 | `POST /chat/events` | Google Chat webhook — point the Chat app here |
 | `POST /tick` | Manually advance the scheduler (for external cron). Requires `Authorization: Bearer $TICK_TOKEN` when set |
 | `GET /export?standupId=N&days=30` | CSV download of submissions (long format: one row per answer). Requires `Authorization: Bearer $EXPORT_TOKEN`; disabled when unset |
+| `GET /dashboard` | [Web dashboard](./dashboard) — config + history. Requires `DASHBOARD_TOKEN`; disabled when unset |
 | `GET /healthz` | Liveness check |
 
 ## Data

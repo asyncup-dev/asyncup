@@ -2,10 +2,11 @@ import type { ChatAdapter } from '../../core/adapter.js';
 import type { Run, RunSummary, Standup, Submission } from '../../core/types.js';
 
 interface SentDm {
-  kind: 'prompt' | 'reminder';
+  kind: 'prompt' | 'reminder' | 'text';
   userName: string;
-  standupId: number;
-  runId: number;
+  standupId?: number;
+  runId?: number;
+  text?: string;
 }
 
 interface PostedMessage {
@@ -82,5 +83,10 @@ export class FakeAdapter implements ChatAdapter {
   async postText(spaceName: string, text: string, threadKey?: string): Promise<void> {
     this.posts.push({ kind: 'text', spaceName, threadKey, text });
     this.log?.(`Text → ${spaceName}${threadKey ? ` [${threadKey}]` : ''}: ${text.split('\n')[0]}`);
+  }
+
+  async sendDm(userName: string, text: string): Promise<void> {
+    this.dms.push({ kind: 'text', userName, text });
+    this.log?.(`DM text → ${userName}: ${text.split('\n')[0]}`);
   }
 }

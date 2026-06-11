@@ -43,10 +43,17 @@ var. Open an issue first so we can agree on scope — happy to guide.
 
 ## Pull requests
 
+**All changes land via pull request** — `main` is protected; nobody (including
+maintainers) pushes to it directly. CI (typecheck, tests with coverage
+thresholds, build, Docker, dependency audit) and CodeQL must be green to merge.
+
 - Keep PRs focused; small is beautiful.
-- `npm run typecheck && npm test` must pass.
-- Add tests for behavior changes (the suite runs in <1s, no excuses 🙂).
+- `npm run typecheck && npm run test:coverage` must pass locally.
+- Add tests for behavior changes (the suite runs in <1s, no excuses 🙂) —
+  coverage thresholds are enforced in CI.
 - For user-visible changes, update the docs in `docs/`.
+- Dependabot keeps dependencies current; prefer latest stable versions for
+  anything you add.
 
 ## Reporting bugs / proposing features
 

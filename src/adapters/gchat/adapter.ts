@@ -33,14 +33,18 @@ export class GoogleChatAdapter implements ChatAdapter {
   }
 
   async postSubmission(standup: Standup, run: Run, submission: Submission): Promise<string | null> {
-    return this.postInThread(standup.spaceName, run.threadKey, submissionMessage(submission));
+    return this.postInThread(
+      standup.spaceName,
+      run.threadKey,
+      submissionMessage(submission, standup.moodAnonymous),
+    );
   }
 
   async updateSubmission(standup: Standup, submission: Submission): Promise<void> {
     await this.client.spaces.messages.update({
       name: submission.messageName!,
       updateMask: 'cardsV2',
-      requestBody: submissionMessage(submission),
+      requestBody: submissionMessage(submission, standup.moodAnonymous),
     });
   }
 
@@ -54,6 +58,11 @@ export class GoogleChatAdapter implements ChatAdapter {
       return;
     }
     await this.client.spaces.messages.create({ parent: spaceName, requestBody: { text } });
+  }
+
+  async sendDm(userName: string, text: string): Promise<void> {
+    const dm = await this.ensureDmSpace(userName);
+    await this.client.spaces.messages.create({ parent: dm, requestBody: { text } });
   }
 
   private async postInThread(

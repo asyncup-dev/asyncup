@@ -38,7 +38,9 @@ const HELP = `*AsyncUp commands* (mention me in this space — prefix with \`#<i
 \`remind <minutes>\` — nudge before the deadline (0 = off)
 \`timezone <IANA>\` · \`days mon,tue,…\` — schedule
 \`questions\` / \`questions set Q1 | Q2 | …\` / \`questions reset\` — customize the form
-\`mood on|off\` · \`digest on|off\` · \`ai on|off\` — toggles
+\`mood on|off|anon\` — mood question (\`anon\` hides who felt what; the wrap-up shows the team average)
+\`escalate @user\` / \`escalate days N\` / \`escalate off\` — DM someone when blockers stay open
+\`digest on|off\` · \`ai on|off\` — weekly digest, AI summaries
 \`status\` · \`trends\` · \`blockers\` · \`export\` — insights`;
 
 /** Commands anyone in the space may run; everything else needs an admin. */
@@ -123,7 +125,9 @@ export class CommandHandler {
       case 'questions':
         return this.questions(standup, rest);
       case 'mood':
-        return this.toggle(standup, 'moodEnabled', arg, 'Mood question');
+        return this.mood(standup, arg);
+      case 'escalate':
+        return this.escalate(standup, ctx.mentions, rest);
       case 'digest':
         return this.toggle(standup, 'digestEnabled', arg, 'Weekly digest');
       case 'ai':
@@ -323,6 +327,50 @@ export class CommandHandler {
     );
   }
 
+  private mood(standup: Standup, value: string): string {
+    switch (value.toLowerCase()) {
+      case 'on':
+        this.repo.updateStandup(standup.id, { moodEnabled: true, moodAnonymous: false });
+        return '✅ Mood question on — moods show on each card.';
+      case 'anon':
+      case 'anonymous':
+        this.repo.updateStandup(standup.id, { moodEnabled: true, moodAnonymous: true });
+        return '✅ Mood question on, *anonymous* — cards hide who felt what; the wrap-up shows the team average instead.';
+      case 'off':
+        this.repo.updateStandup(standup.id, { moodEnabled: false });
+        return '✅ Mood question off.';
+      default:
+        return 'Use `mood on`, `mood anon`, or `mood off`.';
+    }
+  }
+
+  private escalate(standup: Standup, mentions: Mention[], rest: string[]): string {
+    const sub = (rest[0] ?? '').toLowerCase();
+    if (sub === 'off') {
+      this.repo.updateStandup(standup.id, { escalateUserName: null, escalateDisplayName: null });
+      return '✅ Blocker escalation off.';
+    }
+    if (sub === 'days') {
+      const days = Number(rest[1]);
+      if (!Number.isInteger(days) || days < 1 || days > 30) {
+        return 'Give the number of days a blocker may stay open, e.g. `escalate days 3`.';
+      }
+      this.repo.updateStandup(standup.id, { escalateAfterDays: days });
+      return `✅ Blockers escalate after ${days} day${days === 1 ? '' : 's'} open.`;
+    }
+    const contact = mentions[0];
+    if (!contact) {
+      return standup.escalateUserName
+        ? `Escalation: DM ${standup.escalateDisplayName} when blockers are open ${standup.escalateAfterDays}+ days. \`escalate @user\`, \`escalate days N\`, or \`escalate off\` to change.`
+        : 'Mention who should be pinged, e.g. `escalate @Asha` — they get a DM when blockers stay open too long.';
+    }
+    this.repo.updateStandup(standup.id, {
+      escalateUserName: contact.userName,
+      escalateDisplayName: contact.displayName,
+    });
+    return `✅ ${contact.displayName} will be DMed when blockers stay open ${standup.escalateAfterDays}+ days.`;
+  }
+
   private toggle(
     standup: Standup,
     field: 'moodEnabled' | 'digestEnabled' | 'aiEnabled',
@@ -363,9 +411,12 @@ export class CommandHandler {
     const participants = this.repo.listParticipants(standup.id);
     const admins = this.repo.listAdmins(standup.id);
     const toggles = [
-      standup.moodEnabled ? 'mood ✓' : 'mood ✗',
+      standup.moodEnabled ? (standup.moodAnonymous ? 'mood ✓ (anon)' : 'mood ✓') : 'mood ✗',
       standup.digestEnabled ? 'digest ✓' : 'digest ✗',
       standup.aiEnabled ? 'ai ✓' : 'ai ✗',
+      standup.escalateUserName
+        ? `escalate → ${standup.escalateDisplayName} (${standup.escalateAfterDays}d)`
+        : 'escalate ✗',
       standup.questions ? `${standup.questions.length} custom questions` : 'default questions',
     ].join(' · ');
     const lines = [

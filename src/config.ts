@@ -12,6 +12,10 @@ export interface Config {
   tickToken: string;
   /** Shared secret for GET /export. Empty = export endpoint disabled. */
   exportToken: string;
+  /** Shared secret for the web dashboard. Empty = dashboard disabled. */
+  dashboardToken: string;
+  /** Check participants' Google Calendar for OOO events (needs domain-wide delegation). */
+  calendarOoo: boolean;
   /** Bring-your-own-key LLM for AI summaries. Null = AI features off. */
   llm: LlmConfig | null;
 }
@@ -30,6 +34,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     tenantId: env.TENANT_ID ?? 'default',
     tickToken: env.TICK_TOKEN ?? '',
     exportToken: env.EXPORT_TOKEN ?? '',
+    dashboardToken: env.DASHBOARD_TOKEN ?? '',
+    calendarOoo: env.GOOGLE_CALENDAR_OOO === 'true',
     llm: loadLlmConfig(env),
   };
 }

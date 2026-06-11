@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
+import type { OooChecker } from './ooo.js';
 import type { Repo } from '../db/repo.js';
 import type { StandupService } from './standup-service.js';
 import type { AiSummarizer } from '../ai/summarizer.js';
@@ -33,6 +34,7 @@ export class Scheduler {
     private now: () => DateTime = () => DateTime.utc(),
     private log: (msg: string) => void = (msg) => console.log(`[scheduler] ${msg}`),
     private ai: AiSummarizer | null = null,
+    private ooo: OooChecker | null = null,
   ) {}
 
   start(intervalMs = 60_000): NodeJS.Timeout {
@@ -77,6 +79,7 @@ export class Scheduler {
       if (roster.filter((p) => !p.onVacation).length === 0) return;
       run = this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
       this.log(`opened run ${run.id} for "${standup.name}" ${today}`);
+      await this.applyCalendarOoo(standup, run);
       try {
         await this.adapter.postThreadParent(standup, run);
       } catch (err) {
@@ -119,6 +122,24 @@ export class Scheduler {
     if (now >= deadlineAt) await this.closeRun(standup, run);
   }
 
+  /** Marks participants with a calendar OOO event today as away for this run only. */
+  private async applyCalendarOoo(standup: Standup, run: Run): Promise<void> {
+    if (!this.ooo) return;
+    for (const rp of this.repo.listRunParticipants(run.id)) {
+      if (rp.onVacation) continue;
+      const email = this.repo.getUserEmail(rp.userName);
+      if (!email) continue;
+      try {
+        if (await this.ooo.isOoo(email, run.date, standup.timezone)) {
+          this.repo.markRunVacation(run.id, rp.userName);
+          this.log(`calendar OOO: ${rp.displayName} is away for run ${run.id}`);
+        }
+      } catch (err) {
+        this.log(`OOO check failed for ${email}: ${err}`);
+      }
+    }
+  }
+
   private async closeRun(standup: Standup, run: Run): Promise<void> {
     this.repo.closeRun(run.id);
     this.log(`closed run ${run.id} for "${standup.name}" ${run.date}`);
@@ -126,6 +147,14 @@ export class Scheduler {
       await this.adapter.postSummary(standup, run, this.service.buildSummary(run.id));
     } catch (err) {
       this.log(`postSummary failed for run ${run.id}: ${err}`);
+    }
+
+    if (standup.escalateUserName) {
+      try {
+        await this.escalateStaleBlockers(standup, run);
+      } catch (err) {
+        this.log(`blocker escalation failed for run ${run.id}: ${err}`);
+      }
     }
 
     if (standup.aiEnabled && this.ai) {
@@ -159,5 +188,27 @@ export class Scheduler {
         }
       }
     }
+  }
+
+  private async escalateStaleBlockers(standup: Standup, run: Run): Promise<void> {
+    const today = DateTime.fromISO(run.date);
+    const stale = this.repo.listOpenBlockers(standup.id).filter((b) => {
+      if (b.escalatedAt) return false;
+      const age = Math.floor(today.diff(DateTime.fromISO(b.openedDate), 'days').days);
+      return age >= standup.escalateAfterDays;
+    });
+    if (stale.length === 0) return;
+
+    const lines = stale.map((b) => {
+      const age = Math.floor(today.diff(DateTime.fromISO(b.openedDate), 'days').days);
+      return `⚠️ ${b.displayName}: ${b.text} (open ${age}d)`;
+    });
+    await this.adapter.sendDm(
+      standup.escalateUserName!,
+      `🚨 *${standup.name}*: ${stale.length} blocker${stale.length === 1 ? '' : 's'} open for ${standup.escalateAfterDays}+ days:\n${lines.join('\n')}\nBlockers auto-resolve when the person submits a blocker-free standup.`,
+    );
+    const at = this.now().toISO()!;
+    for (const b of stale) this.repo.markBlockerEscalated(b.id, at);
+    this.log(`escalated ${stale.length} blocker(s) for "${standup.name}" to ${standup.escalateDisplayName}`);
   }
 }

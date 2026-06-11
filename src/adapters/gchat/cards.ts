@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import { moodEmoji as moodEmojiFor } from '../../core/insights.js';
 import {
   isBlockerQuestion,
   isRealBlocker,
@@ -159,11 +160,12 @@ export function threadParentText(standup: Standup, run: Run): string {
 }
 
 /** One participant's answers, posted (or updated) as a reply in the day's thread. */
-export function submissionMessage(submission: Submission) {
+export function submissionMessage(submission: Submission, anonymousMood = false) {
   const flags = [
     submission.late ? 'Submitted late' : null,
     submission.editedAt ? 'edited' : null,
   ].filter(Boolean);
+  const showMood = submission.mood && !anonymousMood;
 
   return {
     cardsV2: [
@@ -171,7 +173,7 @@ export function submissionMessage(submission: Submission) {
         cardId: `submission-${submission.id}`,
         card: {
           header: {
-            title: `${submission.mood ? MOOD_EMOJI[submission.mood] : '📝'} ${submission.displayName}`,
+            title: `${showMood ? MOOD_EMOJI[submission.mood!] : '📝'} ${submission.displayName}`,
             subtitle: flags.length ? flags.join(' · ') : undefined,
           },
           sections: [
@@ -209,6 +211,7 @@ export function summaryText(summary: RunSummary): string {
   } else if (summary.mandatoryTotal > 0) {
     lines.push('🎉 Everyone submitted!');
   }
+  if (summary.teamMood !== null) lines.push(`💭 Team mood today: ${moodEmojiFor(summary.teamMood)} ${summary.teamMood}/5`);
   if (summary.away.length > 0) lines.push(`🏖️ Away: ${summary.away.join(', ')}`);
   if (summary.optionalSubmitted > 0) lines.push(`➕ ${summary.optionalSubmitted} optional submitted`);
   if (summary.lateCount > 0) lines.push(`⏰ ${summary.lateCount} late`);

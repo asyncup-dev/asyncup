@@ -24,6 +24,10 @@ export class EventRouter {
   ) {}
 
   async handle(event: any): Promise<object> {
+    // Learn user emails from any interaction — needed for calendar OOO lookups.
+    if (event?.user?.name && event.user.email) {
+      this.repo.setUserEmail(event.user.name, event.user.email);
+    }
     switch (event?.type) {
       case 'ADDED_TO_SPACE':
         return this.onAddedToSpace(event);

@@ -26,7 +26,9 @@ open to everyone in the space.
 | `questions` | Show the current question list |
 | `questions set Q1 \| Q2 \| …` | Replace the questions (1–10, pipe-separated) |
 | `questions reset` | Back to the default three questions |
-| `mood on\|off` | Toggle the mood dropdown in the form |
+| `mood on\|off\|anon` | Mood dropdown; `anon` hides who felt what — the wrap-up shows the team average instead |
+| `escalate @user` | DM this person when blockers stay open too long |
+| `escalate days N` / `escalate off` | Escalation threshold (default 2 days) / disable |
 | `digest on\|off` | Weekly digest posted after the last run of the week |
 | `ai on\|off` | AI daily/weekly summaries (needs an [LLM key](./ai) on the server) |
 
@@ -59,7 +61,12 @@ Anyone can DM the bot directly:
 - **Late submissions** after the deadline still post, flagged *late*; the
   wrap-up isn't recalculated and late entries can no longer be edited.
 - **Blockers** auto-resolve when the same person submits a blocker-free
-  standup on a later day.
+  standup on a later day. With `escalate @user` configured, the contact gets
+  **one** DM per blocker once it has been open past the threshold.
+- **Calendar OOO** (when [enabled](./configuration)): participants with an
+  *Out of office* event in Google Calendar are automatically marked away for
+  that day's run. Emails are learned from Chat interactions, so this kicks in
+  after a person has used the bot at least once.
 - **Roster snapshots:** the day's roster is frozen when the run opens;
   `add`/`remove`/`vacation` apply from the next run.
 - **Custom questions** apply from the next run. Questions containing the word

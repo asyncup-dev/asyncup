@@ -5,6 +5,7 @@ import type { ChatRequestVerifier } from './adapters/gchat/auth.js';
 import type { Scheduler } from './core/scheduler.js';
 import type { Repo } from './db/repo.js';
 import { buildCsv } from './core/export.js';
+import { registerDashboard } from './dashboard/dashboard.js';
 
 export interface ServerDeps {
   router: EventRouter;
@@ -14,6 +15,8 @@ export interface ServerDeps {
   tickToken: string;
   /** Empty string disables the /export endpoint. */
   exportToken: string;
+  /** Empty string disables the /dashboard pages. */
+  dashboardToken: string;
   now?: () => DateTime;
 }
 
@@ -26,6 +29,8 @@ export function createServer(deps: ServerDeps): Express {
   const now = deps.now ?? (() => DateTime.utc());
   const app = express();
   app.use(express.json());
+
+  registerDashboard(app, { repo, token: deps.dashboardToken, now: deps.now });
 
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true });

@@ -6,7 +6,7 @@ import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 let close: (() => void) | null = null;
 
-function startServer(opts: { tickToken?: string; exportToken?: string } = {}) {
+function startServer(opts: { tickToken?: string; exportToken?: string; dashboardToken?: string } = {}) {
   const stack = makeStack();
   const router = new EventRouter(stack.commands, stack.service, stack.repo, TENANT);
   const app = createServer({
@@ -16,6 +16,7 @@ function startServer(opts: { tickToken?: string; exportToken?: string } = {}) {
     repo: stack.repo,
     tickToken: opts.tickToken ?? '',
     exportToken: opts.exportToken ?? '',
+    dashboardToken: opts.dashboardToken ?? '',
     now: stack.clock.now,
   });
   const server = app.listen(0);
