@@ -272,23 +272,34 @@ function esc(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+const LOGO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="26" height="26"><g fill="#fff" opacity=".95"><rect x="24" y="28" width="208" height="168" rx="52"/><path d="M86 188 L60 236 Q54 247 68 240 L132 196 Z"/></g><rect x="66" y="120" width="30" height="44" rx="15" fill="#FFD27D"/><rect x="113" y="92" width="30" height="72" rx="15" fill="#FFAE52"/><rect x="160" y="64" width="30" height="100" rx="15" fill="#FF8A3D"/></svg>';
+
 function layout(title: string, body: string): string {
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
 <style>
-  body{font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#222}
-  table{border-collapse:collapse;width:100%;margin:.5rem 0}
-  th,td{border:1px solid #ddd;padding:.4rem .6rem;text-align:left;font-size:.95em}
-  th{background:#f6f6f6}
-  a{color:#1a63c9} h1 small{color:#888;font-weight:normal}
-  label{display:block;margin:.45rem 0} input,textarea{width:100%;max-width:320px;padding:.3rem;font:inherit}
+  :root{--ink:#15435f;--ink-deep:#0e2f44;--amber:#ff8a3d;--amber-soft:#ffae52;--line:#dde5ea}
+  body{font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:960px;margin:0 auto 3rem;padding:0 1rem;color:#1c2b36;background:#fbfcfd}
+  .topbar{display:flex;align-items:center;gap:.6rem;background:var(--ink);color:#fff;margin:0 -1rem 1.6rem;padding:.7rem 1.2rem;border-radius:0 0 12px 12px}
+  .topbar b{font-size:1.05em;letter-spacing:-.01em}
+  .topbar a{color:#fff;text-decoration:none}
+  .topbar .up{color:var(--amber-soft)}
+  table{border-collapse:collapse;width:100%;margin:.5rem 0;background:#fff}
+  th,td{border:1px solid var(--line);padding:.4rem .6rem;text-align:left;font-size:.95em}
+  th{background:#eef3f6;color:var(--ink-deep)}
+  a{color:#176d94} h1 small{color:#888;font-weight:normal} h2{color:var(--ink-deep)}
+  label{display:block;margin:.45rem 0} input,textarea{width:100%;max-width:320px;padding:.3rem;font:inherit;border:1px solid var(--line);border-radius:5px;background:#fff}
   input[type=checkbox]{width:auto}
-  button{margin-top:.6rem;padding:.45rem 1.2rem;font:inherit;background:#1a63c9;color:#fff;border:0;border-radius:4px;cursor:pointer}
+  button{margin-top:.6rem;padding:.5rem 1.4rem;font:inherit;font-weight:600;background:var(--amber);color:#3b2204;border:0;border-radius:20px;cursor:pointer}
+  button:hover{background:var(--amber-soft)}
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
-  .card{border:1px solid #ddd;border-radius:6px;padding:.6rem 1rem;margin:.6rem 0}
-  .tag{background:#eee;border-radius:3px;padding:0 .35rem;font-size:.8em;margin-left:.3rem}
+  .card{border:1px solid var(--line);background:#fff;border-radius:8px;padding:.6rem 1rem;margin:.6rem 0}
+  .tag{background:#eef3f6;border-radius:3px;padding:0 .35rem;font-size:.8em;margin-left:.3rem}
   .ok{color:#1a7f37}.err{color:#c62828}
   @media(max-width:720px){.cols{grid-template-columns:1fr}}
-</style></head><body>${body}</body></html>`;
+</style></head><body>
+<div class="topbar">${LOGO_SVG}<b><a href="/dashboard">Async<span class="up">Up</span></a></b></div>
+${body}</body></html>`;
 }

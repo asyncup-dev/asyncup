@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="AsyncUp logo">
+  <!-- chat bubble -->
+  <g fill="#15435F">
+    <rect x="24" y="28" width="208" height="168" rx="52"/>
+    <path d="M86 188 L60 236 Q54 247 68 240 L132 196 Z"/>
+  </g>
+  <!-- ascending bars: a standup filling up -->
+  <rect x="66"  y="120" width="30" height="44"  rx="15" fill="#FFD27D"/>
+  <rect x="113" y="92"  width="30" height="72"  rx="15" fill="#FFAE52"/>
+  <rect x="160" y="64"  width="30" height="100" rx="15" fill="#FF8A3D"/>
+</svg>

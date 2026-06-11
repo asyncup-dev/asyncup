@@ -1,7 +1,14 @@
-# AsyncUp
+<p align="center">
+  <img src="docs/public/logo.svg" alt="AsyncUp" width="96" height="96">
+</p>
 
-[![CI](https://github.com/asyncup-dev/asyncup/actions/workflows/ci.yml/badge.svg)](https://github.com/asyncup-dev/asyncup/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+<h1 align="center">AsyncUp</h1>
+
+<p align="center">
+  <a href="https://github.com/asyncup-dev/asyncup/actions/workflows/ci.yml"><img src="https://github.com/asyncup-dev/asyncup/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://asyncup-dev.github.io/asyncup/"><img src="https://img.shields.io/badge/docs-asyncup--dev.github.io-15435f" alt="Docs"></a>
+</p>
 
 **Open-source, self-hosted async daily standups for Google Chat.**
 No meetings, no SaaS, no telemetry — one small container you run yourself, forever free.
