@@ -39,7 +39,7 @@ Your event URL is `https://<your-host>/chat/events`.
 | Field | Value |
 | --- | --- |
 | App name | `AsyncUp` (or your pick) |
-| Avatar URL | any 256×256 PNG |
+| Avatar URL | `https://asyncup-dev.github.io/asyncup/logo-256.png` (the AsyncUp logo, or any 256×256 PNG) |
 | Description | `Async daily standups` |
 | Functionality | ✅ Receive 1:1 messages, ✅ Join spaces and group conversations |
 | Connection settings | **HTTP endpoint URL** → `https://<your-host>/chat/events` |

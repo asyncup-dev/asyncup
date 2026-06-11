@@ -43,6 +43,12 @@ features:
     details: Google Chat today; Slack and Microsoft Teams adapters are next on the roadmap. MIT licensed, never SaaS.
 ---
 
+<script setup>
+// Raw HTML anchors bypass VitePress base-path rewriting — withBase fixes
+// the CTA on project-pages deployments (e.g. /asyncup/).
+import { withBase } from 'vitepress'
+</script>
+
 <div class="au-section">
   <h2>How a morning works</h2>
   <p class="au-sub">No meeting, no interrogation bot — one card, one form, one thread.</p>
@@ -116,6 +122,6 @@ features:
 
 <div class="au-cta">
   <h2>Up and running in 15 minutes</h2>
-  <a class="button" href="/guide/getting-started">Read the guide</a>
+  <a class="button" :href="withBase('/guide/getting-started')">Read the guide</a>
   <span class="alt"><code>docker compose up -d</code> — amd64 &amp; arm64 images on GHCR</span>
 </div>
