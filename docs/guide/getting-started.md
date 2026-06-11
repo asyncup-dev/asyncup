@@ -15,10 +15,9 @@ the names of mandatory participants who didn't fill it in.
 
 - A Google Workspace domain where you can configure a Chat app
   (one-time, ~15 minutes — see [Google Chat setup](./google-chat-setup))
-- Somewhere to run one small container with an HTTPS URL — starting from
-  nothing? **[Server setup from zero](./server-setup)** walks you through a
-  $5 VPS, a domain, and automatic HTTPS in ~30 minutes
-  (other options in [Deployment](./deployment))
+- Somewhere to run one small container with an HTTPS URL — the
+  **[Setup guide](./server-setup)** covers every scenario, from a $5 VPS
+  with automatic HTTPS to Cloud Run and homelab tunnels, with sizing advice
 
 ## Quickstart
 

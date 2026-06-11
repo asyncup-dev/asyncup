@@ -4,9 +4,10 @@ AsyncUp is one small container — by default with SQLite inside, so there are
 no external moving parts at all. Google Chat needs to reach it on a public
 HTTPS URL.
 
-> Starting from zero (no server, no domain, no TLS setup)? Follow
-> **[Server setup from zero](./server-setup)** — a complete VPS + Caddy
-> walkthrough. This page covers the building blocks and alternatives.
+> Looking for a walkthrough? The **[Setup guide](./server-setup)** covers
+> every scenario — VPS, Postgres, Cloud Run, homelab — with a decision
+> matrix and production checklist. This page is the building-blocks
+> reference.
 
 ## Database: embedded or bring your own
 
@@ -69,11 +70,13 @@ a once-a-minute scheduler tick and your team's submissions.
 Closest thing to "no servers at all", and realistically $0/month at team
 scale on the free tier:
 
-1. Deploy the container to **Cloud Run** (min instances = 0). Mount a
-   [Cloud Run volume](https://cloud.google.com/run/docs/configuring/services/volume-mounts)
-   or persistent disk for `DB_PATH` so SQLite survives restarts.
+1. Deploy the container to **Cloud Run** (min instances = 0, **max
+   instances = 1** — the in-process scheduler must not run twice). Use a
+   managed Postgres via `DATABASE_URL` (Cloud SQL, or Neon's free tier) —
+   Cloud Run's filesystem is ephemeral and network volumes don't support
+   SQLite locking reliably.
 2. The in-process scheduler only runs while an instance is alive, so drive
-   it externally: create a **Cloud Scheduler** job (free tier: 3 jobs) that
+   it externally: create a **Cloud Scheduler** job (free tier covers it) that
    hits `POST /tick` every minute with header
    `Authorization: Bearer <tick token>`.
 3. Generate the tick token in dashboard → Settings → Access tokens.
