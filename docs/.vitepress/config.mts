@@ -4,7 +4,20 @@ export default defineConfig({
   title: 'AsyncUp',
   description: 'Open-source, self-hosted async daily standups for Google Chat',
   base: process.env.DOCS_BASE || '/',
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${process.env.DOCS_BASE || '/'}favicon.svg` }],
+    ['meta', { name: 'theme-color', content: '#15435f' }],
+    ['meta', { property: 'og:title', content: 'AsyncUp — async daily standups for Google Chat' }],
+    [
+      'meta',
+      {
+        property: 'og:description',
+        content: 'Open source and self-hosted: standup prompts, date threads, blocker tracking, AI summaries with your own key.',
+      },
+    ],
+  ],
   themeConfig: {
+    logo: '/logo.svg',
     search: {
       provider: 'local',
     },
