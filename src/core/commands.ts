@@ -1,6 +1,13 @@
 import { DateTime, IANAZone } from 'luxon';
 import type { Repo } from '../db/repo.js';
-import { WEEKDAYS, type Standup, type Weekday } from './types.js';
+import { trendsText } from './insights.js';
+import {
+  DEFAULT_QUESTIONS,
+  standupQuestions,
+  WEEKDAYS,
+  type Standup,
+  type Weekday,
+} from './types.js';
 
 export interface Mention {
   userName: string;
@@ -14,21 +21,28 @@ export interface CommandContext {
   text: string;
   /** Users @mentioned in the message (bot excluded). */
   mentions: Mention[];
+  /** Who sent the command. */
+  sender: Mention;
 }
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-const HELP = `*Standup bot commands* (mention me in this space):
-\`setup [name]\` — create a standup reporting to this space
-\`add @user…\` — add participants (mandatory by default)
-\`remove @user…\` — remove participants
-\`mandatory @user…\` / \`optional @user…\` — toggle whether someone counts toward the report
-\`time HH:MM\` — when the prompt DM goes out (participant's local time)
-\`deadline HH:MM\` — when the run closes and the report posts (standup timezone)
-\`remind <minutes>\` — reminder nudge this many minutes before the deadline
-\`timezone <IANA zone>\` — e.g. Asia/Kolkata
-\`days mon,tue,wed,thu,fri\` — which days the standup runs
-\`status\` — current config and today's progress`;
+const HELP = `*AsyncUp commands* (mention me in this space — prefix with \`#<id>\` when the space has several standups):
+\`setup [name]\` — create a standup reporting to this space (creator becomes admin)
+\`add @user…\` / \`remove @user…\` — manage participants
+\`mandatory @user…\` / \`optional @user…\` — who counts toward the report
+\`vacation @user…\` / \`back @user…\` — mark people away (they can also DM me \`vacation\`/\`back\`)
+\`admin @user…\` / \`unadmin @user…\` — who may change configuration
+\`time HH:MM\` — prompt time (participant's local time)
+\`deadline HH:MM\` — close time (standup timezone)
+\`remind <minutes>\` — nudge before the deadline (0 = off)
+\`timezone <IANA>\` · \`days mon,tue,…\` — schedule
+\`questions\` / \`questions set Q1 | Q2 | …\` / \`questions reset\` — customize the form
+\`mood on|off\` · \`digest on|off\` · \`ai on|off\` — toggles
+\`status\` · \`trends\` · \`blockers\` · \`export\` — insights`;
+
+/** Commands anyone in the space may run; everything else needs an admin. */
+const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'export']);
 
 export class CommandHandler {
   constructor(
@@ -38,17 +52,45 @@ export class CommandHandler {
   ) {}
 
   handle(ctx: CommandContext): string {
-    const [verb = '', ...rest] = ctx.text.trim().split(/\s+/);
+    const tokens = ctx.text.trim().split(/\s+/).filter(Boolean);
+
+    let standupRef: number | null = null;
+    const refMatch = tokens[0]?.match(/^#(\d+)$/);
+    if (refMatch) {
+      standupRef = Number(refMatch[1]);
+      tokens.shift();
+    }
+
+    const [verb = '', ...rest] = tokens;
+    const command = verb.toLowerCase();
     const arg = rest.join(' ').trim();
 
-    if (verb === '' || verb.toLowerCase() === 'help') return HELP;
-
-    const command = verb.toLowerCase();
+    if (command === '' || command === 'help') return HELP;
     if (command === 'setup') return this.setup(ctx, arg);
 
-    const standup = this.repo.getStandupBySpace(ctx.tenantId, ctx.spaceName);
-    if (!standup) {
+    const standups = this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
+    if (standups.length === 0) {
       return 'No standup is configured for this space yet. Run `setup` first.';
+    }
+
+    if (command === 'status' && standupRef === null) {
+      return standups.map((s) => this.status(s, standups.length > 1)).join('\n\n');
+    }
+
+    let standup: Standup;
+    if (standupRef !== null) {
+      const found = standups.find((s) => s.id === standupRef);
+      if (!found) return `No standup #${standupRef} in this space. ${listStandups(standups)}`;
+      standup = found;
+    } else if (standups.length === 1) {
+      standup = standups[0]!;
+    } else {
+      return `This space has several standups — prefix your command with the id, e.g. \`#${standups[0]!.id} ${command}\`.\n${listStandups(standups)}`;
+    }
+
+    if (!OPEN_COMMANDS.has(command)) {
+      const denied = this.requireAdmin(standup, ctx.sender);
+      if (denied) return denied;
     }
 
     switch (command) {
@@ -60,6 +102,14 @@ export class CommandHandler {
         return this.setMandatory(standup, ctx.mentions, true);
       case 'optional':
         return this.setMandatory(standup, ctx.mentions, false);
+      case 'vacation':
+        return this.setVacation(standup, ctx.mentions, true);
+      case 'back':
+        return this.setVacation(standup, ctx.mentions, false);
+      case 'admin':
+        return this.addAdmins(standup, ctx.mentions);
+      case 'unadmin':
+        return this.removeAdmins(standup, ctx.mentions);
       case 'time':
         return this.setTime(standup, arg, 'promptTime');
       case 'deadline':
@@ -70,27 +120,49 @@ export class CommandHandler {
         return this.setTimezone(standup, arg);
       case 'days':
         return this.setDays(standup, arg);
+      case 'questions':
+        return this.questions(standup, rest);
+      case 'mood':
+        return this.toggle(standup, 'moodEnabled', arg, 'Mood question');
+      case 'digest':
+        return this.toggle(standup, 'digestEnabled', arg, 'Weekly digest');
+      case 'ai':
+        return this.toggle(standup, 'aiEnabled', arg, 'AI summaries');
       case 'status':
-        return this.status(standup);
+        return this.status(standup, false);
+      case 'trends':
+        return trendsText(this.repo, standup, this.now());
+      case 'blockers':
+        return this.blockers(standup);
+      case 'export':
+        return this.exportInfo(standup);
       default:
         return `Unknown command \`${verb}\`. Try \`help\`.`;
     }
   }
 
+  private requireAdmin(standup: Standup, sender: Mention): string | null {
+    const admins = this.repo.listAdmins(standup.id);
+    if (admins.length === 0 || admins.some((a) => a.userName === sender.userName)) return null;
+    return `🔒 Only admins of *${standup.name}* can change its configuration (${admins
+      .map((a) => a.displayName)
+      .join(', ')}).`;
+  }
+
   private setup(ctx: CommandContext, name: string): string {
-    if (this.repo.getStandupBySpace(ctx.tenantId, ctx.spaceName)) {
-      return 'A standup already exists for this space. Use `status` to see its configuration.';
-    }
     const standup = this.repo.createStandup({
       tenantId: ctx.tenantId,
       spaceName: ctx.spaceName,
       name: name || 'Daily Standup',
       timezone: this.defaultTimezone,
     });
+    if (ctx.sender.userName) {
+      this.repo.addAdmin(standup.id, ctx.sender.userName, ctx.sender.displayName);
+    }
+    const siblings = this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
     return (
-      `✅ Standup *${standup.name}* created. Reports will post in this space.\n` +
-      `Defaults: prompt ${standup.promptTime}, deadline ${standup.deadlineTime}, ` +
-      `reminder ${standup.reminderMinutesBefore}m before, ${standup.timezone}, ${standup.days}.\n` +
+      `✅ Standup *${standup.name}* created (#${standup.id})${siblings.length > 1 ? ` — this space now has ${siblings.length} standups, prefix commands with \`#${standup.id}\`` : ''}. You are its admin.\n` +
+      `Defaults: prompt ${standup.promptTime}, deadline ${standup.deadlineTime}, reminder ${standup.reminderMinutesBefore}m before, ${standup.timezone}, ${standup.days}.\n` +
       `Next: \`add @user…\` to add participants.`
     );
   }
@@ -135,6 +207,47 @@ export class CommandHandler {
     if (changed.length) parts.push(`✅ ${changed.join(', ')} now ${mandatory ? 'mandatory' : 'optional'}.`);
     if (unknown.length) parts.push(`⚠️ Not participants: ${unknown.join(', ')}. Use \`add\` first.`);
     return parts.join(' ');
+  }
+
+  private setVacation(standup: Standup, mentions: Mention[], onVacation: boolean): string {
+    if (mentions.length === 0) {
+      return `Mention the people, e.g. \`${onVacation ? 'vacation' : 'back'} @Asha\`.`;
+    }
+    const changed: string[] = [];
+    const unknown: string[] = [];
+    for (const m of mentions) {
+      (this.repo.setParticipantVacation(standup.id, m.userName, onVacation) ? changed : unknown).push(
+        m.displayName,
+      );
+    }
+    const parts: string[] = [];
+    if (changed.length) {
+      parts.push(
+        onVacation
+          ? `🏖️ ${changed.join(', ')} marked as away — no prompts, not counted as missing.`
+          : `👋 ${changed.join(', ')} back — prompts resume with the next run.`,
+      );
+    }
+    if (unknown.length) parts.push(`⚠️ Not participants: ${unknown.join(', ')}.`);
+    return parts.join(' ');
+  }
+
+  private addAdmins(standup: Standup, mentions: Mention[]): string {
+    if (mentions.length === 0) return 'Mention the people to make admins, e.g. `admin @Asha`.';
+    for (const m of mentions) this.repo.addAdmin(standup.id, m.userName, m.displayName);
+    return `✅ Admins now: ${this.repo.listAdmins(standup.id).map((a) => a.displayName).join(', ')}.`;
+  }
+
+  private removeAdmins(standup: Standup, mentions: Mention[]): string {
+    if (mentions.length === 0) return 'Mention the admins to remove, e.g. `unadmin @Asha`.';
+    const admins = this.repo.listAdmins(standup.id);
+    const remaining = admins.filter((a) => !mentions.some((m) => m.userName === a.userName));
+    if (admins.length > 0 && remaining.length === 0) {
+      return '⚠️ A standup must keep at least one admin — add another admin first.';
+    }
+    for (const m of mentions) this.repo.removeAdmin(standup.id, m.userName);
+    const now = this.repo.listAdmins(standup.id);
+    return `✅ Admins now: ${now.length ? now.map((a) => a.displayName).join(', ') : 'none (configuration is open to everyone)'}.`;
   }
 
   private setTime(standup: Standup, value: string, field: 'promptTime' | 'deadlineTime'): string {
@@ -182,16 +295,92 @@ export class CommandHandler {
     return `✅ Standup runs on: ${ordered.join(', ')}.`;
   }
 
-  private status(standup: Standup): string {
+  private questions(standup: Standup, rest: string[]): string {
+    const sub = (rest[0] ?? '').toLowerCase();
+    if (sub === 'reset') {
+      this.repo.updateStandup(standup.id, { questions: null });
+      return `✅ Questions reset to the defaults:\n${DEFAULT_QUESTIONS.map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
+    }
+    if (sub === 'set') {
+      const parts = rest
+        .slice(1)
+        .join(' ')
+        .split('|')
+        .map((q) => q.trim())
+        .filter(Boolean);
+      if (parts.length === 0 || parts.length > 10) {
+        return 'Give 1–10 questions separated by `|`, e.g. `questions set What shipped? | What is next? | Any blockers?`';
+      }
+      const tooLong = parts.find((q) => q.length > 200);
+      if (tooLong) return `⚠️ Question too long (max 200 chars): "${tooLong.slice(0, 50)}…"`;
+      this.repo.updateStandup(standup.id, { questions: parts });
+      return `✅ Questions updated:\n${parts.map((q, i) => `${i + 1}. ${q}`).join('\n')}\nApplies from the next run.`;
+    }
+    const current = standupQuestions(standup);
+    return (
+      `*Questions for ${standup.name}:*\n${current.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n` +
+      '`questions set Q1 | Q2 | …` to change · `questions reset` for defaults.'
+    );
+  }
+
+  private toggle(
+    standup: Standup,
+    field: 'moodEnabled' | 'digestEnabled' | 'aiEnabled',
+    value: string,
+    label: string,
+  ): string {
+    const v = value.toLowerCase();
+    if (v !== 'on' && v !== 'off') return `Use \`on\` or \`off\`, e.g. \`${label.split(' ')[0]?.toLowerCase()} on\`.`;
+    this.repo.updateStandup(standup.id, { [field]: v === 'on' });
+    if (field === 'aiEnabled' && v === 'on') {
+      return `✅ ${label} on. Requires LLM_PROVIDER + LLM_API_KEY in the server environment — summaries are skipped silently otherwise.`;
+    }
+    return `✅ ${label} ${v}.`;
+  }
+
+  private blockers(standup: Standup): string {
+    const open = this.repo.listOpenBlockers(standup.id);
+    if (open.length === 0) return `✅ No open blockers for *${standup.name}*.`;
+    const today = this.now().setZone(standup.timezone);
+    const lines = open.map((b) => {
+      const age = Math.max(0, Math.floor(today.diff(DateTime.fromISO(b.openedDate), 'days').days));
+      return `⚠️ ${b.displayName}: ${b.text} _(${age}d old)_`;
+    });
+    return `*Open blockers — ${standup.name}:*\n${lines.join('\n')}\nBlockers auto-resolve when the person submits a blocker-free standup.`;
+  }
+
+  private exportInfo(standup: Standup): string {
+    return (
+      `Export *${standup.name}* (#${standup.id}) as CSV via the HTTP endpoint:\n` +
+      '`GET /export?standupId=' +
+      String(standup.id) +
+      '&days=30` with header `Authorization: Bearer $EXPORT_TOKEN`.\n' +
+      'The endpoint is disabled until the EXPORT_TOKEN environment variable is set on the server.'
+    );
+  }
+
+  private status(standup: Standup, withId: boolean): string {
     const participants = this.repo.listParticipants(standup.id);
+    const admins = this.repo.listAdmins(standup.id);
+    const toggles = [
+      standup.moodEnabled ? 'mood ✓' : 'mood ✗',
+      standup.digestEnabled ? 'digest ✓' : 'digest ✗',
+      standup.aiEnabled ? 'ai ✓' : 'ai ✗',
+      standup.questions ? `${standup.questions.length} custom questions` : 'default questions',
+    ].join(' · ');
     const lines = [
-      `*${standup.name}*`,
+      `*${standup.name}*${withId ? ` (#${standup.id})` : ''}`,
       `Prompt ${standup.promptTime} (participant local) · deadline ${standup.deadlineTime} ${standup.timezone} · reminder ${standup.reminderMinutesBefore}m before · ${standup.days}`,
+      toggles,
       participants.length
         ? `Participants: ${participants
-            .map((p) => `${p.displayName}${p.mandatory ? '' : ' (optional)'}`)
+            .map(
+              (p) =>
+                `${p.displayName}${p.mandatory ? '' : ' (optional)'}${p.onVacation ? ' 🏖️' : ''}`,
+            )
             .join(', ')}`
         : 'Participants: none yet — use `add @user`.',
+      admins.length ? `Admins: ${admins.map((a) => a.displayName).join(', ')}` : 'Admins: none (open config)',
     ];
 
     const today = this.now().setZone(standup.timezone).toISODate()!;
@@ -200,15 +389,25 @@ export class CommandHandler {
       const submitted = new Set(this.repo.listSubmissions(run.id).map((s) => s.userName));
       const roster = this.repo.listRunParticipants(run.id);
       const done = roster.filter((p) => submitted.has(p.userName)).map((p) => p.displayName);
-      const pending = roster.filter((p) => !submitted.has(p.userName)).map((p) => p.displayName);
+      const away = roster
+        .filter((p) => !submitted.has(p.userName) && (p.skippedAt || p.onVacation))
+        .map((p) => p.displayName);
+      const pending = roster
+        .filter((p) => !submitted.has(p.userName) && !p.skippedAt && !p.onVacation)
+        .map((p) => p.displayName);
       lines.push(
-        `Today (${run.date}, ${run.status}): ${done.length}/${roster.length} submitted.` +
+        `Today (${run.date}, ${run.status}): ${done.length}/${roster.length - away.length} submitted.` +
           (done.length ? ` ✅ ${done.join(', ')}.` : '') +
-          (pending.length ? ` ⏳ ${pending.join(', ')}.` : ''),
+          (pending.length ? ` ⏳ ${pending.join(', ')}.` : '') +
+          (away.length ? ` 🏖️ ${away.join(', ')}.` : ''),
       );
     } else {
       lines.push(`No run yet today (${today}).`);
     }
     return lines.join('\n');
   }
+}
+
+function listStandups(standups: Standup[]): string {
+  return standups.map((s) => `#${s.id} ${s.name}`).join(' · ');
 }

@@ -22,16 +22,21 @@ Each answer is posted as one card per person under a **per-date thread** in your
  └─ 📊 wrap-up: ✅ 7/9 mandatory submitted · ❌ Missing: Asha, Rohit
 ```
 
-**Docs: [Getting started](docs/guide/getting-started.md) · [Google Chat setup](docs/guide/google-chat-setup.md) · [Commands](docs/guide/commands.md) · [Configuration](docs/guide/configuration.md) · [Deployment](docs/guide/deployment.md)**
+**Docs: [Getting started](docs/guide/getting-started.md) · [Google Chat setup](docs/guide/google-chat-setup.md) · [Commands](docs/guide/commands.md) · [Configuration](docs/guide/configuration.md) · [AI summaries](docs/guide/ai.md) · [Deployment](docs/guide/deployment.md)**
 
 ## Features
 
-- **Dialog form, not a chat interrogation** — all four questions in one modal, one submit.
+- **Dialog form, not a chat interrogation** — all questions in one modal, one submit. **Edit until the deadline**; the posted card updates in place.
+- **Custom questions** per standup (`questions set …`), with the mood dropdown toggleable.
 - **Mandatory vs optional participants** — the report counts only who you choose.
-- **Per-participant timezones** — prompts go out at 09:30 *their* time.
-- **Reminder nudge** before the deadline for people who haven't submitted.
-- **Late submissions** still post to the thread, flagged as late.
-- **Lightweight forever** — one container, SQLite inside, scale-to-zero friendly (`/tick` + free-tier cron ≈ $0/month).
+- **Vacation & skip** — DM `vacation`/`back` for yourself, a 🏖️ *Skip today* button on every prompt; away people aren't nagged or counted as missing.
+- **Pre-fill** — "yesterday" starts as your previous "today".
+- **Per-participant timezones** — prompts go out at 09:30 *their* time, reminder nudge before the deadline, late submissions flagged.
+- **Blocker tracking** — blockers open automatically from answers, resolve on the next clean submission, and surface via `blockers`, the wrap-up, and the digest.
+- **Insights** — `trends` (participation + mood over 4 weeks), weekly digest (`digest on`), CSV export endpoint.
+- **AI summaries, bring your own key** — opt-in daily TL;DR and week-in-review via your Anthropic/OpenAI key; nothing leaves your infra otherwise.
+- **Team admins & multiple standups per space** — config restricted to admins; address standups by `#id`.
+- **Lightweight forever** — one container, SQLite inside (auto-migrating schema), scale-to-zero friendly (`/tick` + free-tier cron ≈ $0/month).
 - **Restart-safe** — all scheduling state lives in SQLite; ticks are idempotent.
 - **Platform-agnostic core** — Google Chat is an adapter; Slack and Teams are planned.
 
@@ -73,12 +78,10 @@ Adding a platform means implementing the `ChatAdapter` interface in
 
 ## Roadmap
 
-- OOO/vacation awareness (Google Calendar) and "skip today"
-- Pre-fill "yesterday" from your previous "today"
-- Custom questions, multiple standups per space, edit submissions
-- Mood trends, blocker tracking, weekly digest, CSV export
 - **Slack adapter**, then **Microsoft Teams**
-- **AI features, bring your own key** — opt-in LLM summaries and team insights using your own API key; nothing leaves your infra otherwise
+- Google Calendar OOO sync (auto-vacation)
+- Anonymous mood option, blocker escalation pings
+- Lightweight web dashboard for config and history
 
 ## Contributing
 

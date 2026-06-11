@@ -17,8 +17,22 @@ export const MOOD_LABEL: Record<Mood, string> = {
   struggling: '😫 Struggling',
 };
 
+export const MOOD_SCORE: Record<Mood, number> = {
+  great: 5,
+  good: 4,
+  okay: 3,
+  meh: 2,
+  struggling: 1,
+};
+
 export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
+
+export const DEFAULT_QUESTIONS = [
+  'What did you do yesterday?',
+  'What will you do today?',
+  'Any blockers?',
+] as const;
 
 export interface Standup {
   id: number;
@@ -34,7 +48,16 @@ export interface Standup {
   timezone: string;
   /** comma-separated subset of WEEKDAYS, e.g. "mon,tue,wed,thu,fri" */
   days: string;
+  /** null = DEFAULT_QUESTIONS */
+  questions: string[] | null;
+  moodEnabled: boolean;
+  digestEnabled: boolean;
+  aiEnabled: boolean;
   active: boolean;
+}
+
+export function standupQuestions(standup: Standup): string[] {
+  return standup.questions ?? [...DEFAULT_QUESTIONS];
 }
 
 export interface Participant {
@@ -45,7 +68,14 @@ export interface Participant {
   /** IANA zone overriding the standup timezone for prompt delivery */
   timezone: string | null;
   mandatory: boolean;
+  onVacation: boolean;
   active: boolean;
+}
+
+export interface Admin {
+  standupId: number;
+  userName: string;
+  displayName: string;
 }
 
 export type RunStatus = 'open' | 'closed';
@@ -66,24 +96,45 @@ export interface RunParticipant {
   displayName: string;
   timezone: string | null;
   mandatory: boolean;
+  onVacation: boolean;
   promptedAt: string | null;
   remindedAt: string | null;
+  skippedAt: string | null;
 }
 
-export interface SubmissionAnswers {
-  yesterday: string;
-  today: string;
-  blockers: string;
-  mood: Mood;
+export interface Answer {
+  /** Question text snapshotted at submission time. */
+  question: string;
+  answer: string;
 }
 
-export interface Submission extends SubmissionAnswers {
+export interface SubmissionInput {
+  answers: Answer[];
+  mood: Mood | null;
+}
+
+export interface Submission extends SubmissionInput {
   id: number;
   runId: number;
   userName: string;
   displayName: string;
   late: boolean;
   submittedAt: string;
+  editedAt: string | null;
+  /** Chat message resource name of the posted card (for edits). */
+  messageName: string | null;
+}
+
+export interface Blocker {
+  id: number;
+  standupId: number;
+  userName: string;
+  displayName: string;
+  text: string;
+  openedRunId: number;
+  openedDate: string;
+  resolvedRunId: number | null;
+  resolvedDate: string | null;
 }
 
 export interface RunSummary {
@@ -92,15 +143,52 @@ export interface RunSummary {
   mandatoryTotal: number;
   mandatorySubmitted: number;
   missingMandatory: string[];
+  /** Mandatory people excluded from the count: skipped or on vacation. */
+  away: string[];
   optionalSubmitted: number;
   lateCount: number;
+  openBlockers: number;
+}
+
+export interface WeeklyDigest {
+  standupName: string;
+  weekStart: string;
+  weekEnd: string;
+  runCount: number;
+  participationPct: number;
+  prevParticipationPct: number | null;
+  avgMood: number | null;
+  prevAvgMood: number | null;
+  blockersOpened: number;
+  blockersResolved: number;
+  openBlockers: { displayName: string; text: string; ageDays: number }[];
 }
 
 export function standupDays(standup: Standup): Weekday[] {
   return standup.days.split(',').map((d) => d.trim() as Weekday);
 }
 
-export function hasBlockers(blockers: string): boolean {
-  const normalized = blockers.trim().toLowerCase();
-  return normalized !== '' && !['none', 'no', 'nope', 'nothing', 'na', 'n/a', '-'].includes(normalized);
+const NO_BLOCKER_WORDS = ['', 'none', 'no', 'nope', 'nothing', 'na', 'n/a', '-', 'nil'];
+
+export function isBlockerQuestion(question: string): boolean {
+  return /blocker|blocked|stuck/i.test(question);
+}
+
+export function isYesterdayQuestion(question: string): boolean {
+  return /yesterday|last working day/i.test(question);
+}
+
+export function isTodayQuestion(question: string): boolean {
+  return /today/i.test(question) && !isYesterdayQuestion(question);
+}
+
+export function isRealBlocker(answer: string): boolean {
+  return !NO_BLOCKER_WORDS.includes(answer.trim().toLowerCase());
+}
+
+/** Non-trivial blocker answers from a submission. */
+export function blockerAnswers(submission: SubmissionInput): string[] {
+  return submission.answers
+    .filter((a) => isBlockerQuestion(a.question) && isRealBlocker(a.answer))
+    .map((a) => a.answer);
 }

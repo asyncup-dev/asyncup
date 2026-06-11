@@ -2,6 +2,8 @@ import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { Repo } from '../db/repo.js';
 import type { StandupService } from './standup-service.js';
+import type { AiSummarizer } from '../ai/summarizer.js';
+import { buildWeeklyDigest, digestText, lastConfiguredWeekday } from './insights.js';
 import { standupDays, type Run, type Standup, type Weekday } from './types.js';
 
 const WEEKDAY_BY_LUXON: Record<number, Weekday> = {
@@ -30,6 +32,7 @@ export class Scheduler {
     private service: StandupService,
     private now: () => DateTime = () => DateTime.utc(),
     private log: (msg: string) => void = (msg) => console.log(`[scheduler] ${msg}`),
+    private ai: AiSummarizer | null = null,
   ) {}
 
   start(intervalMs = 60_000): NodeJS.Timeout {
@@ -70,7 +73,8 @@ export class Scheduler {
 
     let run = this.repo.getRun(standup.id, today);
     if (!run && now >= promptAt) {
-      if (this.repo.listParticipants(standup.id).length === 0) return;
+      const roster = this.repo.listParticipants(standup.id);
+      if (roster.filter((p) => !p.onVacation).length === 0) return;
       run = this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
       this.log(`opened run ${run.id} for "${standup.name}" ${today}`);
       try {
@@ -84,9 +88,11 @@ export class Scheduler {
 
     const submitted = new Set(this.repo.listSubmissions(run.id).map((s) => s.userName));
     const participants = this.repo.listRunParticipants(run.id);
+    const skipPrompt = (p: (typeof participants)[number]) =>
+      p.onVacation || p.skippedAt !== null || submitted.has(p.userName);
 
     for (const rp of participants) {
-      if (rp.promptedAt || submitted.has(rp.userName)) continue;
+      if (rp.promptedAt || skipPrompt(rp)) continue;
       // Prompts go out at promptTime in the participant's own timezone.
       const pPromptAt = timeOn(today, standup.promptTime, rp.timezone ?? zone);
       if (now < pPromptAt) continue;
@@ -100,7 +106,7 @@ export class Scheduler {
 
     if (now >= remindAt && now < deadlineAt) {
       for (const rp of participants) {
-        if (rp.remindedAt || !rp.promptedAt || submitted.has(rp.userName)) continue;
+        if (rp.remindedAt || !rp.promptedAt || skipPrompt(rp)) continue;
         try {
           await this.adapter.sendReminder(rp.userName, standup, run);
           this.repo.markReminded(run.id, rp.userName, now.toISO()!);
@@ -120,6 +126,38 @@ export class Scheduler {
       await this.adapter.postSummary(standup, run, this.service.buildSummary(run.id));
     } catch (err) {
       this.log(`postSummary failed for run ${run.id}: ${err}`);
+    }
+
+    if (standup.aiEnabled && this.ai) {
+      try {
+        const submissions = this.repo.listSubmissions(run.id);
+        if (submissions.length > 0) {
+          const text = await this.ai.dailySummary(standup, run, submissions);
+          await this.adapter.postText(standup.spaceName, `🤖 *AI summary*\n${text}`, run.threadKey);
+        }
+      } catch (err) {
+        this.log(`AI summary failed for run ${run.id}: ${err}`);
+      }
+    }
+
+    if (standup.digestEnabled) {
+      const weekday = DateTime.fromISO(run.date).weekday;
+      if (weekday === lastConfiguredWeekday(standup)) {
+        try {
+          const digest = buildWeeklyDigest(this.repo, standup, run.date);
+          let text = digestText(digest);
+          if (standup.aiEnabled && this.ai) {
+            const submissions = this.repo.listSubmissionsBetween(standup.id, digest.weekStart, digest.weekEnd);
+            if (submissions.length > 0) {
+              text += `\n\n🤖 *AI week in review*\n${await this.ai.weeklySummary(standup, digest, submissions)}`;
+            }
+          }
+          await this.adapter.postText(standup.spaceName, text, `digest-${standup.id}-${digest.weekStart}`);
+          this.log(`posted weekly digest for "${standup.name}" (${digest.weekStart})`);
+        } catch (err) {
+          this.log(`weekly digest failed for "${standup.name}": ${err}`);
+        }
+      }
     }
   }
 }

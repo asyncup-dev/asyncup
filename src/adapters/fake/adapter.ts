@@ -9,9 +9,11 @@ interface SentDm {
 }
 
 interface PostedMessage {
-  kind: 'parent' | 'submission' | 'summary';
+  kind: 'parent' | 'submission' | 'summary' | 'update' | 'text';
   spaceName: string;
-  threadKey: string;
+  threadKey?: string;
+  messageName?: string;
+  text?: string;
   payload?: Submission | RunSummary;
 }
 
@@ -22,6 +24,7 @@ interface PostedMessage {
 export class FakeAdapter implements ChatAdapter {
   dms: SentDm[] = [];
   posts: PostedMessage[] = [];
+  private messageCounter = 0;
 
   constructor(private log: ((msg: string) => void) | null = null) {}
 
@@ -40,14 +43,27 @@ export class FakeAdapter implements ChatAdapter {
     this.log?.(`Thread parent → ${standup.spaceName} [${run.threadKey}]`);
   }
 
-  async postSubmission(standup: Standup, run: Run, submission: Submission): Promise<void> {
+  async postSubmission(standup: Standup, run: Run, submission: Submission): Promise<string | null> {
+    const messageName = `messages/fake-${++this.messageCounter}`;
     this.posts.push({
       kind: 'submission',
       spaceName: standup.spaceName,
       threadKey: run.threadKey,
+      messageName,
       payload: submission,
     });
     this.log?.(`Submission by ${submission.displayName} → ${standup.spaceName} [${run.threadKey}]`);
+    return messageName;
+  }
+
+  async updateSubmission(standup: Standup, submission: Submission): Promise<void> {
+    this.posts.push({
+      kind: 'update',
+      spaceName: standup.spaceName,
+      messageName: submission.messageName ?? undefined,
+      payload: submission,
+    });
+    this.log?.(`Submission updated by ${submission.displayName} (${submission.messageName})`);
   }
 
   async postSummary(standup: Standup, run: Run, summary: RunSummary): Promise<void> {
@@ -61,5 +77,10 @@ export class FakeAdapter implements ChatAdapter {
       `Summary → ${standup.spaceName} [${run.threadKey}]: ${summary.mandatorySubmitted}/${summary.mandatoryTotal}` +
         (summary.missingMandatory.length ? ` missing: ${summary.missingMandatory.join(', ')}` : ''),
     );
+  }
+
+  async postText(spaceName: string, text: string, threadKey?: string): Promise<void> {
+    this.posts.push({ kind: 'text', spaceName, threadKey, text });
+    this.log?.(`Text → ${spaceName}${threadKey ? ` [${threadKey}]` : ''}: ${text.split('\n')[0]}`);
   }
 }

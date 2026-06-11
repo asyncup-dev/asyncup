@@ -6,6 +6,8 @@ import { FakeAdapter } from './adapters/fake/adapter.js';
 import { GoogleChatAdapter } from './adapters/gchat/adapter.js';
 import { ChatRequestVerifier } from './adapters/gchat/auth.js';
 import { EventRouter } from './adapters/gchat/events.js';
+import { createLlm } from './ai/llm.js';
+import { AiSummarizer } from './ai/summarizer.js';
 import { CommandHandler } from './core/commands.js';
 import { Scheduler } from './core/scheduler.js';
 import { StandupService } from './core/standup-service.js';
@@ -23,7 +25,7 @@ const adapter =
 
 const service = new StandupService(repo, adapter);
 const commands = new CommandHandler(repo, config.defaultTimezone);
-const router = new EventRouter(commands, service, config.tenantId);
+const router = new EventRouter(commands, service, repo, config.tenantId);
 
 let verifier: ChatRequestVerifier | null = null;
 if (config.chatAudience) {
@@ -35,11 +37,24 @@ if (config.chatAudience) {
   );
 }
 
-const scheduler = new Scheduler(repo, adapter, service);
+let summarizer: AiSummarizer | null = null;
+if (config.llm) {
+  summarizer = new AiSummarizer(createLlm(config.llm));
+  console.log(`[ai] summaries available via ${config.llm.provider} (${config.llm.model})`);
+}
+
+const scheduler = new Scheduler(repo, adapter, service, undefined, undefined, summarizer);
 scheduler.start();
 scheduler.tick().catch((err) => console.error('[scheduler] initial tick failed:', err));
 
-const app = createServer(router, verifier, scheduler, config.tickToken);
+const app = createServer({
+  router,
+  verifier,
+  scheduler,
+  repo,
+  tickToken: config.tickToken,
+  exportToken: config.exportToken,
+});
 app.listen(config.port, () => {
   console.log(`asyncup listening on :${config.port} (adapter: ${config.adapter}, db: ${config.dbPath})`);
 });

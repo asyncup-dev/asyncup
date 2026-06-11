@@ -1,3 +1,5 @@
+import type { LlmConfig } from './ai/llm.js';
+
 export interface Config {
   port: number;
   dbPath: string;
@@ -8,6 +10,10 @@ export interface Config {
   tenantId: string;
   /** Shared secret for POST /tick (external cron on scale-to-zero deploys). Empty = no auth required. */
   tickToken: string;
+  /** Shared secret for GET /export. Empty = export endpoint disabled. */
+  exportToken: string;
+  /** Bring-your-own-key LLM for AI summaries. Null = AI features off. */
+  llm: LlmConfig | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -23,5 +29,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     defaultTimezone: env.DEFAULT_TIMEZONE ?? 'UTC',
     tenantId: env.TENANT_ID ?? 'default',
     tickToken: env.TICK_TOKEN ?? '',
+    exportToken: env.EXPORT_TOKEN ?? '',
+    llm: loadLlmConfig(env),
   };
+}
+
+function loadLlmConfig(env: NodeJS.ProcessEnv): LlmConfig | null {
+  const provider = env.LLM_PROVIDER;
+  if (!provider) return null;
+  if (provider !== 'anthropic' && provider !== 'openai') {
+    throw new Error(`LLM_PROVIDER must be "anthropic" or "openai", got "${provider}"`);
+  }
+  if (!env.LLM_API_KEY) throw new Error('LLM_PROVIDER is set but LLM_API_KEY is missing');
+  const model = env.LLM_MODEL ?? (provider === 'anthropic' ? 'claude-opus-4-7' : '');
+  if (!model) throw new Error('LLM_MODEL is required when LLM_PROVIDER=openai');
+  return { provider, apiKey: env.LLM_API_KEY, model };
 }

@@ -1,14 +1,16 @@
 import { DateTime } from 'luxon';
 import { FakeAdapter } from '../src/adapters/fake/adapter.js';
+import { AiSummarizer } from '../src/ai/summarizer.js';
 import { CommandHandler } from '../src/core/commands.js';
 import { Scheduler } from '../src/core/scheduler.js';
 import { StandupService } from '../src/core/standup-service.js';
+import { DEFAULT_QUESTIONS, type SubmissionInput } from '../src/core/types.js';
 import { Repo } from '../src/db/repo.js';
 
 export const TZ = 'Asia/Kolkata';
 export const TENANT = 'default';
 
-export function makeStack() {
+export function makeStack(opts: { summarizer?: AiSummarizer | null } = {}) {
   const repo = new Repo(':memory:');
   const adapter = new FakeAdapter();
 
@@ -22,16 +24,16 @@ export function makeStack() {
   };
 
   const service = new StandupService(repo, adapter, clock.now);
-  const scheduler = new Scheduler(repo, adapter, service, clock.now, () => {});
+  const scheduler = new Scheduler(repo, adapter, service, clock.now, () => {}, opts.summarizer ?? null);
   const commands = new CommandHandler(repo, TZ, clock.now);
 
   return { repo, adapter, service, scheduler, commands, clock };
 }
 
-export function seedStandup(repo: Repo, opts: { deadlineTime?: string } = {}) {
+export function seedStandup(repo: Repo, opts: { deadlineTime?: string; spaceName?: string } = {}) {
   const standup = repo.createStandup({
     tenantId: TENANT,
-    spaceName: 'spaces/team',
+    spaceName: opts.spaceName ?? 'spaces/team',
     name: 'Daily Standup',
     timezone: TZ,
   });
@@ -48,9 +50,22 @@ export function seedStandup(repo: Repo, opts: { deadlineTime?: string } = {}) {
   return repo.getStandupById(standup.id)!;
 }
 
-export const ANSWERS = {
-  yesterday: 'Shipped the auth refactor',
-  today: 'Start billing webhooks',
-  blockers: 'none',
+export const ANSWERS: SubmissionInput = {
+  answers: [
+    { question: DEFAULT_QUESTIONS[0], answer: 'Shipped the auth refactor' },
+    { question: DEFAULT_QUESTIONS[1], answer: 'Start billing webhooks' },
+    { question: DEFAULT_QUESTIONS[2], answer: 'none' },
+  ],
   mood: 'good',
-} as const;
+};
+
+export function withBlocker(text: string): SubmissionInput {
+  return {
+    answers: [
+      { question: DEFAULT_QUESTIONS[0], answer: 'Worked on infra' },
+      { question: DEFAULT_QUESTIONS[1], answer: 'More infra' },
+      { question: DEFAULT_QUESTIONS[2], answer: text },
+    ],
+    mood: 'meh',
+  };
+}

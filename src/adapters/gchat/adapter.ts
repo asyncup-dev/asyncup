@@ -32,24 +32,41 @@ export class GoogleChatAdapter implements ChatAdapter {
     await this.postInThread(standup.spaceName, run.threadKey, { text: threadParentText(standup, run) });
   }
 
-  async postSubmission(standup: Standup, run: Run, submission: Submission): Promise<void> {
-    await this.postInThread(standup.spaceName, run.threadKey, submissionMessage(submission));
+  async postSubmission(standup: Standup, run: Run, submission: Submission): Promise<string | null> {
+    return this.postInThread(standup.spaceName, run.threadKey, submissionMessage(submission));
+  }
+
+  async updateSubmission(standup: Standup, submission: Submission): Promise<void> {
+    await this.client.spaces.messages.update({
+      name: submission.messageName!,
+      updateMask: 'cardsV2',
+      requestBody: submissionMessage(submission),
+    });
   }
 
   async postSummary(standup: Standup, run: Run, summary: RunSummary): Promise<void> {
     await this.postInThread(standup.spaceName, run.threadKey, { text: summaryText(summary) });
   }
 
+  async postText(spaceName: string, text: string, threadKey?: string): Promise<void> {
+    if (threadKey) {
+      await this.postInThread(spaceName, threadKey, { text });
+      return;
+    }
+    await this.client.spaces.messages.create({ parent: spaceName, requestBody: { text } });
+  }
+
   private async postInThread(
     spaceName: string,
     threadKey: string,
     body: chat_v1.Schema$Message,
-  ): Promise<void> {
-    await this.client.spaces.messages.create({
+  ): Promise<string | null> {
+    const res = await this.client.spaces.messages.create({
       parent: spaceName,
       messageReplyOption: 'REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD',
       requestBody: { ...body, thread: { threadKey } },
     });
+    return res.data.name ?? null;
   }
 
   /**

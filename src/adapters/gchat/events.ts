@@ -1,7 +1,14 @@
 import type { CommandHandler, Mention } from '../../core/commands.js';
 import type { StandupService } from '../../core/standup-service.js';
-import { MOODS, type Mood, type SubmissionAnswers } from '../../core/types.js';
-import { OPEN_DIALOG_FN, standupDialog, SUBMIT_DIALOG_FN } from './cards.js';
+import type { Repo } from '../../db/repo.js';
+import {
+  isBlockerQuestion,
+  MOODS,
+  standupQuestions,
+  type Answer,
+  type Mood,
+} from '../../core/types.js';
+import { OPEN_DIALOG_FN, SKIP_TODAY_FN, standupDialog, SUBMIT_DIALOG_FN } from './cards.js';
 
 /**
  * Routes Google Chat interaction events (MESSAGE, CARD_CLICKED, dialog
@@ -12,6 +19,7 @@ export class EventRouter {
   constructor(
     private commands: CommandHandler,
     private service: StandupService,
+    private repo: Repo,
     private tenantId: string,
   ) {}
 
@@ -31,7 +39,7 @@ export class EventRouter {
   private onAddedToSpace(event: any): object {
     if (isDm(event)) {
       return {
-        text: "👋 Hi! When your team's standup is due you'll get a card here with a *Fill standup* button.",
+        text: "👋 Hi! When your team's standup is due you'll get a card here with a *Fill standup* button. DM me `vacation` / `back` to toggle your vacation mode.",
       };
     }
     return {
@@ -40,10 +48,9 @@ export class EventRouter {
   }
 
   private onMessage(event: any): object {
+    const user = eventUser(event);
     if (isDm(event)) {
-      return {
-        text: 'I work via the standup form — when a standup is due, you\'ll get a card here with a *Fill standup* button. Configuration happens in the team space (mention me with `help` there).',
-      };
+      return this.onDirectMessage(event, user);
     }
     const text: string = event.message?.argumentText ?? event.message?.text ?? '';
     const reply = this.commands.handle({
@@ -51,56 +58,96 @@ export class EventRouter {
       spaceName: event.space?.name ?? '',
       text,
       mentions: extractMentions(event),
+      sender: user,
     });
     return { text: reply };
+  }
+
+  private onDirectMessage(event: any, user: Mention): object {
+    const text = (event.message?.argumentText ?? event.message?.text ?? '').trim().toLowerCase();
+    if (text === 'vacation' || text === 'ooo') {
+      const affected = this.repo.setVacationForUser(user.userName, true);
+      return {
+        text: affected
+          ? `🏖️ Vacation mode ON across ${affected} standup${affected === 1 ? '' : 's'} — you won't be prompted or counted as missing. DM me \`back\` when you return.`
+          : "You're not on any standup roster yet.",
+      };
+    }
+    if (text === 'back') {
+      const affected = this.repo.setVacationForUser(user.userName, false);
+      return {
+        text: affected
+          ? `👋 Welcome back! Vacation mode is off — prompts resume with the next run.`
+          : "You're not on any standup roster yet.",
+      };
+    }
+    return {
+      text:
+        'When a standup is due you\'ll get a card here with a *Fill standup* button.\n' +
+        'DM commands: `vacation` (pause prompts while you\'re away) · `back` (resume).\n' +
+        'Team configuration happens in the team space — mention me with `help` there.',
+    };
   }
 
   private async onCardClicked(event: any): Promise<object> {
     const fn = event.common?.invokedFunction;
     const runId = Number(getParameter(event, 'runId'));
+    const user = eventUser(event);
 
     if (fn === OPEN_DIALOG_FN) {
       if (!Number.isInteger(runId)) return dialogError('This standup prompt is no longer valid.');
-      return standupDialog(runId);
+      const run = this.repo.getRunById(runId);
+      if (!run) return dialogError('This standup prompt is no longer valid.');
+      const standup = this.repo.getStandupById(run.standupId)!;
+      const prefill = this.service.getPrefill(standup, run, user.userName);
+      return standupDialog(runId, standupQuestions(standup), standup.moodEnabled, prefill);
     }
 
     if (fn === SUBMIT_DIALOG_FN) {
-      return this.onDialogSubmit(event, runId);
+      return this.onDialogSubmit(event, runId, user);
+    }
+
+    if (fn === SKIP_TODAY_FN) {
+      const result = this.service.skipToday(runId, user.userName);
+      const messages = {
+        skipped: "🏖️ Skipped today's standup — you won't be counted as missing. Have a good one!",
+        already_submitted: '✅ You already submitted today, so there is nothing to skip.',
+        not_found: 'This standup prompt is no longer valid.',
+      };
+      return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: messages[result] };
     }
 
     return {};
   }
 
-  private async onDialogSubmit(event: any, runId: number): Promise<object> {
-    const yesterday = getFormValue(event, 'yesterday');
-    const today = getFormValue(event, 'today');
-    const blockers = getFormValue(event, 'blockers');
-    const mood = getFormValue(event, 'mood') as Mood;
+  private async onDialogSubmit(event: any, runId: number, user: Mention): Promise<object> {
+    if (!Number.isInteger(runId)) return dialogError('This standup form is no longer valid.');
+    const run = this.repo.getRunById(runId);
+    if (!run) return dialogError('This standup form is no longer valid.');
+    const standup = this.repo.getStandupById(run.standupId)!;
+    const questions = standupQuestions(standup);
 
-    if (!yesterday.trim() || !today.trim()) {
-      return dialogError('Please fill in both "yesterday" and "today".');
-    }
-    if (!MOODS.includes(mood)) {
-      return dialogError('Please pick your mood from the dropdown.');
-    }
-    if (!Number.isInteger(runId)) {
-      return dialogError('This standup form is no longer valid.');
+    const answers: Answer[] = [];
+    for (let i = 0; i < questions.length; i++) {
+      const question = questions[i]!;
+      const value = getFormValue(event, `q${i}`).trim();
+      if (!value && !isBlockerQuestion(question)) {
+        return dialogError(`Please answer: "${question}"`);
+      }
+      answers.push({ question, answer: value || 'none' });
     }
 
-    const answers: SubmissionAnswers = {
-      yesterday: yesterday.trim(),
-      today: today.trim(),
-      blockers: blockers.trim() || 'none',
-      mood,
-    };
-    const result = await this.service.submit(
-      runId,
-      event.user?.name ?? '',
-      event.user?.displayName ?? 'Unknown',
-      answers,
-    );
+    let mood: Mood | null = null;
+    if (standup.moodEnabled) {
+      const value = getFormValue(event, 'mood') as Mood;
+      if (!MOODS.includes(value)) return dialogError('Please pick your mood from the dropdown.');
+      mood = value;
+    }
+
+    const result = await this.service.submit(runId, user.userName, user.displayName, { answers, mood });
 
     if (result.ok) {
+      if (result.edited) return dialogOk('✏️ Updated — your card in the team space was refreshed.');
       return dialogOk(
         result.late
           ? '✅ Submitted (after the deadline — marked late) and posted to the team space.'
@@ -108,12 +155,19 @@ export class EventRouter {
       );
     }
     const messages: Record<typeof result.reason, string> = {
-      already_submitted: 'You already submitted this standup today. 👍',
+      already_submitted: 'This run is closed — late submissions can no longer be edited.',
       run_not_found: 'This standup form is no longer valid.',
       not_a_participant: "You're not on this standup's roster — ask your admin to `add` you.",
     };
     return dialogError(messages[result.reason]);
   }
+}
+
+function eventUser(event: any): Mention {
+  return {
+    userName: event.user?.name ?? '',
+    displayName: event.user?.displayName ?? 'Unknown',
+  };
 }
 
 function isDm(event: any): boolean {

@@ -4,11 +4,17 @@ import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 function makeRouter() {
   const stack = makeStack();
-  const router = new EventRouter(stack.commands, stack.service, TENANT);
+  const router = new EventRouter(stack.commands, stack.service, stack.repo, TENANT);
   return { ...stack, router };
 }
 
-function dialogSubmitEvent(runId: number, inputs: Partial<Record<string, string>>, user = 'users/alice') {
+const SENDER = { name: 'users/admin', displayName: 'Admin', type: 'HUMAN' };
+
+function dialogSubmitEvent(
+  runId: number,
+  inputs: Partial<Record<string, string>>,
+  user = { name: 'users/alice', displayName: 'Alice', type: 'HUMAN' },
+) {
   const formInputs: any = {};
   for (const [name, value] of Object.entries(inputs)) {
     formInputs[name] = { stringInputs: { value: [value] } };
@@ -17,30 +23,25 @@ function dialogSubmitEvent(runId: number, inputs: Partial<Record<string, string>
     type: 'CARD_CLICKED',
     isDialogEvent: true,
     common: { invokedFunction: 'submitStandup', parameters: { runId: String(runId) }, formInputs },
-    user: { name: user, displayName: 'Alice', type: 'HUMAN' },
+    user,
     space: { name: 'spaces/dm-alice', spaceType: 'DIRECT_MESSAGE' },
   };
 }
 
+const FULL_FORM = { q0: 'Did X', q1: 'Will do Y', q2: 'none', mood: 'good' };
+
 describe('EventRouter', () => {
-  it('routes space messages to the command handler with mentions', async () => {
+  it('routes space messages to the command handler with sender and mentions', async () => {
     const { router, repo } = makeRouter();
     const reply: any = await router.handle({
       type: 'MESSAGE',
       space: { name: 'spaces/team', type: 'ROOM' },
-      message: {
-        argumentText: ' setup Platform',
-        annotations: [
-          {
-            type: 'USER_MENTION',
-            userMention: { user: { name: 'users/bot', displayName: 'Standup Bot', type: 'BOT' } },
-          },
-        ],
-      },
-      user: { name: 'users/admin', displayName: 'Admin' },
+      message: { argumentText: ' setup Platform' },
+      user: SENDER,
     });
     expect(reply.text).toContain('Platform');
-    expect(repo.getStandupBySpace(TENANT, 'spaces/team')?.name).toBe('Platform');
+    const standup = repo.listStandupsBySpace(TENANT, 'spaces/team')[0]!;
+    expect(repo.isAdmin(standup.id, 'users/admin')).toBe(true);
   });
 
   it('extracts human mentions and ignores the bot', async () => {
@@ -49,6 +50,7 @@ describe('EventRouter', () => {
       type: 'MESSAGE',
       space: { name: 'spaces/team', type: 'ROOM' },
       message: { argumentText: 'setup' },
+      user: SENDER,
     });
     const reply: any = await router.handle({
       type: 'MESSAGE',
@@ -66,30 +68,51 @@ describe('EventRouter', () => {
           },
         ],
       },
+      user: SENDER,
     });
     expect(reply.text).toContain('Added Alice');
-    const standup = repo.getStandupBySpace(TENANT, 'spaces/team')!;
+    const standup = repo.listStandupsBySpace(TENANT, 'spaces/team')[0]!;
     expect(repo.listParticipants(standup.id).map((p) => p.userName)).toEqual(['users/alice']);
   });
 
-  it('answers DMs with a hint instead of running commands', async () => {
-    const { router } = makeRouter();
-    const reply: any = await router.handle({
+  it('handles DM self-service vacation and back', async () => {
+    const { router, repo } = makeRouter();
+    const standup = seedStandup(repo);
+    const dm = (text: string) => ({
       type: 'MESSAGE',
       space: { name: 'spaces/dm', spaceType: 'DIRECT_MESSAGE' },
-      message: { text: 'setup' },
+      message: { text },
+      user: { name: 'users/alice', displayName: 'Alice' },
     });
-    expect(reply.text).toContain('Fill standup');
+
+    const on: any = await router.handle(dm('vacation'));
+    expect(on.text).toContain('Vacation mode ON');
+    expect(repo.listParticipants(standup.id).find((p) => p.userName === 'users/alice')?.onVacation).toBe(
+      true,
+    );
+
+    const off: any = await router.handle(dm('back'));
+    expect(off.text).toContain('Welcome back');
+
+    const hint: any = await router.handle(dm('hello there'));
+    expect(hint.text).toContain('Fill standup');
   });
 
-  it('opens the dialog on card click', async () => {
-    const { router } = makeRouter();
+  it('opens a prefilled dialog from the prompt card', async () => {
+    const { router, repo, service } = makeRouter();
+    const standup = seedStandup(repo);
+    const run1 = repo.createRun(standup.id, '2026-06-09', 'k1');
+    await service.submit(run1.id, 'users/alice', 'Alice', ANSWERS);
+    const run2 = repo.createRun(standup.id, '2026-06-10', 'k2');
+
     const reply: any = await router.handle({
       type: 'CARD_CLICKED',
-      common: { invokedFunction: 'openStandupDialog', parameters: { runId: '7' } },
+      common: { invokedFunction: 'openStandupDialog', parameters: { runId: String(run2.id) } },
+      user: { name: 'users/alice', displayName: 'Alice' },
     });
-    expect(reply.actionResponse.type).toBe('DIALOG');
-    expect(reply.actionResponse.dialogAction.dialog).toBeDefined();
+    const widgets = reply.actionResponse.dialogAction.dialog.body.sections[0].widgets;
+    expect(widgets[0].textInput.value).toBe('Start billing webhooks');
+    expect(widgets[1].textInput.value).toBeUndefined();
   });
 
   it('records a dialog submission and posts it to the thread', async () => {
@@ -97,34 +120,68 @@ describe('EventRouter', () => {
     const standup = seedStandup(repo);
     const run = repo.createRun(standup.id, '2026-06-10', 'key');
 
-    const reply: any = await router.handle(dialogSubmitEvent(run.id, { ...ANSWERS }));
+    const reply: any = await router.handle(dialogSubmitEvent(run.id, FULL_FORM));
     expect(reply.actionResponse.dialogAction.actionStatus.statusCode).toBe('OK');
-    expect(repo.getSubmission(run.id, 'users/alice')?.today).toBe(ANSWERS.today);
+    const sub = repo.getSubmission(run.id, 'users/alice')!;
+    expect(sub.answers[1]!.answer).toBe('Will do Y');
     expect(adapter.posts.filter((p) => p.kind === 'submission')).toHaveLength(1);
   });
 
-  it('validates required fields and mood', async () => {
+  it('edits via resubmission with a friendly confirmation', async () => {
+    const { router, repo, adapter } = makeRouter();
+    const standup = seedStandup(repo);
+    const run = repo.createRun(standup.id, '2026-06-10', 'key');
+    await router.handle(dialogSubmitEvent(run.id, FULL_FORM));
+
+    const edit: any = await router.handle(dialogSubmitEvent(run.id, { ...FULL_FORM, q1: 'Changed plan' }));
+    expect(edit.actionResponse.dialogAction.actionStatus.userFacingMessage).toContain('Updated');
+    expect(repo.getSubmission(run.id, 'users/alice')!.answers[1]!.answer).toBe('Changed plan');
+    expect(adapter.posts.filter((p) => p.kind === 'update')).toHaveLength(1);
+  });
+
+  it('validates required answers and mood', async () => {
     const { router, repo } = makeRouter();
     const standup = seedStandup(repo);
     const run = repo.createRun(standup.id, '2026-06-10', 'key');
 
-    const missing: any = await router.handle(dialogSubmitEvent(run.id, { yesterday: 'x' }));
+    const missing: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', mood: 'good' }));
     expect(missing.actionResponse.dialogAction.actionStatus.statusCode).toBe('INVALID_ARGUMENT');
 
     const badMood: any = await router.handle(
-      dialogSubmitEvent(run.id, { yesterday: 'x', today: 'y', mood: 'ecstatic' }),
+      dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', q2: 'none', mood: 'ecstatic' }),
     );
     expect(badMood.actionResponse.dialogAction.actionStatus.statusCode).toBe('INVALID_ARGUMENT');
-    expect(repo.getSubmission(run.id, 'users/alice')).toBeNull();
+
+    // blockers (q2) may be empty; defaults to "none"
+    const ok: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', mood: 'good' }));
+    expect(ok.actionResponse.dialogAction.actionStatus.statusCode).toBe('OK');
+    expect(repo.getSubmission(run.id, 'users/alice')!.answers[2]!.answer).toBe('none');
   });
 
-  it('reports duplicate submissions kindly', async () => {
+  it('skips mood validation when the mood question is disabled', async () => {
+    const { router, repo } = makeRouter();
+    const standup = seedStandup(repo);
+    repo.updateStandup(standup.id, { moodEnabled: false });
+    const run = repo.createRun(standup.id, '2026-06-10', 'key');
+
+    const reply: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y' }));
+    expect(reply.actionResponse.dialogAction.actionStatus.statusCode).toBe('OK');
+    expect(repo.getSubmission(run.id, 'users/alice')!.mood).toBeNull();
+  });
+
+  it('handles the skip button with a card update', async () => {
     const { router, repo } = makeRouter();
     const standup = seedStandup(repo);
     const run = repo.createRun(standup.id, '2026-06-10', 'key');
-    await router.handle(dialogSubmitEvent(run.id, { ...ANSWERS }));
-    const dup: any = await router.handle(dialogSubmitEvent(run.id, { ...ANSWERS }));
-    expect(dup.actionResponse.dialogAction.actionStatus.userFacingMessage).toContain('already submitted');
+
+    const reply: any = await router.handle({
+      type: 'CARD_CLICKED',
+      common: { invokedFunction: 'skipToday', parameters: { runId: String(run.id) } },
+      user: { name: 'users/alice', displayName: 'Alice' },
+    });
+    expect(reply.actionResponse.type).toBe('UPDATE_MESSAGE');
+    expect(reply.text).toContain('Skipped');
+    expect(repo.listRunParticipants(run.id).find((p) => p.userName === 'users/alice')?.skippedAt).not.toBeNull();
   });
 
   it('welcomes when added to a space', async () => {

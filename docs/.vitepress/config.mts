@@ -17,6 +17,7 @@ export default defineConfig({
           { text: 'Google Chat setup', link: '/guide/google-chat-setup' },
           { text: 'Commands', link: '/guide/commands' },
           { text: 'Configuration', link: '/guide/configuration' },
+          { text: 'AI summaries', link: '/guide/ai' },
           { text: 'Deployment', link: '/guide/deployment' },
         ],
       },
