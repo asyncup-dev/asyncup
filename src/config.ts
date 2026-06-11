@@ -1,25 +1,19 @@
-import type { LlmConfig } from './ai/llm.js';
-
+/**
+ * Bootstrap-only configuration. Everything else (Google Chat credentials,
+ * AI keys, integrations, access tokens, default timezone) lives in the
+ * database and is edited from the dashboard — see src/core/settings.ts.
+ */
 export interface Config {
   port: number;
   dbPath: string;
   /** PostgreSQL connection string; empty = embedded SQLite at DB_PATH. */
   databaseUrl: string;
   adapter: 'google' | 'fake';
-  /** GCP project number used to verify incoming Chat requests. Empty = skip (dev only). */
-  chatAudience: string;
-  defaultTimezone: string;
   tenantId: string;
-  /** Shared secret for POST /tick (external cron on scale-to-zero deploys). Empty = no auth required. */
-  tickToken: string;
-  /** Shared secret for GET /export. Empty = export endpoint disabled. */
-  exportToken: string;
   /** Shared secret for the web dashboard. Empty = dashboard disabled. */
   dashboardToken: string;
-  /** Check participants' Google Calendar for OOO events (needs domain-wide delegation). */
-  calendarOoo: boolean;
-  /** Bring-your-own-key LLM for AI summaries. Null = AI features off. */
-  llm: LlmConfig | null;
+  /** Encrypts secrets at rest (AES-256-GCM). Required unless ADAPTER=fake. */
+  secretKey: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -27,30 +21,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (adapter !== 'google' && adapter !== 'fake') {
     throw new Error(`ADAPTER must be "google" or "fake", got "${adapter}"`);
   }
+  const secretKey = env.SECRET_KEY ?? '';
+  if (!secretKey && adapter === 'google') {
+    throw new Error('SECRET_KEY is required — generate one with `openssl rand -hex 32`');
+  }
   return {
     port: Number(env.PORT ?? 8080),
     dbPath: env.DB_PATH ?? './data/standup.db',
     databaseUrl: env.DATABASE_URL ?? '',
     adapter,
-    chatAudience: env.GOOGLE_CHAT_AUDIENCE ?? '',
-    defaultTimezone: env.DEFAULT_TIMEZONE ?? 'UTC',
     tenantId: env.TENANT_ID ?? 'default',
-    tickToken: env.TICK_TOKEN ?? '',
-    exportToken: env.EXPORT_TOKEN ?? '',
     dashboardToken: env.DASHBOARD_TOKEN ?? '',
-    calendarOoo: env.GOOGLE_CALENDAR_OOO === 'true',
-    llm: loadLlmConfig(env),
+    secretKey: secretKey || 'dev-only-ephemeral-secret',
   };
-}
-
-function loadLlmConfig(env: NodeJS.ProcessEnv): LlmConfig | null {
-  const provider = env.LLM_PROVIDER;
-  if (!provider) return null;
-  if (provider !== 'anthropic' && provider !== 'openai') {
-    throw new Error(`LLM_PROVIDER must be "anthropic" or "openai", got "${provider}"`);
-  }
-  if (!env.LLM_API_KEY) throw new Error('LLM_PROVIDER is set but LLM_API_KEY is missing');
-  const model = env.LLM_MODEL ?? (provider === 'anthropic' ? 'claude-opus-4-7' : '');
-  if (!model) throw new Error('LLM_MODEL is required when LLM_PROVIDER=openai');
-  return { provider, apiKey: env.LLM_API_KEY, model };
 }

@@ -6,31 +6,38 @@ Workspace admin (for domain-wide install) and have a Google Cloud project.
 ## 1. Create a GCP project and enable the Chat API
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project (e.g. `asyncup`).
-2. Note the **project number** (Dashboard → Project info) — this is your `GOOGLE_CHAT_AUDIENCE`.
+2. Note the **project number** (Dashboard → Project info) — you'll paste it into AsyncUp's settings.
 3. Enable the API: **APIs & Services → Library → Google Chat API → Enable**.
 
 ## 2. Create a service account
 
 1. **IAM & Admin → Service Accounts → Create service account** (e.g. `asyncup`).
    No project roles are needed — Chat API access comes from the app configuration.
-2. Open the account → **Keys → Add key → JSON**. Download the file as
-   `service-account.json` next to `docker-compose.yml` (it is gitignored).
+2. Open the account → **Keys → Add key → JSON** and download the key file.
+   You'll paste its contents into the dashboard in step 3 — no file mounting.
 
-## 3. Deploy the bot and get an HTTPS URL
-
-Google Chat must reach your webhook over **public HTTPS**:
+## 3. Deploy the bot and connect it
 
 ```bash
 cp .env.example .env
-# set GOOGLE_CHAT_AUDIENCE=<project number>
-# set GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json
-# uncomment the service-account.json volume mount in docker-compose.yml
+# set DASHBOARD_TOKEN (any long random string)
+# set SECRET_KEY      (openssl rand -hex 32)
 docker compose up -d
 ```
 
-Put it behind your reverse proxy (Caddy/nginx/Traefik) or, for a quick test,
-a tunnel like `cloudflared tunnel --url http://localhost:8080`.
+Expose it over **public HTTPS** behind your reverse proxy
+(Caddy/nginx/Traefik) or, for a quick test, a tunnel like
+`cloudflared tunnel --url http://localhost:8080`.
 Your event URL is `https://<your-host>/chat/events`.
+
+Then open `https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` →
+**Settings → Google Chat** and paste:
+
+- the **project number** from step 1
+- the **service-account key JSON** from step 2 (stored encrypted)
+
+Changes apply immediately — no restart. (On Cloud Run you can skip the key
+and use the service's own identity via Application Default Credentials.)
 
 ## 4. Configure the Chat app
 
@@ -81,7 +88,7 @@ event, the service account needs **domain-wide delegation**:
    - Client ID: the number from step 1
    - Scope: `https://www.googleapis.com/auth/calendar.events.readonly`
 3. Enable the **Google Calendar API** in your GCP project.
-4. Set `GOOGLE_CALENDAR_OOO=true` in your `.env` and restart.
+4. Dashboard → **Settings → Workspace** → tick *Google Calendar OOO sync*.
 
 AsyncUp learns each person's email the first time they interact with the bot,
 then checks their primary calendar for OOO events when a run opens. People who
@@ -90,6 +97,6 @@ are OOO are listed as 🏖️ away — never as missing.
 ## Troubleshooting
 
 - **"No DM space with users/…"** in logs → that user doesn't have the app installed; see step 5.
-- **401 on events** → `GOOGLE_CHAT_AUDIENCE` must be the project *number*, not the project ID.
+- **401 on events** → the value in Settings → Google Chat must be the project *number*, not the project ID.
 - **No prompts arriving** → check `docker compose logs`; the scheduler logs every run open/close. Verify the standup `status`, days, and timezone.
 - **Replies not threading** → the bot posts with `threadKey`, which threads correctly even if the parent message failed; check the space's history settings.

@@ -21,6 +21,13 @@ doesn't need the query parameter.
 
 ## What's there
 
+- **First-run checklist** — a setup meter (connect Google Chat, create a
+  standup, add your team, optional AI) that disappears once you're rolling.
+- **Settings** — *all app configuration lives here*: Google Chat connection
+  (project number + paste-in service-account key), AI provider and key,
+  default timezone, Calendar OOO sync, and the machine tokens for `/tick`
+  and `/export` (generate/clear; shown exactly once). Secrets are stored
+  encrypted and never echoed back.
 - **Standup list** — every standup with schedule and today's progress.
 - **Standup detail** — edit name, times, timezone, days, reminder, questions,
   and toggles (mood / anonymous mood / digest / AI / escalation threshold);

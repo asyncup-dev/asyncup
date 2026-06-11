@@ -13,8 +13,9 @@ reproduction steps and the deployment mode (Docker, bare Node, proxy setup).
 ## Scope notes for self-hosters
 
 - `POST /chat/events` should only be reachable via HTTPS, and
-  `GOOGLE_CHAT_AUDIENCE` must be set in production — it cryptographically
+  the GCP project number must be set in dashboard settings — it cryptographically
   verifies that requests come from Google Chat.
-- Set `TICK_TOKEN` if your `/tick` endpoint is internet-reachable.
+- Generate a tick token (dashboard → Settings) if `/tick` is internet-reachable.
+- Keep `SECRET_KEY` out of database backups — it decrypts stored credentials.
 - The SQLite database contains your team's standup answers — treat backups
   accordingly.

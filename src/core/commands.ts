@@ -1,5 +1,6 @@
 import { DateTime, IANAZone } from 'luxon';
 import type { BlockerService } from './blocker-service.js';
+import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
 import { trendsText } from './insights.js';
 import {
@@ -51,7 +52,7 @@ const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'blocker'
 export class CommandHandler {
   constructor(
     private repo: Repo,
-    private defaultTimezone: string,
+    private settings: SettingsService,
     private now: () => DateTime = () => DateTime.utc(),
     private blockerService: BlockerService | null = null,
   ) {}
@@ -163,7 +164,7 @@ export class CommandHandler {
       tenantId: ctx.tenantId,
       spaceName: ctx.spaceName,
       name: name || 'Daily Standup',
-      timezone: this.defaultTimezone,
+      timezone: (await this.settings.get()).defaultTimezone,
     });
     if (ctx.sender.userName) {
       await this.repo.addAdmin(standup.id, ctx.sender.userName, ctx.sender.displayName);

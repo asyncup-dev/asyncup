@@ -191,6 +191,15 @@ CREATE TABLE blocker_updates (
 ALTER TABLE blockers ADD COLUMN resolved_by TEXT;
 CREATE INDEX idx_blockers_unresolved ON blockers(standup_id) WHERE resolved_date IS NULL;
 `,
+  // 5 — app settings move from env vars into the database
+  `
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  encrypted INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+`,
 ];
 
 /**
@@ -319,6 +328,15 @@ CREATE TABLE blocker_updates (
 );
 ALTER TABLE blockers ADD COLUMN resolved_by TEXT;
 CREATE INDEX idx_blockers_unresolved ON blockers(standup_id) WHERE resolved_date IS NULL;
+`,
+  // 5 — app settings move from env vars into the database
+  `
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  encrypted INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
 `,
 ];
 
@@ -1047,6 +1065,25 @@ export class Repo {
   async getUserEmail(userName: string): Promise<string | null> {
     const row = await this.db.get('SELECT email FROM user_emails WHERE user_name = ?', [userName]);
     return row?.email ?? null;
+  }
+
+  // --- settings (key/value, optionally encrypted) ---
+
+  async getSettingRows(): Promise<{ key: string; value: string; encrypted: boolean }[]> {
+    const rows = await this.db.all('SELECT key, value, encrypted FROM settings');
+    return rows.map((r: any) => ({ key: r.key, value: r.value, encrypted: !!r.encrypted }));
+  }
+
+  async setSetting(key: string, value: string, encrypted: boolean, at: string): Promise<void> {
+    await this.db.run(
+      `INSERT INTO settings (key, value, encrypted, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value, encrypted = excluded.encrypted, updated_at = excluded.updated_at`,
+      [key, value, encrypted ? 1 : 0, at],
+    );
+  }
+
+  async deleteSetting(key: string): Promise<void> {
+    await this.db.run('DELETE FROM settings WHERE key = ?', [key]);
   }
 
   // --- DM space cache (used by the Google Chat adapter) ---

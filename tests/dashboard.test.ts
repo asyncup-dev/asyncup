@@ -11,12 +11,11 @@ async function startServer(dashboardToken = 'dash-secret') {
   const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT);
   const app = createServer({
     router,
-    verifier: null,
     scheduler: stack.scheduler,
     repo: stack.repo,
-    tickToken: '',
-    exportToken: '',
+    settings: stack.settings,
     dashboardToken,
+    skipVerification: true,
     now: stack.clock.now,
   });
   const server = app.listen(0);
@@ -75,6 +74,72 @@ describe('dashboard', () => {
     const runPage = await (await get(`/dashboard/standup/${standup.id}/run/2026-06-10`)).text();
     expect(runPage).toContain('Stuck on VPN');
     expect(runPage).toContain('What will you do today?');
+  });
+
+  it('serves the settings page, saves sections, and never echoes secrets', async () => {
+    const { url, settings, get } = await startServer();
+
+    const page = await (await get('/dashboard/settings')).text();
+    expect(page).toContain('Google Chat');
+    expect(page).toContain('AI summaries');
+    expect(page).toContain('Access tokens');
+
+    const post = (body: Record<string, string>) =>
+      fetch(`${url}/dashboard/settings`, {
+        method: 'POST',
+        headers: {
+          cookie: 'asyncup_dash=dash-secret',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(body).toString(),
+        redirect: 'manual',
+      });
+
+    expect((await post({ section: 'chat', chatAudience: 'not-a-number' })).status).toBe(400);
+
+    const ok = await post({
+      section: 'chat',
+      chatAudience: '987654',
+      serviceAccountJson: JSON.stringify({ client_email: 'bot@p.iam.gserviceaccount.com', private_key: 'k' }),
+    });
+    expect(ok.status).toBe(302);
+    const saved = await settings.get();
+    expect(saved.chatAudience).toBe('987654');
+    expect(saved.serviceAccountJson).toContain('client_email');
+
+    // the page shows status, never the key material
+    const after = await (await get('/dashboard/settings')).text();
+    expect(after).toContain('bot@p.iam.gserviceaccount.com');
+    expect(after).not.toContain('private_key');
+
+    // saving AI section with empty key keeps configured values intact
+    expect((await post({ section: 'ai', llmProvider: 'anthropic', llmModel: '' })).status).toBe(302);
+    expect((await settings.get()).llmProvider).toBe('anthropic');
+  });
+
+  it('generates tokens shown once and enforces them on /tick', async () => {
+    const { url, settings } = await startServer();
+    const res = await fetch(`${url}/dashboard/settings`, {
+      method: 'POST',
+      headers: {
+        cookie: 'asyncup_dash=dash-secret',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ action: 'generate-tick' }).toString(),
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    const token = (await settings.get()).tickToken;
+    expect(token).not.toBe('');
+    expect(html).toContain(token); // revealed exactly once on this response
+
+    const fresh = await (await fetch(`${url}/dashboard/settings`, { headers: { cookie: 'asyncup_dash=dash-secret' } })).text();
+    expect(fresh).not.toContain(token);
+
+    expect((await fetch(`${url}/tick`, { method: 'POST' })).status).toBe(401);
+    expect(
+      (await fetch(`${url}/tick`, { method: 'POST', headers: { authorization: `Bearer ${token}` } })).status,
+    ).toBe(200);
   });
 
   it('updates configuration via the form and validates input', async () => {

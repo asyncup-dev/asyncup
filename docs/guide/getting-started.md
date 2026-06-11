@@ -23,7 +23,7 @@ the names of mandatory participants who didn't fill it in.
 ```bash
 git clone https://github.com/asyncup-dev/asyncup
 cd asyncup
-cp .env.example .env   # set GOOGLE_CHAT_AUDIENCE + service account key
+cp .env.example .env   # set DASHBOARD_TOKEN + SECRET_KEY
 docker compose up -d
 ```
 

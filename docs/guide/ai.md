@@ -3,18 +3,16 @@
 AsyncUp can post an **AI TL;DR** under each day's thread and an **AI week in
 review** with the weekly digest. This is strictly opt-in, twice:
 
-1. The self-hoster configures an LLM key on the server (below). Without it,
+1. The self-hoster adds an LLM key in the dashboard (below). Without it,
    nothing ever leaves your infrastructure.
 2. A standup admin enables it per standup with `ai on`.
 
-## Server configuration
+## Configuration
 
-```bash
-# .env
-LLM_PROVIDER=anthropic        # or "openai"
-LLM_API_KEY=sk-ant-...
-# LLM_MODEL=claude-opus-4-7   # default for anthropic; required for openai
-```
+Dashboard → **Settings → AI summaries**: pick the provider (Anthropic or
+OpenAI), paste your API key (stored encrypted), optionally set the model
+(Anthropic defaults to `claude-opus-4-7`; OpenAI requires an explicit model).
+Saving applies immediately.
 
 The integration uses plain HTTPS calls (no SDK dependency) and only ever sends
 the standup submissions of standups that have `ai on`. Failures are logged and
@@ -31,8 +29,8 @@ never block the run from closing.
 ## Cost & model notes
 
 A daily summary for a 10-person team is roughly 1–2k input tokens — a few
-cents per day even on the most capable models. Set `LLM_MODEL` to a smaller
-model (e.g. `claude-haiku-4-5`) if you want it near-free.
+cents per day even on the most capable models. Set a smaller model
+(e.g. `claude-haiku-4-5`) in Settings if you want it near-free.
 
 ## Privacy considerations
 

@@ -48,9 +48,9 @@ one-liner (`docker build -t asyncup .`) if you prefer auditing what you run.
 ## Docker Compose (simplest)
 
 ```bash
-cp .env.example .env       # set GOOGLE_CHAT_AUDIENCE, credentials path
-# uncomment the service-account.json mount in docker-compose.yml
+cp .env.example .env       # set DASHBOARD_TOKEN + SECRET_KEY
 docker compose up -d       # pulls the GHCR image by default
+# then finish setup in https://<host>/dashboard?token=<DASHBOARD_TOKEN>
 ```
 
 Put it behind any HTTPS reverse proxy (Caddy, nginx, Traefik) and point the
@@ -71,8 +71,8 @@ scale on the free tier:
 2. The in-process scheduler only runs while an instance is alive, so drive
    it externally: create a **Cloud Scheduler** job (free tier: 3 jobs) that
    hits `POST /tick` every minute with header
-   `Authorization: Bearer <TICK_TOKEN>`.
-3. Set `TICK_TOKEN` in the service env.
+   `Authorization: Bearer <tick token>`.
+3. Generate the tick token in dashboard → Settings → Access tokens.
 
 Webhook events (dialog opens, submissions, commands) spin the instance up
 on demand; `/tick` wakes it for prompts, reminders, and deadlines. Ticks are
@@ -90,7 +90,7 @@ Run it under systemd or any process manager.
 
 ## Production checklist
 
-- [ ] `GOOGLE_CHAT_AUDIENCE` set (request verification on)
+- [ ] GCP project number set in dashboard settings (request verification on)
 - [ ] HTTPS in front of `/chat/events`
-- [ ] `TICK_TOKEN` set if `/tick` is internet-reachable
+- [ ] Tick token generated if `/tick` is internet-reachable; `SECRET_KEY` backed up
 - [ ] `DB_PATH` on persistent storage, backed up

@@ -16,9 +16,6 @@ services:
       DATABASE_URL: ${DATABASE_URL:-}
     volumes:
       - standup-data:/data
-      # Mount your GCP service account key and set
-      # GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json in .env:
-      # - ./service-account.json:/app/service-account.json:ro
 
   # Optional same-machine PostgreSQL:
   #   docker compose --profile postgres up -d
