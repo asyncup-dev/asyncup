@@ -1,4 +1,4 @@
-import type { Run, RunSummary, Standup, Submission } from './types.js';
+import type { Blocker, Run, RunSummary, Standup, Submission } from './types.js';
 
 /**
  * Platform abstraction. The core never touches Google Chat (or Slack/Teams)
@@ -31,4 +31,10 @@ export interface ChatAdapter {
 
   /** Plain-text direct message — used for blocker escalation pings. */
   sendDm(userName: string, text: string): Promise<void>;
+
+  /**
+   * Interactive blocker card (Acknowledge / Add update / Resolve buttons),
+   * DMed when someone is tagged on a blocker or nudged about one.
+   */
+  sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void>;
 }

@@ -1,4 +1,5 @@
 import { DateTime, IANAZone } from 'luxon';
+import type { BlockerService } from './blocker-service.js';
 import type { Repo } from '../db/repo.js';
 import { trendsText } from './insights.js';
 import {
@@ -41,16 +42,18 @@ const HELP = `*AsyncUp commands* (mention me in this space — prefix with \`#<i
 \`mood on|off|anon\` — mood question (\`anon\` hides who felt what; the wrap-up shows the team average)
 \`escalate @user\` / \`escalate days N\` / \`escalate off\` — DM someone when blockers stay open
 \`digest on|off\` · \`ai on|off\` — weekly digest, AI summaries
+\`blocker <id> tag @user…\` / \`blocker <id> update <text>\` / \`blocker <id> resolve\` — work a blocker together
 \`status\` · \`trends\` · \`blockers\` · \`export\` — insights`;
 
 /** Commands anyone in the space may run; everything else needs an admin. */
-const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'export']);
+const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'blocker', 'export']);
 
 export class CommandHandler {
   constructor(
     private repo: Repo,
     private defaultTimezone: string,
     private now: () => DateTime = () => DateTime.utc(),
+    private blockerService: BlockerService | null = null,
   ) {}
 
   async handle(ctx: CommandContext): Promise<string> {
@@ -138,6 +141,8 @@ export class CommandHandler {
         return await trendsText(this.repo, standup, this.now());
       case 'blockers':
         return this.blockers(standup);
+      case 'blocker':
+        return this.blockerCmd(standup, ctx, rest);
       case 'export':
         return this.exportInfo(standup);
       default:
@@ -390,11 +395,54 @@ export class CommandHandler {
     const open = await this.repo.listOpenBlockers(standup.id);
     if (open.length === 0) return `✅ No open blockers for *${standup.name}*.`;
     const today = this.now().setZone(standup.timezone);
-    const lines = open.map((b) => {
+    const lines: string[] = [];
+    for (const b of open) {
       const age = Math.max(0, Math.floor(today.diff(DateTime.fromISO(b.openedDate), 'days').days));
-      return `⚠️ ${b.displayName}: ${b.text} _(${age}d old)_`;
-    });
-    return `*Open blockers — ${standup.name}:*\n${lines.join('\n')}\nBlockers auto-resolve when the person submits a blocker-free standup.`;
+      const tags = await this.repo.listBlockerTags(b.id);
+      const updates = await this.repo.listBlockerUpdates(b.id);
+      let line = `⚠️ #${b.id} ${b.displayName}: ${b.text} _(${age}d old)_`;
+      if (tags.length > 0) {
+        line += ` · tagged: ${tags.map((t) => `${t.displayName}${t.acknowledgedAt ? ' ✋' : ''}`).join(', ')}`;
+      }
+      if (updates.length > 0) line += ` · ${updates.length} update${updates.length === 1 ? '' : 's'}`;
+      lines.push(line);
+    }
+    return (
+      `*Open blockers — ${standup.name}:*\n${lines.join('\n')}\n` +
+      'Work one with `blocker <id> tag @user`, `blocker <id> update <text>`, `blocker <id> resolve`. ' +
+      'Untagged blockers also auto-resolve on the next blocker-free standup.'
+    );
+  }
+
+  private async blockerCmd(standup: Standup, ctx: CommandContext, rest: string[]): Promise<string> {
+    if (!this.blockerService) return 'Blocker collaboration is not available.';
+    const id = Number(rest[0]);
+    const sub = (rest[1] ?? '').toLowerCase();
+    if (!Number.isInteger(id) || !['tag', 'update', 'resolve'].includes(sub)) {
+      return 'Usage: `blocker <id> tag @user…` · `blocker <id> update <text>` · `blocker <id> resolve` — ids are shown by `blockers`.';
+    }
+    if (sub === 'tag') {
+      return this.blockerService.tag(standup, id, ctx.mentions, ctx.sender);
+    }
+    if (sub === 'update') {
+      const text = rest.slice(2).join(' ').trim();
+      if (!text) return 'Add the update text, e.g. `blocker 12 update keys requested from infra`.';
+      const result = await this.blockerService.addUpdate(id, ctx.sender, text);
+      const messages = {
+        ok: `📝 Update posted on blocker #${id} — everyone involved was notified.`,
+        resolved: `Blocker #${id} is already resolved.`,
+        not_found: `No blocker #${id}.`,
+      };
+      return messages[result];
+    }
+    const result = await this.blockerService.resolve(id, ctx.sender);
+    const messages = {
+      resolved: `✅ Blocker #${id} resolved — everyone involved was notified.`,
+      already_resolved: `Blocker #${id} was already resolved.`,
+      not_allowed: 'Only the reporter, tagged people, or a standup admin can resolve this blocker.',
+      not_found: `No blocker #${id}.`,
+    };
+    return messages[result];
   }
 
   private exportInfo(standup: Standup): string {

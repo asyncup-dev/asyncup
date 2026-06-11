@@ -1,8 +1,9 @@
 import { auth as chatAuth, chat, type chat_v1 } from '@googleapis/chat';
 import type { ChatAdapter } from '../../core/adapter.js';
 import type { Repo } from '../../db/repo.js';
-import type { Run, RunSummary, Standup, Submission } from '../../core/types.js';
+import type { Blocker, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import {
+  blockerCard,
   promptMessage,
   reminderMessage,
   submissionMessage,
@@ -63,6 +64,11 @@ export class GoogleChatAdapter implements ChatAdapter {
   async sendDm(userName: string, text: string): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
     await this.client.spaces.messages.create({ parent: dm, requestBody: { text } });
+  }
+
+  async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
+    const dm = await this.ensureDmSpace(userName);
+    await this.client.spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note) });
   }
 
   private async postInThread(

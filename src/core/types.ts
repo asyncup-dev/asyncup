@@ -141,7 +141,28 @@ export interface Blocker {
   openedDate: string;
   resolvedRunId: number | null;
   resolvedDate: string | null;
+  /** Display name of who resolved it, or "auto" for clean-submission auto-resolve. */
+  resolvedBy: string | null;
   escalatedAt: string | null;
+}
+
+export interface BlockerTag {
+  blockerId: number;
+  userName: string;
+  displayName: string;
+  taggedBy: string;
+  taggedAt: string;
+  acknowledgedAt: string | null;
+  lastNudgedAt: string | null;
+}
+
+export interface BlockerUpdate {
+  id: number;
+  blockerId: number;
+  userName: string;
+  displayName: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface RunSummary {

@@ -9,6 +9,7 @@ import { EventRouter } from './adapters/gchat/events.js';
 import { createLlm } from './ai/llm.js';
 import { AiSummarizer } from './ai/summarizer.js';
 import { GoogleCalendarOoo } from './integrations/google-calendar.js';
+import { BlockerService } from './core/blocker-service.js';
 import { CommandHandler } from './core/commands.js';
 import { Scheduler } from './core/scheduler.js';
 import { StandupService } from './core/standup-service.js';
@@ -32,8 +33,9 @@ const adapter =
     : new FakeAdapter((msg) => console.log(`[fake-adapter] ${msg}`));
 
 const service = new StandupService(repo, adapter);
-const commands = new CommandHandler(repo, config.defaultTimezone);
-const router = new EventRouter(commands, service, repo, config.tenantId);
+const blockerService = new BlockerService(repo, adapter);
+const commands = new CommandHandler(repo, config.defaultTimezone, undefined, blockerService);
+const router = new EventRouter(commands, service, blockerService, repo, config.tenantId);
 
 let verifier: ChatRequestVerifier | null = null;
 if (config.chatAudience) {

@@ -3,6 +3,8 @@ import type {
   Admin,
   Answer,
   Blocker,
+  BlockerTag,
+  BlockerUpdate,
   Mood,
   Participant,
   Run,
@@ -166,6 +168,29 @@ ALTER TABLE standups ADD COLUMN escalate_display_name TEXT;
 ALTER TABLE standups ADD COLUMN escalate_after_days INTEGER NOT NULL DEFAULT 2;
 ALTER TABLE blockers ADD COLUMN escalated_at TEXT;
 `,
+  // 4 — blocker collaboration: tags, acknowledgments, updates, explicit resolve
+  `
+CREATE TABLE blocker_tags (
+  blocker_id INTEGER NOT NULL REFERENCES blockers(id),
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  tagged_by TEXT NOT NULL,
+  tagged_at TEXT NOT NULL,
+  acknowledged_at TEXT,
+  last_nudged_at TEXT,
+  PRIMARY KEY (blocker_id, user_name)
+);
+CREATE TABLE blocker_updates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  blocker_id INTEGER NOT NULL REFERENCES blockers(id),
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+ALTER TABLE blockers ADD COLUMN resolved_by TEXT;
+CREATE INDEX idx_blockers_unresolved ON blockers(standup_id) WHERE resolved_date IS NULL;
+`,
 ];
 
 /**
@@ -272,6 +297,29 @@ CREATE TABLE user_emails (
   // 2, 3 — already included in the initial Postgres schema above
   '',
   '',
+  // 4 — blocker collaboration (mirrors the SQLite migration)
+  `
+CREATE TABLE blocker_tags (
+  blocker_id INTEGER NOT NULL REFERENCES blockers(id),
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  tagged_by TEXT NOT NULL,
+  tagged_at TEXT NOT NULL,
+  acknowledged_at TEXT,
+  last_nudged_at TEXT,
+  PRIMARY KEY (blocker_id, user_name)
+);
+CREATE TABLE blocker_updates (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  blocker_id INTEGER NOT NULL REFERENCES blockers(id),
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+ALTER TABLE blockers ADD COLUMN resolved_by TEXT;
+CREATE INDEX idx_blockers_unresolved ON blockers(standup_id) WHERE resolved_date IS NULL;
+`,
 ];
 
 function toStandup(row: any): Standup {
@@ -359,7 +407,31 @@ function toBlocker(row: any): Blocker {
     openedDate: row.opened_date,
     resolvedRunId: row.resolved_run_id ?? null,
     resolvedDate: row.resolved_date ?? null,
+    resolvedBy: row.resolved_by ?? null,
     escalatedAt: row.escalated_at ?? null,
+  };
+}
+
+function toBlockerTag(row: any): BlockerTag {
+  return {
+    blockerId: row.blocker_id,
+    userName: row.user_name,
+    displayName: row.display_name,
+    taggedBy: row.tagged_by,
+    taggedAt: row.tagged_at,
+    acknowledgedAt: row.acknowledged_at ?? null,
+    lastNudgedAt: row.last_nudged_at ?? null,
+  };
+}
+
+function toBlockerUpdate(row: any): BlockerUpdate {
+  return {
+    id: row.id,
+    blockerId: row.blocker_id,
+    userName: row.user_name,
+    displayName: row.display_name,
+    text: row.text,
+    createdAt: row.created_at,
   };
 }
 
@@ -822,21 +894,124 @@ export class Repo {
     await this.db.run('DELETE FROM blockers WHERE opened_run_id = ? AND user_name = ?', [runId, userName]);
   }
 
+  /**
+   * Auto-resolve on a clean submission — but only "private" blockers.
+   * Tagged blockers and blockers with updates are collaborative and must be
+   * resolved explicitly so a clean standup can't silently close them.
+   */
   async resolveBlockersFor(standupId: number, userName: string, runId: number, date: string): Promise<number> {
     const result = await this.db.run(
-      `UPDATE blockers SET resolved_run_id = ?, resolved_date = ?
-       WHERE standup_id = ? AND user_name = ? AND resolved_run_id IS NULL AND opened_run_id != ?`,
+      `UPDATE blockers SET resolved_run_id = ?, resolved_date = ?, resolved_by = 'auto'
+       WHERE standup_id = ? AND user_name = ? AND resolved_date IS NULL AND opened_run_id != ?
+         AND NOT EXISTS (SELECT 1 FROM blocker_tags bt WHERE bt.blocker_id = blockers.id)
+         AND NOT EXISTS (SELECT 1 FROM blocker_updates bu WHERE bu.blocker_id = blockers.id)`,
       [runId, date, standupId, userName, runId],
     );
     return result.changes;
   }
 
+  async resolveBlocker(id: number, date: string, by: string): Promise<boolean> {
+    const result = await this.db.run(
+      'UPDATE blockers SET resolved_date = ?, resolved_by = ? WHERE id = ? AND resolved_date IS NULL',
+      [date, by, id],
+    );
+    return result.changes > 0;
+  }
+
+  async getBlockerById(id: number): Promise<Blocker | null> {
+    const row = await this.db.get('SELECT * FROM blockers WHERE id = ?', [id]);
+    return row ? toBlocker(row) : null;
+  }
+
   async listOpenBlockers(standupId: number): Promise<Blocker[]> {
     const rows = await this.db.all(
-      'SELECT * FROM blockers WHERE standup_id = ? AND resolved_run_id IS NULL ORDER BY opened_date',
+      'SELECT * FROM blockers WHERE standup_id = ? AND resolved_date IS NULL ORDER BY opened_date',
       [standupId],
     );
     return rows.map(toBlocker);
+  }
+
+  // --- blocker collaboration ---
+
+  async tagBlocker(input: {
+    blockerId: number;
+    userName: string;
+    displayName: string;
+    taggedBy: string;
+    at: string;
+  }): Promise<boolean> {
+    const existing = await this.db.get(
+      'SELECT 1 FROM blocker_tags WHERE blocker_id = ? AND user_name = ?',
+      [input.blockerId, input.userName],
+    );
+    if (existing) return false;
+    await this.db.run(
+      `INSERT INTO blocker_tags (blocker_id, user_name, display_name, tagged_by, tagged_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [input.blockerId, input.userName, input.displayName, input.taggedBy, input.at],
+    );
+    return true;
+  }
+
+  async listBlockerTags(blockerId: number): Promise<BlockerTag[]> {
+    const rows = await this.db.all(
+      'SELECT * FROM blocker_tags WHERE blocker_id = ? ORDER BY tagged_at',
+      [blockerId],
+    );
+    return rows.map(toBlockerTag);
+  }
+
+  async ackBlockerTag(blockerId: number, userName: string, at: string): Promise<boolean> {
+    const result = await this.db.run(
+      'UPDATE blocker_tags SET acknowledged_at = ? WHERE blocker_id = ? AND user_name = ? AND acknowledged_at IS NULL',
+      [at, blockerId, userName],
+    );
+    return result.changes > 0;
+  }
+
+  async markTagNudged(blockerId: number, userName: string, at: string): Promise<void> {
+    await this.db.run(
+      'UPDATE blocker_tags SET last_nudged_at = ? WHERE blocker_id = ? AND user_name = ?',
+      [at, blockerId, userName],
+    );
+  }
+
+  /** Unacknowledged tags on open blockers — the daily-nudge worklist. */
+  async listUnackedTags(standupId: number): Promise<{ tag: BlockerTag; blocker: Blocker }[]> {
+    const rows = await this.db.all(
+      `SELECT bt.*, b.id AS b_id FROM blocker_tags bt
+       JOIN blockers b ON b.id = bt.blocker_id
+       WHERE b.standup_id = ? AND b.resolved_date IS NULL AND bt.acknowledged_at IS NULL`,
+      [standupId],
+    );
+    const result: { tag: BlockerTag; blocker: Blocker }[] = [];
+    for (const row of rows) {
+      const blocker = await this.getBlockerById(row.b_id);
+      if (blocker) result.push({ tag: toBlockerTag(row), blocker });
+    }
+    return result;
+  }
+
+  async addBlockerUpdate(input: {
+    blockerId: number;
+    userName: string;
+    displayName: string;
+    text: string;
+    at: string;
+  }): Promise<void> {
+    await this.db.run(
+      `INSERT INTO blocker_updates (blocker_id, user_name, display_name, text, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [input.blockerId, input.userName, input.displayName, input.text, input.at],
+    );
+  }
+
+  async listBlockerUpdates(blockerId: number): Promise<BlockerUpdate[]> {
+    const rows = await this.db.all(
+      'SELECT * FROM blocker_updates WHERE blocker_id = ? ORDER BY created_at',
+      [blockerId],
+    );
+    return rows.map(toBlockerUpdate);
   }
 
   async countBlockersOpenedBetween(standupId: number, fromDate: string, toDate: string): Promise<number> {
