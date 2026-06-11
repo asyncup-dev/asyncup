@@ -2,7 +2,7 @@ import { DateTime } from 'luxon';
 import type { Repo } from '../db/repo.js';
 import { MOOD_SCORE, standupDays, WEEKDAYS, type Standup, type WeeklyDigest } from './types.js';
 
-interface RangeStats {
+export interface RangeStats {
   runCount: number;
   expected: number;
   submitted: number;
@@ -10,13 +10,18 @@ interface RangeStats {
   moodCount: number;
 }
 
-export function rangeStats(repo: Repo, standupId: number, fromDate: string, toDate: string): RangeStats {
+export async function rangeStats(
+  repo: Repo,
+  standupId: number,
+  fromDate: string,
+  toDate: string,
+): Promise<RangeStats> {
   const stats: RangeStats = { runCount: 0, expected: 0, submitted: 0, moodSum: 0, moodCount: 0 };
-  for (const run of repo.listRunsBetween(standupId, fromDate, toDate)) {
+  for (const run of await repo.listRunsBetween(standupId, fromDate, toDate)) {
     stats.runCount++;
-    const submissions = repo.listSubmissions(run.id);
+    const submissions = await repo.listSubmissions(run.id);
     const submittedBy = new Set(submissions.map((s) => s.userName));
-    for (const p of repo.listRunParticipants(run.id)) {
+    for (const p of await repo.listRunParticipants(run.id)) {
       if (!p.mandatory) continue;
       if (submittedBy.has(p.userName)) {
         stats.expected++;
@@ -57,15 +62,15 @@ export function lastConfiguredWeekday(standup: Standup): number {
   return Math.max(...configured);
 }
 
-export function buildWeeklyDigest(repo: Repo, standup: Standup, runDate: string): WeeklyDigest {
+export async function buildWeeklyDigest(repo: Repo, standup: Standup, runDate: string): Promise<WeeklyDigest> {
   const date = DateTime.fromISO(runDate);
   const weekStart = date.startOf('week').toISODate()!;
   const weekEnd = date.endOf('week').toISODate()!;
   const prevStart = date.minus({ weeks: 1 }).startOf('week').toISODate()!;
   const prevEnd = date.minus({ weeks: 1 }).endOf('week').toISODate()!;
 
-  const current = rangeStats(repo, standup.id, weekStart, weekEnd);
-  const previous = rangeStats(repo, standup.id, prevStart, prevEnd);
+  const current = await rangeStats(repo, standup.id, weekStart, weekEnd);
+  const previous = await rangeStats(repo, standup.id, prevStart, prevEnd);
 
   return {
     standupName: standup.name,
@@ -76,9 +81,9 @@ export function buildWeeklyDigest(repo: Repo, standup: Standup, runDate: string)
     prevParticipationPct: previous.runCount > 0 ? participationPct(previous) : null,
     avgMood: avgMood(current),
     prevAvgMood: previous.runCount > 0 ? avgMood(previous) : null,
-    blockersOpened: repo.countBlockersOpenedBetween(standup.id, weekStart, weekEnd),
-    blockersResolved: repo.countBlockersResolvedBetween(standup.id, weekStart, weekEnd),
-    openBlockers: repo.listOpenBlockers(standup.id).map((b) => ({
+    blockersOpened: await repo.countBlockersOpenedBetween(standup.id, weekStart, weekEnd),
+    blockersResolved: await repo.countBlockersResolvedBetween(standup.id, weekStart, weekEnd),
+    openBlockers: (await repo.listOpenBlockers(standup.id)).map((b) => ({
       displayName: b.displayName,
       text: b.text,
       ageDays: Math.max(0, Math.floor(DateTime.fromISO(runDate).diff(DateTime.fromISO(b.openedDate), 'days').days)),
@@ -115,13 +120,13 @@ export function digestText(digest: WeeklyDigest): string {
   return lines.join('\n');
 }
 
-export function trendsText(repo: Repo, standup: Standup, now: DateTime, weeks = 4): string {
+export async function trendsText(repo: Repo, standup: Standup, now: DateTime, weeks = 4): Promise<string> {
   const lines = [`📈 *${standup.name}* — last ${weeks} weeks`];
   const local = now.setZone(standup.timezone);
   for (let i = weeks - 1; i >= 0; i--) {
     const start = local.minus({ weeks: i }).startOf('week');
     const end = local.minus({ weeks: i }).endOf('week');
-    const stats = rangeStats(repo, standup.id, start.toISODate()!, end.toISODate()!);
+    const stats = await rangeStats(repo, standup.id, start.toISODate()!, end.toISODate()!);
     if (stats.runCount === 0) {
       lines.push(`${start.toFormat('dd LLL')}–${end.toFormat('dd LLL')} ▸ no runs`);
       continue;
@@ -133,7 +138,7 @@ export function trendsText(repo: Repo, standup: Standup, now: DateTime, weeks = 
         (mood !== null ? ` · mood ${moodEmoji(mood)} ${mood}/5` : ''),
     );
   }
-  const open = repo.listOpenBlockers(standup.id).length;
+  const open = (await repo.listOpenBlockers(standup.id)).length;
   if (open > 0) lines.push(`⚠️ ${open} open blocker${open === 1 ? '' : 's'} — try \`blockers\``);
   return lines.join('\n');
 }

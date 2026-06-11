@@ -10,8 +10,16 @@ import { Repo } from '../src/db/repo.js';
 export const TZ = 'Asia/Kolkata';
 export const TENANT = 'default';
 
-export function makeStack(opts: { summarizer?: AiSummarizer | null } = {}) {
-  const repo = new Repo(':memory:');
+let schemaCounter = 0;
+
+export async function makeStack(opts: { summarizer?: AiSummarizer | null } = {}) {
+  let repo: Repo;
+  if (process.env.TEST_DATABASE_URL) {
+    const schema = `t_${process.pid}_${Date.now()}_${schemaCounter++}`;
+    repo = await Repo.postgres(process.env.TEST_DATABASE_URL, schema);
+  } else {
+    repo = await Repo.sqlite(':memory:');
+  }
   const adapter = new FakeAdapter();
 
   let current = DateTime.fromISO('2026-06-10T00:00:00', { zone: TZ });
@@ -30,24 +38,24 @@ export function makeStack(opts: { summarizer?: AiSummarizer | null } = {}) {
   return { repo, adapter, service, scheduler, commands, clock };
 }
 
-export function seedStandup(repo: Repo, opts: { deadlineTime?: string; spaceName?: string } = {}) {
-  const standup = repo.createStandup({
+export async function seedStandup(repo: Repo, opts: { deadlineTime?: string; spaceName?: string } = {}) {
+  const standup = await repo.createStandup({
     tenantId: TENANT,
     spaceName: opts.spaceName ?? 'spaces/team',
     name: 'Daily Standup',
     timezone: TZ,
   });
   // defaults: prompt 09:30, deadline 11:30, reminder 60m, mon-fri
-  if (opts.deadlineTime) repo.updateStandup(standup.id, { deadlineTime: opts.deadlineTime });
-  repo.upsertParticipant({ standupId: standup.id, userName: 'users/alice', displayName: 'Alice' });
-  repo.upsertParticipant({ standupId: standup.id, userName: 'users/bob', displayName: 'Bob' });
-  repo.upsertParticipant({
+  if (opts.deadlineTime) await repo.updateStandup(standup.id, { deadlineTime: opts.deadlineTime });
+  await repo.upsertParticipant({ standupId: standup.id, userName: 'users/alice', displayName: 'Alice' });
+  await repo.upsertParticipant({ standupId: standup.id, userName: 'users/bob', displayName: 'Bob' });
+  await repo.upsertParticipant({
     standupId: standup.id,
     userName: 'users/carol',
     displayName: 'Carol',
     mandatory: false,
   });
-  return repo.getStandupById(standup.id)!;
+  return (await repo.getStandupById(standup.id))!;
 }
 
 export const ANSWERS: SubmissionInput = {

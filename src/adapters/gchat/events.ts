@@ -26,7 +26,7 @@ export class EventRouter {
   async handle(event: any): Promise<object> {
     // Learn user emails from any interaction — needed for calendar OOO lookups.
     if (event?.user?.name && event.user.email) {
-      this.repo.setUserEmail(event.user.name, event.user.email);
+      await this.repo.setUserEmail(event.user.name, event.user.email);
     }
     switch (event?.type) {
       case 'ADDED_TO_SPACE':
@@ -51,13 +51,13 @@ export class EventRouter {
     };
   }
 
-  private onMessage(event: any): object {
+  private async onMessage(event: any): Promise<object> {
     const user = eventUser(event);
     if (isDm(event)) {
       return this.onDirectMessage(event, user);
     }
     const text: string = event.message?.argumentText ?? event.message?.text ?? '';
-    const reply = this.commands.handle({
+    const reply = await this.commands.handle({
       tenantId: this.tenantId,
       spaceName: event.space?.name ?? '',
       text,
@@ -67,10 +67,10 @@ export class EventRouter {
     return { text: reply };
   }
 
-  private onDirectMessage(event: any, user: Mention): object {
+  private async onDirectMessage(event: any, user: Mention): Promise<object> {
     const text = (event.message?.argumentText ?? event.message?.text ?? '').trim().toLowerCase();
     if (text === 'vacation' || text === 'ooo') {
-      const affected = this.repo.setVacationForUser(user.userName, true);
+      const affected = await this.repo.setVacationForUser(user.userName, true);
       return {
         text: affected
           ? `🏖️ Vacation mode ON across ${affected} standup${affected === 1 ? '' : 's'} — you won't be prompted or counted as missing. DM me \`back\` when you return.`
@@ -78,7 +78,7 @@ export class EventRouter {
       };
     }
     if (text === 'back') {
-      const affected = this.repo.setVacationForUser(user.userName, false);
+      const affected = await this.repo.setVacationForUser(user.userName, false);
       return {
         text: affected
           ? `👋 Welcome back! Vacation mode is off — prompts resume with the next run.`
@@ -100,10 +100,10 @@ export class EventRouter {
 
     if (fn === OPEN_DIALOG_FN) {
       if (!Number.isInteger(runId)) return dialogError('This standup prompt is no longer valid.');
-      const run = this.repo.getRunById(runId);
+      const run = await this.repo.getRunById(runId);
       if (!run) return dialogError('This standup prompt is no longer valid.');
-      const standup = this.repo.getStandupById(run.standupId)!;
-      const prefill = this.service.getPrefill(standup, run, user.userName);
+      const standup = (await this.repo.getStandupById(run.standupId))!;
+      const prefill = await this.service.getPrefill(standup, run, user.userName);
       return standupDialog(runId, standupQuestions(standup), standup.moodEnabled, prefill);
     }
 
@@ -112,7 +112,7 @@ export class EventRouter {
     }
 
     if (fn === SKIP_TODAY_FN) {
-      const result = this.service.skipToday(runId, user.userName);
+      const result = await this.service.skipToday(runId, user.userName);
       const messages = {
         skipped: "🏖️ Skipped today's standup — you won't be counted as missing. Have a good one!",
         already_submitted: '✅ You already submitted today, so there is nothing to skip.',
@@ -126,9 +126,9 @@ export class EventRouter {
 
   private async onDialogSubmit(event: any, runId: number, user: Mention): Promise<object> {
     if (!Number.isInteger(runId)) return dialogError('This standup form is no longer valid.');
-    const run = this.repo.getRunById(runId);
+    const run = await this.repo.getRunById(runId);
     if (!run) return dialogError('This standup form is no longer valid.');
-    const standup = this.repo.getStandupById(run.standupId)!;
+    const standup = (await this.repo.getStandupById(run.standupId))!;
     const questions = standupQuestions(standup);
 
     const answers: Answer[] = [];

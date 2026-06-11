@@ -38,7 +38,8 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **Insights** — `trends` (participation + mood over 4 weeks), weekly digest (`digest on`), CSV export endpoint.
 - **AI summaries, bring your own key** — opt-in daily TL;DR and week-in-review via your Anthropic/OpenAI key; nothing leaves your infra otherwise.
 - **Team admins & multiple standups per space** — config restricted to admins; address standups by `#id`.
-- **Lightweight forever** — one container, SQLite inside (auto-migrating schema), scale-to-zero friendly (`/tick` + free-tier cron ≈ $0/month).
+- **Lightweight forever** — one container, SQLite inside (auto-migrating schema), scale-to-zero friendly (`/tick` + free-tier cron ≈ $0/month). Runs happily on 1 vCPU / 512 MB.
+- **Bring your own database** — set `DATABASE_URL` and AsyncUp uses your PostgreSQL (managed or `docker compose --profile postgres`) instead of embedded SQLite; both engines tested in CI.
 - **Restart-safe** — all scheduling state lives in SQLite; ticks are idempotent.
 - **Platform-agnostic core** — Google Chat is an adapter; Slack and Teams are planned.
 

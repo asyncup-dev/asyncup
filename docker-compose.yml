@@ -11,11 +11,30 @@ services:
         required: false
     environment:
       DB_PATH: /data/standup.db
+      # Bring your own database: set DATABASE_URL in .env (any PostgreSQL —
+      # managed/RDS/Cloud SQL, or the bundled one below) and SQLite is skipped.
+      DATABASE_URL: ${DATABASE_URL:-}
     volumes:
       - standup-data:/data
       # Mount your GCP service account key and set
       # GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json in .env:
       # - ./service-account.json:/app/service-account.json:ro
 
+  # Optional same-machine PostgreSQL:
+  #   docker compose --profile postgres up -d
+  # with DATABASE_URL=postgres://asyncup:${POSTGRES_PASSWORD}@postgres:5432/asyncup in .env
+  postgres:
+    image: postgres:18-alpine
+    profiles: [postgres]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: asyncup
+      POSTGRES_DB: asyncup
+      # Required when using the profile — the postgres image refuses to start without it.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
 volumes:
   standup-data:
+  postgres-data:

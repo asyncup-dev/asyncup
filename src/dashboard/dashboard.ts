@@ -44,25 +44,25 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
     return false;
   };
 
-  app.get('/dashboard', (req, res) => {
+  app.get('/dashboard', async (req, res) => {
     if (!authed(req, res)) return;
-    const standups = repo.listActiveStandups();
-    const rows = standups
-      .map((s) => {
-        const today = now().setZone(s.timezone).toISODate()!;
-        const run = repo.getRun(s.id, today);
-        const todayCell = run
-          ? `${repo.listSubmissions(run.id).length} submitted (${run.status})`
-          : '—';
-        return `<tr>
+    const standups = await repo.listActiveStandups();
+    const rowParts: string[] = [];
+    for (const s of standups) {
+      const today = now().setZone(s.timezone).toISODate()!;
+      const run = await repo.getRun(s.id, today);
+      const todayCell = run
+        ? `${(await repo.listSubmissions(run.id)).length} submitted (${run.status})`
+        : '—';
+      rowParts.push(`<tr>
           <td><a href="/dashboard/standup/${s.id}">#${s.id} ${esc(s.name)}</a></td>
           <td>${esc(s.spaceName)}</td>
           <td>${esc(s.promptTime)} → ${esc(s.deadlineTime)} ${esc(s.timezone)}</td>
-          <td>${repo.listParticipants(s.id).length}</td>
+          <td>${(await repo.listParticipants(s.id)).length}</td>
           <td>${todayCell}</td>
-        </tr>`;
-      })
-      .join('');
+        </tr>`);
+    }
+    const rows = rowParts.join('');
     res.send(
       layout(
         'AsyncUp dashboard',
@@ -73,40 +73,40 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
     );
   });
 
-  app.get('/dashboard/standup/:id', (req, res) => {
+  app.get('/dashboard/standup/:id', async (req, res) => {
     if (!authed(req, res)) return;
-    const standup = repo.getStandupById(Number(req.params.id));
+    const standup = await repo.getStandupById(Number(req.params.id));
     if (!standup) {
       res.status(404).send(layout('Not found', '<p>Unknown standup.</p>'));
       return;
     }
-    res.send(layout(`${standup.name} — AsyncUp`, standupPage(repo, standup, now(), req.query.saved === '1', null)));
+    res.send(layout(`${standup.name} — AsyncUp`, await standupPage(repo, standup, now(), req.query.saved === '1', null)));
   });
 
-  app.post('/dashboard/standup/:id', (req, res) => {
+  app.post('/dashboard/standup/:id', async (req, res) => {
     if (!authed(req, res)) return;
-    const standup = repo.getStandupById(Number(req.params.id));
+    const standup = await repo.getStandupById(Number(req.params.id));
     if (!standup) {
       res.status(404).send(layout('Not found', '<p>Unknown standup.</p>'));
       return;
     }
-    const error = applyConfig(repo, standup, req.body);
+    const error = await applyConfig(repo, standup, req.body);
     if (error) {
-      res.status(400).send(layout(`${standup.name} — AsyncUp`, standupPage(repo, repo.getStandupById(standup.id)!, now(), false, error)));
+      res.status(400).send(layout(`${standup.name} — AsyncUp`, await standupPage(repo, (await repo.getStandupById(standup.id))!, now(), false, error)));
       return;
     }
     res.redirect(`/dashboard/standup/${standup.id}?saved=1`);
   });
 
-  app.get('/dashboard/standup/:id/run/:date', (req, res) => {
+  app.get('/dashboard/standup/:id/run/:date', async (req, res) => {
     if (!authed(req, res)) return;
-    const standup = repo.getStandupById(Number(req.params.id));
-    const run = standup ? repo.getRun(standup.id, String(req.params.date)) : null;
+    const standup = await repo.getStandupById(Number(req.params.id));
+    const run = standup ? await repo.getRun(standup.id, String(req.params.date)) : null;
     if (!standup || !run) {
       res.status(404).send(layout('Not found', '<p>Unknown run.</p>'));
       return;
     }
-    const submissions = repo.listSubmissions(run.id)
+    const submissions = (await repo.listSubmissions(run.id))
       .map(
         (s) => `<div class="card">
           <h3>${s.mood && !standup.moodAnonymous ? MOOD_EMOJI[s.mood] : '📝'} ${esc(s.displayName)}
@@ -115,8 +115,8 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
         </div>`,
       )
       .join('');
-    const roster = repo.listRunParticipants(run.id);
-    const submitted = new Set(repo.listSubmissions(run.id).map((s) => s.userName));
+    const roster = await repo.listRunParticipants(run.id);
+    const submitted = new Set((await repo.listSubmissions(run.id)).map((s) => s.userName));
     const missing = roster
       .filter((p) => p.mandatory && !submitted.has(p.userName) && !p.skippedAt && !p.onVacation)
       .map((p) => esc(p.displayName));
@@ -132,7 +132,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
   });
 }
 
-function applyConfig(repo: Repo, standup: Standup, body: any): string | null {
+async function applyConfig(repo: Repo, standup: Standup, body: any): Promise<string | null> {
   const name = String(body.name ?? '').trim();
   if (!name) return 'Name is required.';
   const promptTime = String(body.promptTime ?? '');
@@ -161,7 +161,7 @@ function applyConfig(repo: Repo, standup: Standup, body: any): string | null {
   if (questionLines.length === 0 || questionLines.length > 10) return 'Provide 1–10 questions (one per line).';
   if (questionLines.some((q: string) => q.length > 200)) return 'Questions must be ≤200 characters.';
 
-  repo.updateStandup(standup.id, {
+  await repo.updateStandup(standup.id, {
     name,
     promptTime,
     deadlineTime,
@@ -178,48 +178,51 @@ function applyConfig(repo: Repo, standup: Standup, body: any): string | null {
   return null;
 }
 
-function standupPage(repo: Repo, s: Standup, now: DateTime, saved: boolean, error: string | null): string {
-  const participants = repo.listParticipants(s.id)
+async function standupPage(repo: Repo, s: Standup, now: DateTime, saved: boolean, error: string | null): Promise<string> {
+  const participants = (await repo.listParticipants(s.id))
     .map(
       (p) =>
         `<li>${esc(p.displayName)}${p.mandatory ? '' : ' <span class="tag">optional</span>'}${p.onVacation ? ' 🏖️' : ''}</li>`,
     )
     .join('');
-  const admins = repo.listAdmins(s.id).map((a) => esc(a.displayName)).join(', ') || '<i>none (open config)</i>';
+  const admins = (await repo.listAdmins(s.id)).map((a) => esc(a.displayName)).join(', ') || '<i>none (open config)</i>';
 
-  const runs = repo.listRecentRuns(s.id, 14)
-    .map((run) => {
-      const roster = repo.listRunParticipants(run.id);
-      const submitted = new Set(repo.listSubmissions(run.id).map((x) => x.userName));
-      const away = roster.filter((p) => !submitted.has(p.userName) && (p.skippedAt || p.onVacation));
-      const missing = roster.filter(
-        (p) => p.mandatory && !submitted.has(p.userName) && !p.skippedAt && !p.onVacation,
-      );
-      return `<tr>
+  const runParts: string[] = [];
+  for (const run of await repo.listRecentRuns(s.id, 14)) {
+    const roster = await repo.listRunParticipants(run.id);
+    const submitted = new Set((await repo.listSubmissions(run.id)).map((x) => x.userName));
+    const away = roster.filter((p) => !submitted.has(p.userName) && (p.skippedAt || p.onVacation));
+    const missing = roster.filter(
+      (p) => p.mandatory && !submitted.has(p.userName) && !p.skippedAt && !p.onVacation,
+    );
+    runParts.push(`<tr>
         <td><a href="/dashboard/standup/${s.id}/run/${run.date}">${run.date}</a></td>
         <td>${run.status}</td>
         <td>${submitted.size}/${roster.length - away.length}</td>
         <td>${missing.map((p) => esc(p.displayName)).join(', ') || '—'}</td>
-      </tr>`;
-    })
-    .join('');
+      </tr>`);
+  }
+  const runs = runParts.join('');
 
   const local = now.setZone(s.timezone);
-  const trendRows = [3, 2, 1, 0]
-    .map((i) => {
-      const start = local.minus({ weeks: i }).startOf('week');
-      const end = local.minus({ weeks: i }).endOf('week');
-      const stats = rangeStats(repo, s.id, start.toISODate()!, end.toISODate()!);
-      if (stats.runCount === 0) return `<tr><td>${start.toFormat('dd LLL')}</td><td colspan="2">no runs</td></tr>`;
-      const pct = stats.expected === 0 ? 100 : Math.round((stats.submitted / stats.expected) * 100);
-      const mood = stats.moodCount ? Math.round((stats.moodSum / stats.moodCount) * 10) / 10 : null;
-      return `<tr><td>${start.toFormat('dd LLL')}–${end.toFormat('dd LLL')}</td><td>${pct}%</td><td>${
-        mood !== null ? `${moodEmoji(mood)} ${mood}/5` : '—'
-      }</td></tr>`;
-    })
-    .join('');
+  const trendParts: string[] = [];
+  for (const i of [3, 2, 1, 0]) {
+    const start = local.minus({ weeks: i }).startOf('week');
+    const end = local.minus({ weeks: i }).endOf('week');
+    const stats = await rangeStats(repo, s.id, start.toISODate()!, end.toISODate()!);
+    if (stats.runCount === 0) {
+      trendParts.push(`<tr><td>${start.toFormat('dd LLL')}</td><td colspan="2">no runs</td></tr>`);
+      continue;
+    }
+    const pct = stats.expected === 0 ? 100 : Math.round((stats.submitted / stats.expected) * 100);
+    const mood = stats.moodCount ? Math.round((stats.moodSum / stats.moodCount) * 10) / 10 : null;
+    trendParts.push(`<tr><td>${start.toFormat('dd LLL')}–${end.toFormat('dd LLL')}</td><td>${pct}%</td><td>${
+      mood !== null ? `${moodEmoji(mood)} ${mood}/5` : '—'
+    }</td></tr>`);
+  }
+  const trendRows = trendParts.join('');
 
-  const blockers = repo.listOpenBlockers(s.id)
+  const blockers = (await repo.listOpenBlockers(s.id))
     .map((b) => `<li>⚠️ <b>${esc(b.displayName)}</b>: ${esc(b.text)} <small>(since ${b.openedDate}${b.escalatedAt ? ', escalated' : ''})</small></li>`)
     .join('');
 

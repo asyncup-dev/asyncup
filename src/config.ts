@@ -3,6 +3,8 @@ import type { LlmConfig } from './ai/llm.js';
 export interface Config {
   port: number;
   dbPath: string;
+  /** PostgreSQL connection string; empty = embedded SQLite at DB_PATH. */
+  databaseUrl: string;
   adapter: 'google' | 'fake';
   /** GCP project number used to verify incoming Chat requests. Empty = skip (dev only). */
   chatAudience: string;
@@ -28,6 +30,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     port: Number(env.PORT ?? 8080),
     dbPath: env.DB_PATH ?? './data/standup.db',
+    databaseUrl: env.DATABASE_URL ?? '',
     adapter,
     chatAudience: env.GOOGLE_CHAT_AUDIENCE ?? '',
     defaultTimezone: env.DEFAULT_TIMEZONE ?? 'UTC',

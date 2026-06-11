@@ -5,7 +5,8 @@ Everything is configured via environment variables (see `.env.example`).
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `8080` | Webhook port |
-| `DB_PATH` | `./data/standup.db` | SQLite database file |
+| `DB_PATH` | `./data/standup.db` | SQLite database file (default storage) |
+| `DATABASE_URL` | *(empty)* | Bring-your-own PostgreSQL connection string — when set, SQLite is skipped (see [Deployment](./deployment#database-embedded-or-bring-your-own)) |
 | `ADAPTER` | `google` | `google` for production, `fake` for a console demo |
 | `GOOGLE_CHAT_AUDIENCE` | *(empty)* | Your GCP project **number**. Verifies incoming requests are signed by Google Chat. Empty skips verification — local development only |
 | `GOOGLE_APPLICATION_CREDENTIALS` | — | Path to the service account key JSON |
@@ -31,8 +32,10 @@ Everything is configured via environment variables (see `.env.example`).
 
 ## Data
 
-All state lives in a single SQLite file (`DB_PATH`): standups, participants,
-admins, runs, submissions, blockers, and the DM-space cache. Back it up like
-any file; the process can restart at any time without losing or double-sending
-prompts. Schema migrations run automatically on startup (tracked via
-`PRAGMA user_version`), so upgrading AsyncUp is just deploying the new image.
+All state — standups, participants, admins, runs, submissions, blockers, and
+the DM-space cache — lives either in a single SQLite file (`DB_PATH`, the
+default) or in your own PostgreSQL (`DATABASE_URL`). Back up the file or use
+your database's backup story; the process can restart at any time without
+losing or double-sending prompts (graceful shutdown on SIGTERM included).
+Schema migrations run automatically on startup in both modes, so upgrading
+AsyncUp is just deploying the new image.

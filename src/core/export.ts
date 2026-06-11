@@ -6,9 +6,9 @@ function csvField(value: string): string {
 }
 
 /** Long-format CSV: one row per answered question per submission. */
-export function buildCsv(repo: Repo, standup: Standup, fromDate: string, toDate: string): string {
+export async function buildCsv(repo: Repo, standup: Standup, fromDate: string, toDate: string): Promise<string> {
   const rows = [['date', 'standup', 'person', 'late', 'edited', 'mood', 'question', 'answer']];
-  for (const { submission, runDate } of repo.listSubmissionsBetween(standup.id, fromDate, toDate)) {
+  for (const { submission, runDate } of await repo.listSubmissionsBetween(standup.id, fromDate, toDate)) {
     for (const answer of submission.answers) {
       rows.push([
         runDate,

@@ -53,7 +53,7 @@ export class CommandHandler {
     private now: () => DateTime = () => DateTime.utc(),
   ) {}
 
-  handle(ctx: CommandContext): string {
+  async handle(ctx: CommandContext): Promise<string> {
     const tokens = ctx.text.trim().split(/\s+/).filter(Boolean);
 
     let standupRef: number | null = null;
@@ -70,13 +70,13 @@ export class CommandHandler {
     if (command === '' || command === 'help') return HELP;
     if (command === 'setup') return this.setup(ctx, arg);
 
-    const standups = this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
+    const standups = await this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
     if (standups.length === 0) {
       return 'No standup is configured for this space yet. Run `setup` first.';
     }
 
     if (command === 'status' && standupRef === null) {
-      return standups.map((s) => this.status(s, standups.length > 1)).join('\n\n');
+      return (await Promise.all(standups.map((s) => this.status(s, standups.length > 1)))).join('\n\n');
     }
 
     let standup: Standup;
@@ -91,7 +91,7 @@ export class CommandHandler {
     }
 
     if (!OPEN_COMMANDS.has(command)) {
-      const denied = this.requireAdmin(standup, ctx.sender);
+      const denied = await this.requireAdmin(standup, ctx.sender);
       if (denied) return denied;
     }
 
@@ -135,7 +135,7 @@ export class CommandHandler {
       case 'status':
         return this.status(standup, false);
       case 'trends':
-        return trendsText(this.repo, standup, this.now());
+        return await trendsText(this.repo, standup, this.now());
       case 'blockers':
         return this.blockers(standup);
       case 'export':
@@ -145,25 +145,25 @@ export class CommandHandler {
     }
   }
 
-  private requireAdmin(standup: Standup, sender: Mention): string | null {
-    const admins = this.repo.listAdmins(standup.id);
+  private async requireAdmin(standup: Standup, sender: Mention): Promise<string | null> {
+    const admins = await this.repo.listAdmins(standup.id);
     if (admins.length === 0 || admins.some((a) => a.userName === sender.userName)) return null;
     return `🔒 Only admins of *${standup.name}* can change its configuration (${admins
       .map((a) => a.displayName)
       .join(', ')}).`;
   }
 
-  private setup(ctx: CommandContext, name: string): string {
-    const standup = this.repo.createStandup({
+  private async setup(ctx: CommandContext, name: string): Promise<string> {
+    const standup = await this.repo.createStandup({
       tenantId: ctx.tenantId,
       spaceName: ctx.spaceName,
       name: name || 'Daily Standup',
       timezone: this.defaultTimezone,
     });
     if (ctx.sender.userName) {
-      this.repo.addAdmin(standup.id, ctx.sender.userName, ctx.sender.displayName);
+      await this.repo.addAdmin(standup.id, ctx.sender.userName, ctx.sender.displayName);
     }
-    const siblings = this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
+    const siblings = await this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
     return (
       `✅ Standup *${standup.name}* created (#${standup.id})${siblings.length > 1 ? ` — this space now has ${siblings.length} standups, prefix commands with \`#${standup.id}\`` : ''}. You are its admin.\n` +
       `Defaults: prompt ${standup.promptTime}, deadline ${standup.deadlineTime}, reminder ${standup.reminderMinutesBefore}m before, ${standup.timezone}, ${standup.days}.\n` +
@@ -171,10 +171,10 @@ export class CommandHandler {
     );
   }
 
-  private addParticipants(standup: Standup, mentions: Mention[]): string {
+  private async addParticipants(standup: Standup, mentions: Mention[]): Promise<string> {
     if (mentions.length === 0) return 'Mention the people to add, e.g. `add @Asha @Rohit`.';
     for (const m of mentions) {
-      this.repo.upsertParticipant({
+      await this.repo.upsertParticipant({
         standupId: standup.id,
         userName: m.userName,
         displayName: m.displayName,
@@ -183,12 +183,12 @@ export class CommandHandler {
     return `✅ Added ${mentions.map((m) => m.displayName).join(', ')} (mandatory). Use \`optional @user\` to exclude someone from the report count.`;
   }
 
-  private removeParticipants(standup: Standup, mentions: Mention[]): string {
+  private async removeParticipants(standup: Standup, mentions: Mention[]): Promise<string> {
     if (mentions.length === 0) return 'Mention the people to remove, e.g. `remove @Asha`.';
     const removed: string[] = [];
     const unknown: string[] = [];
     for (const m of mentions) {
-      (this.repo.removeParticipant(standup.id, m.userName) ? removed : unknown).push(m.displayName);
+      ((await this.repo.removeParticipant(standup.id, m.userName)) ? removed : unknown).push(m.displayName);
     }
     const parts: string[] = [];
     if (removed.length) parts.push(`✅ Removed ${removed.join(', ')}.`);
@@ -196,14 +196,14 @@ export class CommandHandler {
     return parts.join(' ');
   }
 
-  private setMandatory(standup: Standup, mentions: Mention[], mandatory: boolean): string {
+  private async setMandatory(standup: Standup, mentions: Mention[], mandatory: boolean): Promise<string> {
     if (mentions.length === 0) {
       return `Mention the people to mark as ${mandatory ? 'mandatory' : 'optional'}.`;
     }
     const changed: string[] = [];
     const unknown: string[] = [];
     for (const m of mentions) {
-      (this.repo.setParticipantMandatory(standup.id, m.userName, mandatory) ? changed : unknown).push(
+      ((await this.repo.setParticipantMandatory(standup.id, m.userName, mandatory)) ? changed : unknown).push(
         m.displayName,
       );
     }
@@ -213,14 +213,14 @@ export class CommandHandler {
     return parts.join(' ');
   }
 
-  private setVacation(standup: Standup, mentions: Mention[], onVacation: boolean): string {
+  private async setVacation(standup: Standup, mentions: Mention[], onVacation: boolean): Promise<string> {
     if (mentions.length === 0) {
       return `Mention the people, e.g. \`${onVacation ? 'vacation' : 'back'} @Asha\`.`;
     }
     const changed: string[] = [];
     const unknown: string[] = [];
     for (const m of mentions) {
-      (this.repo.setParticipantVacation(standup.id, m.userName, onVacation) ? changed : unknown).push(
+      ((await this.repo.setParticipantVacation(standup.id, m.userName, onVacation)) ? changed : unknown).push(
         m.displayName,
       );
     }
@@ -236,56 +236,56 @@ export class CommandHandler {
     return parts.join(' ');
   }
 
-  private addAdmins(standup: Standup, mentions: Mention[]): string {
+  private async addAdmins(standup: Standup, mentions: Mention[]): Promise<string> {
     if (mentions.length === 0) return 'Mention the people to make admins, e.g. `admin @Asha`.';
-    for (const m of mentions) this.repo.addAdmin(standup.id, m.userName, m.displayName);
-    return `✅ Admins now: ${this.repo.listAdmins(standup.id).map((a) => a.displayName).join(', ')}.`;
+    for (const m of mentions) await this.repo.addAdmin(standup.id, m.userName, m.displayName);
+    return `✅ Admins now: ${(await this.repo.listAdmins(standup.id)).map((a) => a.displayName).join(', ')}.`;
   }
 
-  private removeAdmins(standup: Standup, mentions: Mention[]): string {
+  private async removeAdmins(standup: Standup, mentions: Mention[]): Promise<string> {
     if (mentions.length === 0) return 'Mention the admins to remove, e.g. `unadmin @Asha`.';
-    const admins = this.repo.listAdmins(standup.id);
+    const admins = await this.repo.listAdmins(standup.id);
     const remaining = admins.filter((a) => !mentions.some((m) => m.userName === a.userName));
     if (admins.length > 0 && remaining.length === 0) {
       return '⚠️ A standup must keep at least one admin — add another admin first.';
     }
-    for (const m of mentions) this.repo.removeAdmin(standup.id, m.userName);
-    const now = this.repo.listAdmins(standup.id);
+    for (const m of mentions) await this.repo.removeAdmin(standup.id, m.userName);
+    const now = await this.repo.listAdmins(standup.id);
     return `✅ Admins now: ${now.length ? now.map((a) => a.displayName).join(', ') : 'none (configuration is open to everyone)'}.`;
   }
 
-  private setTime(standup: Standup, value: string, field: 'promptTime' | 'deadlineTime'): string {
+  private async setTime(standup: Standup, value: string, field: 'promptTime' | 'deadlineTime'): Promise<string> {
     if (!TIME_RE.test(value)) return 'Please give a 24h time like `09:30`.';
     const next = { promptTime: standup.promptTime, deadlineTime: standup.deadlineTime, [field]: value };
     if (next.promptTime >= next.deadlineTime) {
       return `⚠️ Prompt time (${next.promptTime}) must be before the deadline (${next.deadlineTime}).`;
     }
-    this.repo.updateStandup(standup.id, { [field]: value });
+    await this.repo.updateStandup(standup.id, { [field]: value });
     return field === 'promptTime'
       ? `✅ Prompts will go out at ${value} (each participant's local time).`
       : `✅ Deadline set to ${value} ${standup.timezone}. The report posts then.`;
   }
 
-  private setReminder(standup: Standup, value: string): string {
+  private async setReminder(standup: Standup, value: string): Promise<string> {
     const minutes = Number(value);
     if (!Number.isInteger(minutes) || minutes < 0 || minutes > 24 * 60) {
       return 'Please give the number of minutes before the deadline, e.g. `remind 60`. Use `remind 0` to disable.';
     }
-    this.repo.updateStandup(standup.id, { reminderMinutesBefore: minutes });
+    await this.repo.updateStandup(standup.id, { reminderMinutesBefore: minutes });
     return minutes === 0
       ? '✅ Reminder disabled.'
       : `✅ Reminder will go out ${minutes} minutes before the deadline.`;
   }
 
-  private setTimezone(standup: Standup, value: string): string {
+  private async setTimezone(standup: Standup, value: string): Promise<string> {
     if (!value || !IANAZone.isValidZone(value)) {
       return 'Please give a valid IANA timezone, e.g. `timezone Asia/Kolkata`.';
     }
-    this.repo.updateStandup(standup.id, { timezone: value });
+    await this.repo.updateStandup(standup.id, { timezone: value });
     return `✅ Timezone set to ${value}.`;
   }
 
-  private setDays(standup: Standup, value: string): string {
+  private async setDays(standup: Standup, value: string): Promise<string> {
     const days = value
       .toLowerCase()
       .split(/[,\s]+/)
@@ -295,14 +295,14 @@ export class CommandHandler {
       return 'Please list days like `days mon,tue,wed,thu,fri`.';
     }
     const ordered = WEEKDAYS.filter((d) => days.includes(d));
-    this.repo.updateStandup(standup.id, { days: ordered.join(',') });
+    await this.repo.updateStandup(standup.id, { days: ordered.join(',') });
     return `✅ Standup runs on: ${ordered.join(', ')}.`;
   }
 
-  private questions(standup: Standup, rest: string[]): string {
+  private async questions(standup: Standup, rest: string[]): Promise<string> {
     const sub = (rest[0] ?? '').toLowerCase();
     if (sub === 'reset') {
-      this.repo.updateStandup(standup.id, { questions: null });
+      await this.repo.updateStandup(standup.id, { questions: null });
       return `✅ Questions reset to the defaults:\n${DEFAULT_QUESTIONS.map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
     }
     if (sub === 'set') {
@@ -317,7 +317,7 @@ export class CommandHandler {
       }
       const tooLong = parts.find((q) => q.length > 200);
       if (tooLong) return `⚠️ Question too long (max 200 chars): "${tooLong.slice(0, 50)}…"`;
-      this.repo.updateStandup(standup.id, { questions: parts });
+      await this.repo.updateStandup(standup.id, { questions: parts });
       return `✅ Questions updated:\n${parts.map((q, i) => `${i + 1}. ${q}`).join('\n')}\nApplies from the next run.`;
     }
     const current = standupQuestions(standup);
@@ -327,27 +327,27 @@ export class CommandHandler {
     );
   }
 
-  private mood(standup: Standup, value: string): string {
+  private async mood(standup: Standup, value: string): Promise<string> {
     switch (value.toLowerCase()) {
       case 'on':
-        this.repo.updateStandup(standup.id, { moodEnabled: true, moodAnonymous: false });
+        await this.repo.updateStandup(standup.id, { moodEnabled: true, moodAnonymous: false });
         return '✅ Mood question on — moods show on each card.';
       case 'anon':
       case 'anonymous':
-        this.repo.updateStandup(standup.id, { moodEnabled: true, moodAnonymous: true });
+        await this.repo.updateStandup(standup.id, { moodEnabled: true, moodAnonymous: true });
         return '✅ Mood question on, *anonymous* — cards hide who felt what; the wrap-up shows the team average instead.';
       case 'off':
-        this.repo.updateStandup(standup.id, { moodEnabled: false });
+        await this.repo.updateStandup(standup.id, { moodEnabled: false });
         return '✅ Mood question off.';
       default:
         return 'Use `mood on`, `mood anon`, or `mood off`.';
     }
   }
 
-  private escalate(standup: Standup, mentions: Mention[], rest: string[]): string {
+  private async escalate(standup: Standup, mentions: Mention[], rest: string[]): Promise<string> {
     const sub = (rest[0] ?? '').toLowerCase();
     if (sub === 'off') {
-      this.repo.updateStandup(standup.id, { escalateUserName: null, escalateDisplayName: null });
+      await this.repo.updateStandup(standup.id, { escalateUserName: null, escalateDisplayName: null });
       return '✅ Blocker escalation off.';
     }
     if (sub === 'days') {
@@ -355,7 +355,7 @@ export class CommandHandler {
       if (!Number.isInteger(days) || days < 1 || days > 30) {
         return 'Give the number of days a blocker may stay open, e.g. `escalate days 3`.';
       }
-      this.repo.updateStandup(standup.id, { escalateAfterDays: days });
+      await this.repo.updateStandup(standup.id, { escalateAfterDays: days });
       return `✅ Blockers escalate after ${days} day${days === 1 ? '' : 's'} open.`;
     }
     const contact = mentions[0];
@@ -364,30 +364,30 @@ export class CommandHandler {
         ? `Escalation: DM ${standup.escalateDisplayName} when blockers are open ${standup.escalateAfterDays}+ days. \`escalate @user\`, \`escalate days N\`, or \`escalate off\` to change.`
         : 'Mention who should be pinged, e.g. `escalate @Asha` — they get a DM when blockers stay open too long.';
     }
-    this.repo.updateStandup(standup.id, {
+    await this.repo.updateStandup(standup.id, {
       escalateUserName: contact.userName,
       escalateDisplayName: contact.displayName,
     });
     return `✅ ${contact.displayName} will be DMed when blockers stay open ${standup.escalateAfterDays}+ days.`;
   }
 
-  private toggle(
+  private async toggle(
     standup: Standup,
     field: 'moodEnabled' | 'digestEnabled' | 'aiEnabled',
     value: string,
     label: string,
-  ): string {
+  ): Promise<string> {
     const v = value.toLowerCase();
     if (v !== 'on' && v !== 'off') return `Use \`on\` or \`off\`, e.g. \`${label.split(' ')[0]?.toLowerCase()} on\`.`;
-    this.repo.updateStandup(standup.id, { [field]: v === 'on' });
+    await this.repo.updateStandup(standup.id, { [field]: v === 'on' });
     if (field === 'aiEnabled' && v === 'on') {
       return `✅ ${label} on. Requires LLM_PROVIDER + LLM_API_KEY in the server environment — summaries are skipped silently otherwise.`;
     }
     return `✅ ${label} ${v}.`;
   }
 
-  private blockers(standup: Standup): string {
-    const open = this.repo.listOpenBlockers(standup.id);
+  private async blockers(standup: Standup): Promise<string> {
+    const open = await this.repo.listOpenBlockers(standup.id);
     if (open.length === 0) return `✅ No open blockers for *${standup.name}*.`;
     const today = this.now().setZone(standup.timezone);
     const lines = open.map((b) => {
@@ -407,9 +407,9 @@ export class CommandHandler {
     );
   }
 
-  private status(standup: Standup, withId: boolean): string {
-    const participants = this.repo.listParticipants(standup.id);
-    const admins = this.repo.listAdmins(standup.id);
+  private async status(standup: Standup, withId: boolean): Promise<string> {
+    const participants = await this.repo.listParticipants(standup.id);
+    const admins = await this.repo.listAdmins(standup.id);
     const toggles = [
       standup.moodEnabled ? (standup.moodAnonymous ? 'mood ✓ (anon)' : 'mood ✓') : 'mood ✗',
       standup.digestEnabled ? 'digest ✓' : 'digest ✗',
@@ -435,10 +435,10 @@ export class CommandHandler {
     ];
 
     const today = this.now().setZone(standup.timezone).toISODate()!;
-    const run = this.repo.getRun(standup.id, today);
+    const run = await this.repo.getRun(standup.id, today);
     if (run) {
-      const submitted = new Set(this.repo.listSubmissions(run.id).map((s) => s.userName));
-      const roster = this.repo.listRunParticipants(run.id);
+      const submitted = new Set((await this.repo.listSubmissions(run.id)).map((s) => s.userName));
+      const roster = await this.repo.listRunParticipants(run.id);
       const done = roster.filter((p) => submitted.has(p.userName)).map((p) => p.displayName);
       const away = roster
         .filter((p) => !submitted.has(p.userName) && (p.skippedAt || p.onVacation))

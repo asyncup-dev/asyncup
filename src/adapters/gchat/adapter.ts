@@ -84,12 +84,12 @@ export class GoogleChatAdapter implements ChatAdapter {
    * space name to avoid a lookup on every send.
    */
   private async ensureDmSpace(userName: string): Promise<string> {
-    const cached = this.repo.getDmSpace(userName);
+    const cached = await this.repo.getDmSpace(userName);
     if (cached) return cached;
     try {
       const res = await this.client.spaces.findDirectMessage({ name: userName });
       const spaceName = res.data.name!;
-      this.repo.setDmSpace(userName, spaceName);
+      await this.repo.setDmSpace(userName, spaceName);
       return spaceName;
     } catch (err: any) {
       if (err?.response?.status === 404 || err?.code === 404) {
