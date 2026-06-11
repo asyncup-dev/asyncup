@@ -30,6 +30,7 @@ export default defineConfig({
         text: 'Guide',
         items: [
           { text: 'Getting started', link: '/guide/getting-started' },
+          { text: 'Server setup from zero', link: '/guide/server-setup' },
           { text: 'Google Chat setup', link: '/guide/google-chat-setup' },
           { text: 'Commands', link: '/guide/commands' },
           { text: 'Configuration', link: '/guide/configuration' },

@@ -4,6 +4,10 @@ AsyncUp is one small container — by default with SQLite inside, so there are
 no external moving parts at all. Google Chat needs to reach it on a public
 HTTPS URL.
 
+> Starting from zero (no server, no domain, no TLS setup)? Follow
+> **[Server setup from zero](./server-setup)** — a complete VPS + Caddy
+> walkthrough. This page covers the building blocks and alternatives.
+
 ## Database: embedded or bring your own
 
 | Mode | Configuration | When to choose it |
