@@ -4,12 +4,25 @@ AsyncUp is one small container with SQLite inside — no external database, no
 queue, no other moving parts. Google Chat needs to reach it on a public
 HTTPS URL.
 
+## Prebuilt image
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) are published to GHCR on
+every merge to `main`:
+
+```bash
+docker pull ghcr.io/asyncup-dev/asyncup:latest
+```
+
+Tags: `latest` (main), `vX.Y.Z` + `X.Y` (releases), `sha-…` (every build) —
+pin a digest for reproducible deploys. Building from source stays a
+one-liner (`docker build -t asyncup .`) if you prefer auditing what you run.
+
 ## Docker Compose (simplest)
 
 ```bash
 cp .env.example .env       # set GOOGLE_CHAT_AUDIENCE, credentials path
 # uncomment the service-account.json mount in docker-compose.yml
-docker compose up -d
+docker compose up -d       # pulls the GHCR image by default
 ```
 
 Put it behind any HTTPS reverse proxy (Caddy, nginx, Traefik) and point the
