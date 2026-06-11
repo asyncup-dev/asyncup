@@ -1,9 +1,50 @@
-# Server setup from zero
+# Setup guide — every scenario
 
-Everything from "I have nothing" to AsyncUp running on your own domain with
+From a 5-person team on a $5 box to a locked-down production deployment.
+Pick your path with the matrix, follow the walkthrough, finish with the
+production checklist.
+
+## Which setup should I pick?
+
+| Your situation | Recommended path | Database | ~Cost/mo |
+| --- | --- | --- | --- |
+| Small team (≤25), want the simplest thing that works | **[Path A — VPS + SQLite](#path-a)** | embedded SQLite | $4–6 |
+| You already run (or want) real Postgres ops | **[Path B — VPS + PostgreSQL](#path-b)** | bundled or managed | $4–20 |
+| No server to maintain, ever | **[Path C — Cloud Run](#path-c)** | managed Postgres | ~$0–10 |
+| Homelab / Raspberry Pi / behind NAT | **[Path D — home server + tunnel](#path-d)** | embedded SQLite | $0 + power |
+| Company platform (K8s, ECS, …) | your platform + **[production checklist](#production-checklist)** | managed Postgres | varies |
+
+### Real numbers, so you can stop worrying about scale
+
+A **10-person team** posting daily generates roughly:
+
+- ~10 form submissions + ~40 webhook calls per workday — *seconds* of CPU
+- ~2,600 submissions/year ≈ **2–3 MB** of database growth
+- Peak memory ~150 MB RSS regardless of team size
+
+A **100-person org** across 10 standups is still ~25 MB/year and idles the
+same. **Performance never decides this choice** — every path above handles
+hundreds of users on minimum hardware. Choose by *operations*:
+
+- **SQLite** = one file. Backup is `cp`, restore is `cp`. Perfect until you
+  need point-in-time recovery or someone else managing durability.
+- **Managed Postgres** = automated backups, PITR, failover — someone else's
+  pager. Worth it when losing a week of standups would actually hurt, or
+  when company policy says "no databases on VMs".
+- **Bundled Postgres on the same box** is mostly a stepping stone: you get
+  Postgres semantics but still own backups. Prefer SQLite (simpler) or
+  managed (safer) unless you specifically want it.
+
+**So: 10 people putting daily updates?** Path A. Genuinely. Move to managed
+Postgres when the standup history becomes something you'd be sad to lose —
+it's a one-line `DATABASE_URL` change and the schema recreates itself.
+
+---
+
+## Path A — VPS + SQLite (the default) {#path-a}
+
+Everything from "I have nothing" to AsyncUp on your own domain with
 automatic HTTPS. No prior server experience assumed — about 30 minutes.
-
-What you'll end up with:
 
 ```
 your team's Google Chat ⇄ https://standup.example.com
@@ -12,58 +53,45 @@ your team's Google Chat ⇄ https://standup.example.com
                           AsyncUp container (SQLite inside)
 ```
 
-## 1. Rent a small server
+### A1. Rent a small server
 
-Any provider works — Hetzner, DigitalOcean, Vultr, Lightsail, OVH, Oracle
-Cloud's free tier… AsyncUp needs very little
-(see [system requirements](./deployment#system-requirements)):
+Any provider — Hetzner, DigitalOcean, Vultr, Lightsail, OVH, Oracle Cloud's
+free tier…
 
-- **1 vCPU, 512 MB+ RAM**, 10 GB disk — usually the cheapest tier (~$4–6/mo)
-- **Ubuntu 24.04 LTS** (commands below assume it; Debian works identically)
-- amd64 or arm64 — both are published images
+- **1 vCPU, 512 MB+ RAM**, 10 GB disk — usually the cheapest tier
+- **Ubuntu 24.04 LTS** (commands assume it; Debian is identical)
+- amd64 or arm64 — both images are published
 
 You'll get an **IP address** and SSH access (`ssh root@<ip>`).
 
-## 2. Point a domain at it
+### A2. Point a domain at it
 
-In your DNS provider, create an **A record** for a subdomain pointing at the
-server's IP:
+Create an **A record** for a subdomain pointing at the server's IP:
 
 | Type | Name | Value |
 | --- | --- | --- |
 | A | `standup` | `<your server IP>` |
 
-So `standup.example.com → <ip>`. DNS usually propagates in minutes —
-`ping standup.example.com` should answer from your server's IP before you
-continue (HTTPS certificates won't issue until it does).
+`ping standup.example.com` should answer from your server before you
+continue — HTTPS certificates won't issue until DNS resolves.
 
-## 3. Basic hardening + Docker
-
-SSH in and run:
+### A3. Basic hardening + Docker
 
 ```bash
-# stay patched automatically
 apt-get update && apt-get -y upgrade && apt-get -y install unattended-upgrades ufw
 
-# firewall: SSH + web only
 ufw allow OpenSSH
 ufw allow 80/tcp
 ufw allow 443/tcp
 ufw --force enable
 
-# Docker (official install script)
 curl -fsSL https://get.docker.com | sh
 ```
 
-## 4. Deploy AsyncUp + Caddy
+### A4. Deploy AsyncUp + Caddy
 
-Caddy is a tiny web server that gets and renews **Let's Encrypt certificates
-automatically** — you never touch TLS again. Create a directory with three
-files:
-
-```bash
-mkdir -p /opt/asyncup && cd /opt/asyncup
-```
+Caddy obtains and renews **Let's Encrypt certificates automatically** — you
+never touch TLS. Three files in `/opt/asyncup`:
 
 **`compose.yml`**
 
@@ -95,7 +123,7 @@ volumes:
   caddy-config:
 ```
 
-Note that AsyncUp itself exposes no ports to the internet — only Caddy does.
+AsyncUp itself exposes no ports to the internet — only Caddy does.
 
 **`Caddyfile`** (swap in your domain)
 
@@ -105,69 +133,169 @@ standup.example.com {
 }
 ```
 
-**`.env`**
-
-```bash
-DASHBOARD_TOKEN=$(openssl rand -hex 24)   # run these two commands and paste
-SECRET_KEY=$(openssl rand -hex 32)        # the values, or use any generator
-```
-
-i.e. the file should contain two lines like:
+**`.env`** — two generated secrets:
 
 ```
-DASHBOARD_TOKEN=2f8c1d…
-SECRET_KEY=9b04ee…
+DASHBOARD_TOKEN=<openssl rand -hex 24>
+SECRET_KEY=<openssl rand -hex 32>
 ```
 
-Start it:
+Start and verify:
 
 ```bash
 docker compose up -d
-```
-
-## 5. Verify
-
-```bash
 curl https://standup.example.com/healthz     # → {"ok":true}
 ```
 
-First HTTPS request can take ~30 seconds while Caddy obtains the certificate.
-If it doesn't come up: `docker compose logs caddy` — the usual culprits are
-DNS not pointing at this server yet, or ports 80/443 blocked by a provider
-firewall (some clouds have one *in addition to* ufw).
+The first HTTPS request can take ~30s while the certificate issues. If it
+doesn't: `docker compose logs caddy` — usual culprits are DNS not pointing
+here yet, or a *provider-level* firewall blocking 80/443 in addition to ufw.
 
-Now open **`https://standup.example.com/dashboard?token=<DASHBOARD_TOKEN>`** —
-you'll see the first-run checklist. From here, follow
-**[Google Chat setup](./google-chat-setup)** (paste your GCP project number
-and service-account key into Settings, point the Chat app at
-`https://standup.example.com/chat/events`).
+Open **`https://standup.example.com/dashboard?token=<DASHBOARD_TOKEN>`**,
+follow the first-run checklist, then [Google Chat setup](./google-chat-setup).
 
-## 6. Updates & backups
-
-**Update AsyncUp** (new image, schema migrates automatically):
+### A5. Updates & backups
 
 ```bash
+# update (schema migrates automatically)
 cd /opt/asyncup && docker compose pull && docker compose up -d
-```
 
-**Back up the database** (everything lives in one SQLite file):
-
-```bash
+# nightly backup (cron): one file is the whole database
 docker compose cp asyncup:/data/standup.db ./standup-backup-$(date +%F).db
 ```
 
-Drop that line in a cron job and ship the file wherever you keep backups.
-Stored secrets in it are encrypted — just keep `SECRET_KEY` (your `.env`)
-backed up separately. Restoring = putting the file back and
-`docker compose up -d`.
+Stored secrets are encrypted — keep `SECRET_KEY` (your `.env`) backed up
+*separately* from database backups. Restore = put the file back, `up -d`.
 
-**Logs:** `docker compose logs -f asyncup`
+---
 
-## Variations
+## Path B — VPS + PostgreSQL {#path-b}
 
-- **Your own Postgres** instead of SQLite: add `DATABASE_URL=postgres://…` to
-  `.env` — see [Deployment](./deployment#database-embedded-or-bring-your-own).
-- **Existing reverse proxy** (nginx, Traefik, …): skip Caddy, expose
-  `asyncup` on a local port and proxy `https://your-domain → localhost:8080`.
-- **No server at all**: Cloud Run scale-to-zero —
-  see [Deployment](./deployment#scale-to-zero-cloud-run).
+Same as Path A, with the database swapped. Two flavors:
+
+### B1. Managed Postgres (recommended for production)
+
+Create a database on RDS, Cloud SQL, Neon, Supabase, DigitalOcean — anything
+that speaks Postgres. Then add one line to `.env`:
+
+```
+DATABASE_URL=postgres://user:password@host:5432/asyncup
+```
+
+`docker compose up -d` — the schema creates and migrates itself. SQLite is
+skipped entirely. You inherit the provider's backups, PITR, and failover.
+If the provider requires TLS, append `?sslmode=require` to the URL.
+
+### B2. Bundled Postgres on the same machine
+
+Use the repo's compose file, which ships an optional Postgres 18 service:
+
+```bash
+git clone https://github.com/asyncup-dev/asyncup /opt/asyncup && cd /opt/asyncup
+cp .env.example .env    # set DASHBOARD_TOKEN, SECRET_KEY, POSTGRES_PASSWORD
+# and: DATABASE_URL=postgres://asyncup:<password>@postgres:5432/asyncup
+docker compose --profile postgres up -d
+```
+
+(Add the Caddy service from Path A for HTTPS.) Sizing: 2 GB RAM is
+comfortable for app + Postgres. Backups become your job:
+
+```bash
+docker compose exec postgres pg_dump -U asyncup asyncup | gzip > backup-$(date +%F).sql.gz
+```
+
+---
+
+## Path C — Cloud Run, no server at all {#path-c}
+
+Closest to zero ops and realistically ~$0–10/month: the container scales to
+zero between standups.
+
+1. **Database: use managed Postgres** (Cloud SQL, or Neon's free tier).
+   Don't put SQLite on Cloud Run — its filesystem is ephemeral and
+   network-mounted volumes don't support SQLite's locking properly.
+2. Deploy `ghcr.io/asyncup-dev/asyncup:latest` to **Cloud Run**:
+   min instances 0, **max instances 1** (important — see the
+   [checklist](#production-checklist)), port 8080, env vars:
+   `DATABASE_URL`, `DASHBOARD_TOKEN`, `SECRET_KEY`.
+3. The in-process scheduler only runs while an instance is alive, so drive
+   it externally: a **Cloud Scheduler** job (free tier covers it) hitting
+   `POST https://<your-run-url>/tick` every minute with header
+   `Authorization: Bearer <tick token>` (generate the token in dashboard →
+   Settings → Access tokens).
+4. Cloud Run gives you HTTPS out of the box; map a custom domain in its
+   settings if you want one.
+5. Bonus: skip the service-account key entirely — give the Cloud Run service
+   account Chat API access and leave the key field empty (ADC).
+
+Webhook events wake the instance on demand; `/tick` wakes it for prompts,
+reminders, and deadlines. Ticks are idempotent — missed or overlapping ticks
+are safe.
+
+---
+
+## Path D — home server / Raspberry Pi behind NAT {#path-d}
+
+No public IP needed: a **Cloudflare Tunnel** makes an outbound-only
+connection and gives your domain HTTPS for free.
+
+1. Domain on Cloudflare (free plan) → Zero Trust → Tunnels → create a tunnel,
+   route `standup.example.com` → `http://asyncup:8080`.
+2. On the Pi/box (arm64 and amd64 both work):
+
+```yaml
+services:
+  asyncup:
+    image: ghcr.io/asyncup-dev/asyncup:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_PATH: /data/standup.db
+    volumes:
+      - standup-data:/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+
+volumes:
+  standup-data:
+```
+
+No open ports, no port forwarding, no certificates to manage. Everything
+else (env, dashboard, backups) is identical to Path A.
+
+---
+
+## Production checklist {#production-checklist}
+
+Whatever path you chose:
+
+- [ ] **Exactly one instance.** The scheduler runs in-process — two replicas
+      would double-send prompts. On K8s: `replicas: 1` + `Recreate` strategy;
+      on Cloud Run: max instances 1. (HA isn't needed — a restart loses
+      nothing, and ticks catch up.)
+- [ ] HTTPS in front of `/chat/events`; GCP **project number** set in
+      dashboard settings so webhooks are cryptographically verified
+- [ ] `DASHBOARD_TOKEN` + `SECRET_KEY` set; `SECRET_KEY` backed up somewhere
+      that is *not* the database backup
+- [ ] Tick token generated if `/tick` is internet-reachable
+- [ ] Backups: nightly SQLite file copy *or* managed-Postgres automated
+      backups; do one restore drill
+- [ ] Monitoring: point any uptime monitor at `GET /healthz` (it pings the
+      database); alert on non-200
+- [ ] Updates: `docker compose pull && up -d` periodically — or pin a digest
+      and bump deliberately; watch the repo's releases
+- [ ] Logs: `docker compose logs` is plain stdout — ship it wherever your
+      logs go, or rely on `docker logs` retention
+
+## Quick reference
+
+| | Path A (VPS+SQLite) | Path B1 (managed PG) | Path C (Cloud Run) | Path D (home) |
+| --- | --- | --- | --- | --- |
+| Monthly cost | $4–6 | $4–6 + DB ($0–15) | ~$0–10 | $0 |
+| Ops you own | VM updates, file backup | VM updates | none | the hardware |
+| Backups | one file, cron | provider PITR | provider PITR | one file, cron |
+| TLS | Caddy, automatic | Caddy, automatic | built-in | Cloudflare, automatic |
+| Best for | ≤50 people, simplicity | history you can't lose | zero maintenance | tinkerers |
