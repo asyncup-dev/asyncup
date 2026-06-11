@@ -8,7 +8,7 @@ let close: (() => void) | null = null;
 
 async function startServer(opts: { tickToken?: string; exportToken?: string; dashboardToken?: string } = {}) {
   const stack = await makeStack();
-  const router = new EventRouter(stack.commands, stack.service, stack.repo, TENANT);
+  const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT);
   const app = createServer({
     router,
     verifier: null,

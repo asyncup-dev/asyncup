@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import { FakeAdapter } from '../src/adapters/fake/adapter.js';
 import { AiSummarizer } from '../src/ai/summarizer.js';
+import { BlockerService } from '../src/core/blocker-service.js';
 import { CommandHandler } from '../src/core/commands.js';
 import { Scheduler } from '../src/core/scheduler.js';
 import { StandupService } from '../src/core/standup-service.js';
@@ -32,10 +33,11 @@ export async function makeStack(opts: { summarizer?: AiSummarizer | null } = {})
   };
 
   const service = new StandupService(repo, adapter, clock.now);
+  const blockers = new BlockerService(repo, adapter, clock.now);
   const scheduler = new Scheduler(repo, adapter, service, clock.now, () => {}, opts.summarizer ?? null);
-  const commands = new CommandHandler(repo, TZ, clock.now);
+  const commands = new CommandHandler(repo, TZ, clock.now, blockers);
 
-  return { repo, adapter, service, scheduler, commands, clock };
+  return { repo, adapter, service, blockers, scheduler, commands, clock };
 }
 
 export async function seedStandup(repo: Repo, opts: { deadlineTime?: string; spaceName?: string } = {}) {

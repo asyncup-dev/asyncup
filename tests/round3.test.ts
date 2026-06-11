@@ -182,7 +182,7 @@ describe('Blocker escalation', () => {
 describe('Email capture', () => {
   it('learns user emails from interaction events', async () => {
     const stack = await makeStack();
-    const router = new EventRouter(stack.commands, stack.service, stack.repo, TENANT);
+    const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT);
     await router.handle({
       type: 'MESSAGE',
       space: { name: 'spaces/team', type: 'ROOM' },

@@ -39,7 +39,7 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **Vacation & skip** — DM `vacation`/`back` for yourself, a 🏖️ *Skip today* button on every prompt; away people aren't nagged or counted as missing. Optional **Google Calendar OOO sync** marks people away automatically.
 - **Pre-fill** — "yesterday" starts as your previous "today".
 - **Per-participant timezones** — prompts go out at 09:30 *their* time, reminder nudge before the deadline, late submissions flagged.
-- **Blocker tracking & escalation** — blockers open automatically from answers, resolve on the next clean submission, surface via `blockers`/wrap-up/digest, and **DM a configured contact** when they stay open too long.
+- **Blocker tracking, collaboration & escalation** — blockers open automatically from answers and can be **worked as items**: tag teammates (interactive DM card with Acknowledge / Update / Resolve), updates broadcast to everyone involved + a per-blocker thread, daily nudges until acknowledged, and escalation DMs when they go stale. Untagged blockers auto-resolve on the next clean submission; tagged ones need an explicit resolve.
 - **Anonymous mood** (`mood anon`) — cards hide who felt what; the wrap-up shows the team average.
 - **Web dashboard** — token-gated, server-rendered config + history UI baked into the same container (`DASHBOARD_TOKEN`).
 - **Insights** — `trends` (participation + mood over 4 weeks), weekly digest (`digest on`), CSV export endpoint.

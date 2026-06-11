@@ -6,6 +6,7 @@ import {
   MOOD_EMOJI,
   MOOD_LABEL,
   MOODS,
+  type Blocker,
   type Run,
   type RunSummary,
   type Standup,
@@ -15,6 +16,10 @@ import {
 export const OPEN_DIALOG_FN = 'openStandupDialog';
 export const SUBMIT_DIALOG_FN = 'submitStandup';
 export const SKIP_TODAY_FN = 'skipToday';
+export const ACK_BLOCKER_FN = 'ackBlocker';
+export const RESOLVE_BLOCKER_FN = 'resolveBlocker';
+export const OPEN_BLOCKER_UPDATE_FN = 'openBlockerUpdate';
+export const SUBMIT_BLOCKER_UPDATE_FN = 'submitBlockerUpdate';
 
 function humanDate(isoDate: string): string {
   return DateTime.fromISO(isoDate).toFormat('ccc, dd LLL yyyy');
@@ -150,6 +155,91 @@ export function standupDialog(
     actionResponse: {
       type: 'DIALOG',
       dialogAction: { dialog: { body: { sections: [{ widgets }] } } },
+    },
+  };
+}
+
+/** Interactive DM card for someone tagged on (or nudged about) a blocker. */
+export function blockerCard(standup: Standup, blocker: Blocker, note: string) {
+  const param = [{ key: 'blockerId', value: String(blocker.id) }];
+  return {
+    cardsV2: [
+      {
+        cardId: `blocker-${blocker.id}`,
+        card: {
+          header: { title: `⚠️ Blocker #${blocker.id} — ${standup.name}`, subtitle: note },
+          sections: [
+            {
+              widgets: [
+                {
+                  decoratedText: {
+                    topLabel: `Reported by ${blocker.displayName} on ${blocker.openedDate}`,
+                    text: blocker.text,
+                    wrapText: true,
+                  },
+                },
+                {
+                  buttonList: {
+                    buttons: [
+                      { text: '✋ Acknowledge', onClick: { action: { function: ACK_BLOCKER_FN, parameters: param } } },
+                      {
+                        text: '📝 Add update',
+                        onClick: {
+                          action: { function: OPEN_BLOCKER_UPDATE_FN, interaction: 'OPEN_DIALOG', parameters: param },
+                        },
+                      },
+                      { text: '✅ Resolve', onClick: { action: { function: RESOLVE_BLOCKER_FN, parameters: param } } },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+/** Modal dialog for posting a blocker update. */
+export function blockerUpdateDialog(blockerId: number) {
+  return {
+    actionResponse: {
+      type: 'DIALOG',
+      dialogAction: {
+        dialog: {
+          body: {
+            sections: [
+              {
+                widgets: [
+                  {
+                    textInput: {
+                      name: 'update',
+                      label: 'What is the latest on this blocker?',
+                      type: 'MULTIPLE_LINE',
+                    },
+                  },
+                  {
+                    buttonList: {
+                      buttons: [
+                        {
+                          text: 'Post update',
+                          onClick: {
+                            action: {
+                              function: SUBMIT_BLOCKER_UPDATE_FN,
+                              parameters: [{ key: 'blockerId', value: String(blockerId) }],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
     },
   };
 }

@@ -1,11 +1,12 @@
 import type { ChatAdapter } from '../../core/adapter.js';
-import type { Run, RunSummary, Standup, Submission } from '../../core/types.js';
+import type { Blocker, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 
 interface SentDm {
-  kind: 'prompt' | 'reminder' | 'text';
+  kind: 'prompt' | 'reminder' | 'text' | 'blockerCard';
   userName: string;
   standupId?: number;
   runId?: number;
+  blockerId?: number;
   text?: string;
 }
 
@@ -88,5 +89,10 @@ export class FakeAdapter implements ChatAdapter {
   async sendDm(userName: string, text: string): Promise<void> {
     this.dms.push({ kind: 'text', userName, text });
     this.log?.(`DM text → ${userName}: ${text.split('\n')[0]}`);
+  }
+
+  async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
+    this.dms.push({ kind: 'blockerCard', userName, standupId: standup.id, blockerId: blocker.id, text: note });
+    this.log?.(`DM blocker card #${blocker.id} → ${userName} (${note})`);
   }
 }

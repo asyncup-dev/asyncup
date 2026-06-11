@@ -4,7 +4,7 @@ import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 async function makeRouter() {
   const stack = await makeStack();
-  const router = new EventRouter(stack.commands, stack.service, stack.repo, TENANT);
+  const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT);
   return { ...stack, router };
 }
 

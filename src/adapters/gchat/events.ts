@@ -1,3 +1,4 @@
+import type { BlockerService } from '../../core/blocker-service.js';
 import type { CommandHandler, Mention } from '../../core/commands.js';
 import type { StandupService } from '../../core/standup-service.js';
 import type { Repo } from '../../db/repo.js';
@@ -8,7 +9,17 @@ import {
   type Answer,
   type Mood,
 } from '../../core/types.js';
-import { OPEN_DIALOG_FN, SKIP_TODAY_FN, standupDialog, SUBMIT_DIALOG_FN } from './cards.js';
+import {
+  ACK_BLOCKER_FN,
+  blockerUpdateDialog,
+  OPEN_BLOCKER_UPDATE_FN,
+  OPEN_DIALOG_FN,
+  RESOLVE_BLOCKER_FN,
+  SKIP_TODAY_FN,
+  standupDialog,
+  SUBMIT_BLOCKER_UPDATE_FN,
+  SUBMIT_DIALOG_FN,
+} from './cards.js';
 
 /**
  * Routes Google Chat interaction events (MESSAGE, CARD_CLICKED, dialog
@@ -19,6 +30,7 @@ export class EventRouter {
   constructor(
     private commands: CommandHandler,
     private service: StandupService,
+    private blockers: BlockerService,
     private repo: Repo,
     private tenantId: string,
   ) {}
@@ -119,6 +131,47 @@ export class EventRouter {
         not_found: 'This standup prompt is no longer valid.',
       };
       return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: messages[result] };
+    }
+
+    const blockerId = Number(getParameter(event, 'blockerId'));
+
+    if (fn === ACK_BLOCKER_FN) {
+      const result = await this.blockers.acknowledge(blockerId, user);
+      const messages = {
+        acked: '✋ Acknowledged — the reporter has been told you are on it. Use the buttons above to post updates or resolve.',
+        already_acked: 'You already acknowledged this blocker.',
+        not_tagged: "You aren't tagged on this blocker.",
+        not_found: 'This blocker is already resolved or no longer exists.',
+      };
+      return { text: messages[result] };
+    }
+
+    if (fn === OPEN_BLOCKER_UPDATE_FN) {
+      if (!Number.isInteger(blockerId)) return dialogError('This blocker card is no longer valid.');
+      return blockerUpdateDialog(blockerId);
+    }
+
+    if (fn === SUBMIT_BLOCKER_UPDATE_FN) {
+      const text = getFormValue(event, 'update').trim();
+      if (!text) return dialogError('Please write the update first.');
+      const result = await this.blockers.addUpdate(blockerId, user, text);
+      const messages = {
+        ok: '📝 Update posted — everyone involved was notified.',
+        resolved: 'This blocker is already resolved.',
+        not_found: 'This blocker no longer exists.',
+      };
+      return result === 'ok' ? dialogOk(messages.ok) : dialogError(messages[result]);
+    }
+
+    if (fn === RESOLVE_BLOCKER_FN) {
+      const result = await this.blockers.resolve(blockerId, user);
+      const messages = {
+        resolved: '✅ Blocker resolved — everyone involved was notified.',
+        already_resolved: 'This blocker was already resolved.',
+        not_allowed: 'Only the reporter, tagged people, or a standup admin can resolve this blocker.',
+        not_found: 'This blocker no longer exists.',
+      };
+      return { text: messages[result] };
     }
 
     return {};

@@ -157,6 +157,12 @@ export class Scheduler {
       }
     }
 
+    try {
+      await this.nudgeUnackedBlockerTags(standup, run);
+    } catch (err) {
+      this.log(`blocker nudges failed for run ${run.id}: ${err}`);
+    }
+
     if (standup.aiEnabled && this.ai) {
       try {
         const submissions = await this.repo.listSubmissions(run.id);
@@ -186,6 +192,27 @@ export class Scheduler {
         } catch (err) {
           this.log(`weekly digest failed for "${standup.name}": ${err}`);
         }
+      }
+    }
+  }
+
+  /** One DM per day per unacknowledged tag on an open blocker — stops on ack. */
+  private async nudgeUnackedBlockerTags(standup: Standup, run: Run): Promise<void> {
+    const localDate = (iso: string) => DateTime.fromISO(iso).setZone(standup.timezone).toISODate();
+    for (const { tag, blocker } of await this.repo.listUnackedTags(standup.id)) {
+      // Tagged today → they already got the card; nudged today → done for today.
+      if (localDate(tag.taggedAt) === run.date) continue;
+      if (tag.lastNudgedAt && localDate(tag.lastNudgedAt) === run.date) continue;
+      try {
+        await this.adapter.sendBlockerCard(
+          tag.userName,
+          standup,
+          blocker,
+          `Reminder: ${tag.taggedBy} tagged you on this blocker — please acknowledge.`,
+        );
+        await this.repo.markTagNudged(blocker.id, tag.userName, this.now().toISO()!);
+      } catch (err) {
+        this.log(`blocker nudge to ${tag.userName} failed: ${err}`);
       }
     }
   }

@@ -38,8 +38,31 @@ open to everyone in the space.
 | --- | --- |
 | `status` | Configuration + today's progress (submitted / pending / away) |
 | `trends` | Last 4 weeks: participation % and average mood |
-| `blockers` | Open blockers with their age |
+| `blockers` | Open blockers with ids, age, who's tagged, and update counts |
 | `export` | How to download a CSV of submissions |
+
+## Working a blocker together (everyone)
+
+Blockers get an id (`blockers` shows them). Tag teammates to pull them in:
+
+| Command | Effect |
+| --- | --- |
+| `blocker 12 tag @Asha @Rohit` | Tagged people get an interactive DM card (✋ Acknowledge · 📝 Add update · ✅ Resolve) |
+| `blocker 12 update <text>` | Post an update — DMed to the reporter and everyone tagged, and added to the blocker's thread in the space |
+| `blocker 12 resolve` | Close it (reporter, tagged people, or admins) |
+
+How collaboration changes the lifecycle:
+
+- **Tagging makes it explicit-resolve.** Untagged blockers still auto-resolve
+  when the reporter's next standup is blocker-free; once a blocker is tagged
+  or has updates, only an explicit resolve closes it — someone's clean
+  standup can't silently end a conversation others are having.
+- **Acknowledge stops the nudges.** Tagged people get one DM per day (at run
+  close) until they hit ✋ Acknowledge; posting an update acknowledges
+  implicitly. The reporter is notified of every ack.
+- **Everything is tracked.** Updates and resolution land in a per-blocker
+  thread in the team space, and open blockers keep appearing in wrap-ups,
+  digests, and escalation pings until resolved.
 
 ## DM self-service
 
@@ -60,8 +83,9 @@ Anyone can DM the bot directly:
   "today" answer.
 - **Late submissions** after the deadline still post, flagged *late*; the
   wrap-up isn't recalculated and late entries can no longer be edited.
-- **Blockers** auto-resolve when the same person submits a blocker-free
-  standup on a later day. With `escalate @user` configured, the contact gets
+- **Untagged blockers** auto-resolve when the same person submits a
+  blocker-free standup on a later day; tagged ones need an explicit
+  `blocker <id> resolve`. With `escalate @user` configured, the contact gets
   **one** DM per blocker once it has been open past the threshold.
 - **Calendar OOO** (when [enabled](./configuration)): participants with an
   *Out of office* event in Google Calendar are automatically marked away for
