@@ -14,6 +14,10 @@ export interface Config {
   dashboardToken: string;
   /** Encrypts secrets at rest (AES-256-GCM). Required unless ADAPTER=fake. */
   secretKey: string;
+  /** Postgres TLS mode: disable | require (default for managed PG) | verify-full. Read by the driver. */
+  dbSsl: string;
+  /** CA bundle path for DB_SSL=verify-full. */
+  dbSslCa: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -33,5 +37,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     tenantId: env.TENANT_ID ?? 'default',
     dashboardToken: env.DASHBOARD_TOKEN ?? '',
     secretKey: secretKey || 'dev-only-ephemeral-secret',
+    dbSsl: env.DB_SSL ?? '',
+    dbSslCa: env.DB_SSL_CA ?? '',
   };
 }

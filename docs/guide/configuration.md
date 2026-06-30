@@ -15,6 +15,8 @@ AsyncUp is configured in two layers:
 | `PORT` | `8080` | Webhook + dashboard port |
 | `DB_PATH` | `./data/standup.db` | SQLite database file (default storage) |
 | `DATABASE_URL` | *(empty)* | Bring-your-own PostgreSQL — when set, SQLite is skipped (see [Deployment](./deployment#database-embedded-or-bring-your-own)) |
+| `DB_SSL` | from URL `sslmode` | Postgres TLS: `require` (encrypt, no verify — default for managed DBs), `verify-full`, or `disable` |
+| `DB_SSL_CA` | *(empty)* | CA bundle path for `DB_SSL=verify-full` |
 | `DASHBOARD_TOKEN` | *(empty)* | Secret for `/dashboard` — **required** to configure the app. Disabled while empty |
 | `SECRET_KEY` | — | Encrypts stored secrets. Generate with `openssl rand -hex 32`. Required (except `ADAPTER=fake`) |
 | `ADAPTER` | `google` | `google` for production, `fake` for a console demo |
@@ -51,7 +53,17 @@ service account's email), never the material itself.
 
 All state — standups, participants, admins, runs, submissions, blockers, app
 settings — lives either in a single SQLite file (`DB_PATH`, the default) or in
-your own PostgreSQL (`DATABASE_URL`). Back up the file or use your database's
+your own PostgreSQL (`DATABASE_URL`).
+
+> **Managed Postgres TLS:** RDS / Cloud SQL / Neon / Supabase present a
+> certificate signed by their own CA. AsyncUp treats `sslmode=require` as
+> "encrypt but don't verify the cert" (the libpq default every other client
+> uses), so `DATABASE_URL=…?sslmode=require` connects out of the box. For
+> strict verification set `DB_SSL=verify-full` and point `DB_SSL_CA` at the
+> provider's CA bundle. (Earlier builds inherited node-pg's stricter default
+> and crash-looped with `SELF_SIGNED_CERT_IN_CHAIN` — that's fixed.)
+
+Back up the file or use your database's
 backup story; stored secrets are encrypted, so backups are safe to ship
 off-box as long as `SECRET_KEY` stays out of them. Schema migrations run
 automatically on startup in both modes, so upgrading AsyncUp is just

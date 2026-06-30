@@ -1,12 +1,14 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { createServer } from '../src/server.js';
 import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 let close: (() => void) | null = null;
 
-async function startServer(opts: { tickToken?: string; exportToken?: string; dashboardToken?: string } = {}) {
+async function startServer(
+  opts: { tickToken?: string; exportToken?: string; dashboardToken?: string; verify?: boolean } = {},
+) {
   const stack = await makeStack();
   if (opts.tickToken) await stack.settings.update({ tickToken: opts.tickToken });
   if (opts.exportToken) await stack.settings.update({ exportToken: opts.exportToken });
@@ -17,7 +19,7 @@ async function startServer(opts: { tickToken?: string; exportToken?: string; das
     repo: stack.repo,
     settings: stack.settings,
     dashboardToken: opts.dashboardToken ?? '',
-    skipVerification: true,
+    skipVerification: !opts.verify,
     now: stack.clock.now,
   });
   const server = app.listen(0);
@@ -84,6 +86,31 @@ describe('server', () => {
     });
     const body: any = await res.json();
     expect(body.text).toContain('Crew');
+  });
+
+  it('logs the concrete 401 reason and neutralizes log injection', async () => {
+    const { url, settings } = await startServer({ verify: true });
+    await settings.update({ chatAudience: '819177304171' }); // turns verification on
+    const lines: string[] = [];
+    const warn = vi.spyOn(console, 'warn').mockImplementation((m?: unknown) => void lines.push(String(m)));
+    const log = vi.spyOn(console, 'log').mockImplementation((m?: unknown) => void lines.push(String(m)));
+    try {
+      const res = await fetch(`${url}/chat/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        // attacker-controlled type with a newline + forged log line
+        body: JSON.stringify({ type: 'MESSAGE\n[chat] rejected /chat/events (401) — FORGED' }),
+      });
+      expect(res.status).toBe(401);
+      expect(lines.some((w) => w.includes('rejected /chat/events') && w.includes('missing'))).toBe(true);
+      // the arrival log line must not contain a raw newline (log forging prevented)
+      const arrival = lines.find((l) => l.startsWith('[chat] POST /chat/events'));
+      expect(arrival).toBeDefined();
+      expect(arrival).not.toContain('\n');
+    } finally {
+      warn.mockRestore();
+      log.mockRestore();
+    }
   });
 
   it('disables /export without EXPORT_TOKEN and guards it with one', async () => {

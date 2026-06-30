@@ -184,7 +184,11 @@ DATABASE_URL=postgres://user:password@host:5432/asyncup
 
 `docker compose up -d` — the schema creates and migrates itself. SQLite is
 skipped entirely. You inherit the provider's backups, PITR, and failover.
-If the provider requires TLS, append `?sslmode=require` to the URL.
+
+For TLS (RDS, Cloud SQL, Neon, Supabase all use it), append `?sslmode=require`
+— AsyncUp encrypts the connection without trying to verify the provider's
+private CA, so it connects out of the box. Want strict verification? Set
+`DB_SSL=verify-full` and `DB_SSL_CA=/path/to/ca-bundle.pem`.
 
 ### B2. Bundled Postgres on the same machine
 

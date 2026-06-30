@@ -233,8 +233,13 @@ async function applySettings(settings: SettingsService, body: any): Promise<stri
 
   if (section === 'chat') {
     const chatAudience = String(body.chatAudience ?? '').trim();
-    if (chatAudience && !/^\d+$/.test(chatAudience)) {
-      return 'The project number is numeric — find it on the GCP dashboard (not the project ID).';
+    // Accepts the GCP project number and/or the app URL (Chat API "Audience"
+    // can be either) — space/comma separated. Reject obvious mistakes like
+    // the project ID slug or org ID being pasted as the only value.
+    const auds = chatAudience.split(/[\s,]+/).filter(Boolean);
+    const bad = auds.find((a) => !/^\d+$/.test(a) && !/^https:\/\/\S+$/i.test(a));
+    if (bad) {
+      return `"${bad}" isn't a GCP project number or an https app URL. Use the project number (digits) or the Chat app's HTTP endpoint URL — not the project ID slug or org ID.`;
     }
     const json = String(body.serviceAccountJson ?? '').trim();
     if (json) {
@@ -327,9 +332,11 @@ async function settingsPage(
     <input type="hidden" name="section" value="chat">
     <div class="kicker">01 · Google Chat</div>
     <h2>Workspace connection</h2>
-    <label>GCP project <em>number</em>
-      <input name="chatAudience" value="${esc(s.chatAudience)}" placeholder="e.g. 1234567890" inputmode="numeric">
-      <small class="muted">Verifies that webhook calls really come from Google Chat.</small>
+    <label>Audience — GCP project <em>number</em> (or app URL)
+      <input name="chatAudience" value="${esc(s.chatAudience)}" placeholder="e.g. 819177304171">
+      <small class="muted">Verifies webhook calls come from Google Chat. Use the project <b>number</b> (digits, from
+      Cloud overview → Project info — <em>not</em> the project ID or org ID). If your Chat API "Audience" is set to
+      the App URL instead, paste that URL; you can enter both, space-separated.</small>
     </label>
     <label>Service-account key (JSON)
       <textarea name="serviceAccountJson" rows="4" placeholder='${s.serviceAccountJson ? 'Paste a new key to replace the stored one' : '{ "type": "service_account", … } — paste the downloaded key file'}'></textarea>
