@@ -88,21 +88,28 @@ describe('server', () => {
     expect(body.text).toContain('Crew');
   });
 
-  it('logs the concrete reason when a chat event is rejected (401)', async () => {
+  it('logs the concrete 401 reason and neutralizes log injection', async () => {
     const { url, settings } = await startServer({ verify: true });
     await settings.update({ chatAudience: '819177304171' }); // turns verification on
-    const warns: string[] = [];
-    const spy = vi.spyOn(console, 'warn').mockImplementation((m?: unknown) => void warns.push(String(m)));
+    const lines: string[] = [];
+    const warn = vi.spyOn(console, 'warn').mockImplementation((m?: unknown) => void lines.push(String(m)));
+    const log = vi.spyOn(console, 'log').mockImplementation((m?: unknown) => void lines.push(String(m)));
     try {
       const res = await fetch(`${url}/chat/events`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type: 'MESSAGE' }),
+        // attacker-controlled type with a newline + forged log line
+        body: JSON.stringify({ type: 'MESSAGE\n[chat] rejected /chat/events (401) — FORGED' }),
       });
       expect(res.status).toBe(401);
-      expect(warns.some((w) => w.includes('rejected /chat/events') && w.includes('missing'))).toBe(true);
+      expect(lines.some((w) => w.includes('rejected /chat/events') && w.includes('missing'))).toBe(true);
+      // the arrival log line must not contain a raw newline (log forging prevented)
+      const arrival = lines.find((l) => l.startsWith('[chat] POST /chat/events'));
+      expect(arrival).toBeDefined();
+      expect(arrival).not.toContain('\n');
     } finally {
-      spy.mockRestore();
+      warn.mockRestore();
+      log.mockRestore();
     }
   });
 

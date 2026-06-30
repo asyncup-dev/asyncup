@@ -25,6 +25,11 @@ function bearerToken(req: Request): string | undefined {
   return req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];
 }
 
+/** Collapse control chars (incl. newlines) and cap length before logging untrusted text — prevents log forging. */
+function logSafe(value: unknown): string {
+  return String(value).replace(/\p{Cc}/gu, ' ').slice(0, 200);
+}
+
 export function createServer(deps: ServerDeps): Express {
   const { router, scheduler, repo, settings } = deps;
   const now = deps.now ?? (() => DateTime.utc());
@@ -74,12 +79,12 @@ export function createServer(deps: ServerDeps): Express {
 
   app.post('/chat/events', async (req, res) => {
     const eventType = req.body?.type ?? 'unknown';
-    console.log(`[chat] POST /chat/events type=${eventType}`);
+    console.log(`[chat] POST /chat/events type=${logSafe(eventType)}`);
     const verifier = await getVerifier();
     if (verifier) {
       const result = await verifier.verify(req.header('authorization'));
       if (!result.ok) {
-        console.warn(`[chat] rejected /chat/events (401) — ${result.reason}`);
+        console.warn(`[chat] rejected /chat/events (401) — ${logSafe(result.reason)}`);
         res.status(401).json({ error: 'unauthorized' });
         return;
       }
