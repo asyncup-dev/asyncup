@@ -45,7 +45,10 @@ export function createServer(deps: ServerDeps): Express {
       return null;
     }
     if (verifierCache?.audience !== chatAudience) {
-      verifierCache = { audience: chatAudience, verifier: new ChatRequestVerifier(chatAudience) };
+      // chatAudience may hold several space/comma-separated values (project
+      // number and/or app URL) — accept a token matching any of them.
+      const audiences = chatAudience.split(/[\s,]+/).filter(Boolean);
+      verifierCache = { audience: chatAudience, verifier: new ChatRequestVerifier(audiences) };
     }
     return verifierCache.verifier;
   };
@@ -70,10 +73,16 @@ export function createServer(deps: ServerDeps): Express {
   });
 
   app.post('/chat/events', async (req, res) => {
+    const eventType = req.body?.type ?? 'unknown';
+    console.log(`[chat] POST /chat/events type=${eventType}`);
     const verifier = await getVerifier();
-    if (verifier && !(await verifier.verify(req.header('authorization')))) {
-      res.status(401).json({ error: 'unauthorized' });
-      return;
+    if (verifier) {
+      const result = await verifier.verify(req.header('authorization'));
+      if (!result.ok) {
+        console.warn(`[chat] rejected /chat/events (401) — ${result.reason}`);
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
     }
     try {
       res.json(await router.handle(req.body));

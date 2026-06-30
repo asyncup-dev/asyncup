@@ -1,12 +1,14 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { createServer } from '../src/server.js';
 import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 let close: (() => void) | null = null;
 
-async function startServer(opts: { tickToken?: string; exportToken?: string; dashboardToken?: string } = {}) {
+async function startServer(
+  opts: { tickToken?: string; exportToken?: string; dashboardToken?: string; verify?: boolean } = {},
+) {
   const stack = await makeStack();
   if (opts.tickToken) await stack.settings.update({ tickToken: opts.tickToken });
   if (opts.exportToken) await stack.settings.update({ exportToken: opts.exportToken });
@@ -17,7 +19,7 @@ async function startServer(opts: { tickToken?: string; exportToken?: string; das
     repo: stack.repo,
     settings: stack.settings,
     dashboardToken: opts.dashboardToken ?? '',
-    skipVerification: true,
+    skipVerification: !opts.verify,
     now: stack.clock.now,
   });
   const server = app.listen(0);
@@ -84,6 +86,24 @@ describe('server', () => {
     });
     const body: any = await res.json();
     expect(body.text).toContain('Crew');
+  });
+
+  it('logs the concrete reason when a chat event is rejected (401)', async () => {
+    const { url, settings } = await startServer({ verify: true });
+    await settings.update({ chatAudience: '819177304171' }); // turns verification on
+    const warns: string[] = [];
+    const spy = vi.spyOn(console, 'warn').mockImplementation((m?: unknown) => void warns.push(String(m)));
+    try {
+      const res = await fetch(`${url}/chat/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'MESSAGE' }),
+      });
+      expect(res.status).toBe(401);
+      expect(warns.some((w) => w.includes('rejected /chat/events') && w.includes('missing'))).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('disables /export without EXPORT_TOKEN and guards it with one', async () => {

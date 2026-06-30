@@ -1,5 +1,52 @@
+import { readFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import pg from 'pg';
+
+export type ResolvedSsl = false | { rejectUnauthorized: boolean; ca?: string } | undefined;
+
+export interface SslResolution {
+  connectionString: string;
+  ssl: ResolvedSsl;
+  /** What we settled on, for logging. */
+  mode: 'disable' | 'require' | 'verify-full' | 'none';
+}
+
+/**
+ * Decide the `ssl` option for node-postgres from the connection string and
+ * env, instead of letting `pg` interpret `sslmode` itself.
+ *
+ * Why: recent `pg`/`pg-connection-string` treat `sslmode=require` as
+ * **verify-full**, which rejects managed databases (RDS, Cloud SQL, Neon,
+ * Supabase) that use a private CA — the app crash-loops with
+ * `SELF_SIGNED_CERT_IN_CHAIN` on first boot. Every other Postgres client
+ * (libpq, psycopg, JDBC, pgx) treats `require` as "encrypt, don't verify".
+ * We restore that behavior as the default and make strict verification an
+ * explicit opt-in.
+ *
+ * Precedence: `DB_SSL` env > the URL's `sslmode` > none.
+ *   - `disable`              → no TLS
+ *   - `require` / `prefer`   → encrypt, do NOT verify the cert (default for managed PG)
+ *   - `verify-ca`/`verify-full` → verify; pass the CA bundle via `DB_SSL_CA`
+ */
+export function resolvePostgresSsl(url: string, env: NodeJS.ProcessEnv = process.env): SslResolution {
+  const parsed = new URL(url);
+  const urlMode = parsed.searchParams.get('sslmode');
+  // We set `ssl` explicitly, so strip the params pg would otherwise act on.
+  for (const param of ['sslmode', 'uselibpqcompat', 'ssl']) parsed.searchParams.delete(param);
+  const connectionString = parsed.toString();
+
+  const mode = (env.DB_SSL ?? urlMode ?? '').toLowerCase();
+  const caPath = env.DB_SSL_CA;
+
+  if (mode === '') return { connectionString, ssl: undefined, mode: 'none' };
+  if (mode === 'disable') return { connectionString, ssl: false, mode: 'disable' };
+  if (mode === 'verify-full' || mode === 'verify-ca') {
+    const ca = caPath ? readFileSync(caPath, 'utf8') : undefined;
+    return { connectionString, ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) }, mode: 'verify-full' };
+  }
+  // require / prefer / anything else truthy → encrypt without verification
+  return { connectionString, ssl: { rejectUnauthorized: false }, mode: 'require' };
+}
 
 /**
  * Thin async database abstraction so the Repo works against embedded SQLite
@@ -123,8 +170,22 @@ export class PostgresDriver extends QueuedDriver implements Driver {
 
   /** `schema` isolates installs/tests sharing one database. */
   static async connect(url: string, schema?: string): Promise<PostgresDriver> {
-    const client = new pg.Client({ connectionString: url });
-    await client.connect();
+    const { connectionString, ssl, mode } = resolvePostgresSsl(url);
+    const client = new pg.Client({ connectionString, ssl });
+    console.log(`[db] postgres TLS: ${mode}`);
+    try {
+      await client.connect();
+    } catch (err: any) {
+      const code = err?.code ?? '';
+      if (code === 'SELF_SIGNED_CERT_IN_CHAIN' || code === 'DEPTH_ZERO_SELF_SIGNED_CERT') {
+        throw new Error(
+          `Postgres TLS verification failed (${code}). Your database uses a private CA ` +
+            `(common on RDS/Cloud SQL/Neon). Either set DB_SSL=require to encrypt without ` +
+            `verifying, or set DB_SSL=verify-full with DB_SSL_CA=/path/to/ca-bundle.pem.`,
+        );
+      }
+      throw err;
+    }
     if (schema) {
       if (!/^[a-z_][a-z0-9_]*$/i.test(schema)) throw new Error(`invalid schema name: ${schema}`);
       await client.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
