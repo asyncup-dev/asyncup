@@ -50,16 +50,22 @@ and use the service's own identity via Application Default Credentials.)
 | Description | `Async daily standups` |
 | Functionality | ✅ Receive 1:1 messages, ✅ Join spaces and group conversations |
 | Connection settings | **HTTP endpoint URL** → `https://<your-host>/chat/events` |
-| Visibility | **Make this Chat app available to specific people and groups in your domain**, or your whole domain |
+| Authentication Audience | **Project Number** (recommended — this is what AsyncUp verifies) |
+| Visibility | the people/Google Group who'll use it (see below) |
 
-Save. The app status should become **LIVE**.
+> Today's console may default to **"Build this Chat app as a Google Workspace
+> add-on."** That's fine — HTTP-endpoint Chat apps work either way. Just note the
+> add-on path needs the same distribution steps below.
 
-## 5. Install it for your users (admin)
+Save. The app status should become **LIVE**. Paste the **project number** into the
+dashboard's **Audience** field (Settings → Google Chat) so it matches the
+Authentication Audience you set here.
 
-So the bot can DM people without each person adding it manually:
+## 5. Get the bot to your team
 
-1. [admin.google.com](https://admin.google.com) → **Apps → Google Workspace → Google Chat → Installation policies** (or Marketplace apps, depending on rollout).
-2. Install/force-install the app for the OUs or groups who'll use standups.
+How users actually receive the bot — allowlist + self-add (small teams) vs a
+private Marketplace listing + admin install (org-wide, zero-touch) — is its own
+topic. **See [Installing AsyncUp for your team](./distribution).**
 
 > The bot can only DM users it shares a DM space with. Admin install creates
 > that automatically; otherwise each user must add the app once themselves.

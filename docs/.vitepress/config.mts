@@ -32,6 +32,7 @@ export default defineConfig({
           { text: 'Getting started', link: '/guide/getting-started' },
           { text: 'Setup guide (all scenarios)', link: '/guide/server-setup' },
           { text: 'Google Chat setup', link: '/guide/google-chat-setup' },
+          { text: 'Installing for your team', link: '/guide/distribution' },
           { text: 'Commands', link: '/guide/commands' },
           { text: 'Configuration', link: '/guide/configuration' },
           { text: 'AI summaries', link: '/guide/ai' },
