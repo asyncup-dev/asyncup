@@ -20,6 +20,27 @@ The token is then remembered in an HttpOnly cookie and the browser is
 immediately redirected to a clean URL, so the token doesn't linger in the
 address bar, browser history, or proxy access logs.
 
+## Sign in with Google — admin and user consoles
+
+With an OAuth client configured (Settings → *Sign in with Google*), the
+consoles map straight onto Google Workspace roles:
+
+- **Workspace admins** (super or delegated, per the Directory API) sign in
+  and get this full admin dashboard — no token needed.
+- **Everyone else** gets a personal console at **`/me`**: their standups and
+  today's status, their recent submissions, and self-service controls for
+  timezone and vacation mode — the same things the DM commands do.
+
+Setup: create a **Web application** OAuth client (GCP → APIs & Services →
+Credentials) with redirect URI `https://<your-host>/auth/callback`, paste
+its ID and secret into Settings, and set the **Workspace admin email** so
+admin status can be looked up in the Directory. Sign-ins are rejected for
+accounts the Directory doesn't know (or that are suspended); without the
+Directory configured, everyone signs in as a regular user and the admin
+console stays token-only.
+
+`DASHBOARD_TOKEN` keeps working as break-glass operator access either way.
+
 ## What's there
 
 - **First-run checklist** — a setup meter (connect Google Chat, create a

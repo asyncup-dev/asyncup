@@ -9,6 +9,9 @@ import type { Scheduler } from './core/scheduler.js';
 import type { Repo } from './db/repo.js';
 import { buildCsv } from './core/export.js';
 import { registerDashboard } from './dashboard/dashboard.js';
+import { registerUserConsole } from './dashboard/me.js';
+import { registerAuth, type IdentityBroker } from './auth/google.js';
+import type { UserDirectory } from './core/directory.js';
 
 export interface ServerDeps {
   router: EventRouter;
@@ -21,6 +24,12 @@ export interface ServerDeps {
   skipVerification?: boolean;
   /** Per-standup webhook signing secret (shown to admins on the dashboard). */
   webhookSecret?: (standupId: number) => string;
+  /** Signs sessions; empty disables Google sign-in. */
+  secretKey?: string;
+  /** Directory lookups for Workspace roles (admin vs user). */
+  directory?: () => Promise<UserDirectory | null>;
+  /** Test override for the Google OAuth exchange. */
+  identityBroker?: (clientId: string, clientSecret: string) => IdentityBroker;
   now?: () => DateTime;
 }
 
@@ -69,6 +78,23 @@ export function createServer(deps: ServerDeps): Express {
   const authLimiter = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
   app.use(['/dashboard', '/export', '/tick'], authLimiter);
 
+  const signInEnabled = async () => {
+    const { oauthClientId, oauthClientSecret } = await settings.get();
+    return !!(oauthClientId && oauthClientSecret);
+  };
+  app.use(['/me', '/auth'], express.urlencoded({ extended: false }));
+  registerAuth(app, {
+    settings,
+    secretKey: deps.secretKey ?? '',
+    directory: deps.directory ?? (async () => null),
+    broker: deps.identityBroker,
+  });
+  registerUserConsole(app, {
+    repo,
+    secretKey: deps.secretKey ?? '',
+    now: deps.now,
+    signInEnabled,
+  });
   registerDashboard(app, {
     repo,
     settings,
@@ -76,6 +102,8 @@ export function createServer(deps: ServerDeps): Express {
     now: deps.now,
     runNow: (standup) => scheduler.runNow(standup),
     webhookSecret: deps.webhookSecret,
+    secretKey: deps.secretKey,
+    signInEnabled,
   });
 
   app.get('/healthz', async (_req, res) => {
