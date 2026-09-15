@@ -22,6 +22,8 @@ export interface DashboardDeps {
   now?: () => DateTime;
   /** Opens today's run immediately (scheduler.runNow); enables the button. */
   runNow?: (standup: Standup) => Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'>;
+  /** Per-standup webhook signing secret to show next to a configured URL. */
+  webhookSecret?: (standupId: number) => string;
 }
 
 const COOKIE = 'asyncup_dash';
@@ -199,7 +201,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       layout(
         `${standup.name} — AsyncUp`,
         'home',
-        await standupPage(repo, standup, now(), req.query.saved === '1', null, notice, !!deps.runNow),
+        await standupPage(repo, standup, now(), req.query.saved === '1', null, notice, !!deps.runNow, deps.webhookSecret),
       ),
     );
   });
@@ -288,7 +290,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
     }
     const error = await applyConfig(repo, standup, req.body);
     if (error) {
-      res.status(400).send(layout(`${standup.name} — AsyncUp`, 'home', await standupPage(repo, (await repo.getStandupById(standup.id))!, now(), false, error, null, !!deps.runNow)));
+      res.status(400).send(layout(`${standup.name} — AsyncUp`, 'home', await standupPage(repo, (await repo.getStandupById(standup.id))!, now(), false, error, null, !!deps.runNow, deps.webhookSecret)));
       return;
     }
     res.redirect(`/dashboard/standup/${standup.id}?saved=1`);
@@ -563,6 +565,7 @@ async function standupPage(
   error: string | null,
   notice: string | null = null,
   canRunNow = false,
+  webhookSecret?: (standupId: number) => string,
 ): Promise<string> {
   const roster = await repo.listParticipants(s.id);
   const rosterAction = (p: { userName: string }, action: string, label: string, danger = false) =>
@@ -657,6 +660,12 @@ async function standupPage(
     <label>Escalate after (days) <input name="escalateAfterDays" value="${s.escalateAfterDays}"></label>
     ${escalateSelect}
     <label>Webhook URL <input name="webhookUrl" value="${esc(s.webhookUrl ?? '')}" placeholder="https://… (optional)"> <small class="muted">JSON POST on each submission and wrap-up</small></label>
+    ${
+      s.webhookUrl && webhookSecret?.(s.id)
+        ? `<p class="reveal">Deliveries carry <code>X-AsyncUp-Signature: sha256=HMAC_SHA256(body, secret)</code> — signing secret:
+           <code>${esc(webhookSecret(s.id))}</code></p>`
+        : ''
+    }
     <label>Questions (one per line)<textarea name="questions" rows="4">${esc(standupQuestions(s).join('\n'))}</textarea></label>
     <label class="inline"><input type="checkbox" name="moodEnabled" ${check(s.moodEnabled)}> Mood question</label>
     <label class="inline"><input type="checkbox" name="moodAnonymous" ${check(s.moodAnonymous)}> Anonymous mood</label>

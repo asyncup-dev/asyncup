@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /**
  * AES-256-GCM for settings marked secret. The key is derived from the
@@ -39,4 +39,19 @@ export function tokenEquals(candidate: unknown, expected: string): boolean {
   const a = createHash('sha256').update(candidate).digest();
   const b = createHash('sha256').update(expected).digest();
   return timingSafeEqual(a, b);
+}
+
+/**
+ * Per-standup webhook signing secret, derived from SECRET_KEY — nothing new
+ * to store or rotate separately. Shown to admins so the receiver can verify
+ * X-AsyncUp-Signature.
+ */
+export function deriveWebhookSecret(secretKey: string, standupId: number): string {
+  if (!secretKey) return '';
+  return createHmac('sha256', secretKey).update(`webhook:${standupId}`).digest('hex');
+}
+
+/** Hex HMAC-SHA256 of a delivery body with the standup's signing secret. */
+export function signWebhookBody(secret: string, body: string): string {
+  return createHmac('sha256', secret).update(body).digest('hex');
 }
