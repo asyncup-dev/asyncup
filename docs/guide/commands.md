@@ -6,9 +6,10 @@ e.g. `@AsyncUp #2 time 09:30` — `status` lists all standups with their ids.
 
 ## Configuration (admins only)
 
-The person who runs `setup` becomes the standup's first admin. Only admins can
-change configuration; `status`, `trends`, `blockers`, `export` and `help` are
-open to everyone in the space.
+The person who runs `setup` becomes the standup's first admin (`setup` itself
+is open to everyone in the space — there is nobody to gate it before the first
+standup exists). Only admins can change configuration; `status`, `trends`,
+`blockers`, `export` and `help` are open to everyone in the space.
 
 | Command | Effect |
 | --- | --- |
@@ -18,7 +19,7 @@ open to everyone in the space.
 | `mandatory @user…` / `optional @user…` | Count toward the wrap-up report, or not |
 | `vacation @user…` / `back @user…` | Mark people away — no prompts, not counted as missing |
 | `admin @user…` / `unadmin @user…` | Manage who can change configuration |
-| `time HH:MM` | Prompt time — interpreted in each participant's own timezone |
+| `time HH:MM` | Prompt time — interpreted in each participant's own timezone (participants set theirs by DMing `timezone <IANA>`; default is the standup timezone) |
 | `deadline HH:MM` | When the run closes and the wrap-up posts — standup timezone |
 | `remind <minutes>` | Nudge non-submitters this many minutes before the deadline (`0` disables) |
 | `timezone <IANA>` | Standup timezone, e.g. `Asia/Kolkata` |
@@ -70,8 +71,10 @@ Anyone can DM the bot directly:
 
 | Message | Effect |
 | --- | --- |
-| `vacation` | Pause prompts for yourself across all your standups |
+| `vacation` (or `ooo`) | Pause prompts for yourself across all your standups |
 | `back` | Resume prompts |
+| `timezone <IANA>` | Get prompts at the standup's prompt time in *your* timezone (all your standups) |
+| `timezone reset` | Follow each standup's timezone again (`timezone` alone shows the current setting) |
 
 ## Behavior notes
 
@@ -86,7 +89,8 @@ Anyone can DM the bot directly:
 - **Untagged blockers** auto-resolve when the same person submits a
   blocker-free standup on a later day; tagged ones need an explicit
   `blocker <id> resolve`. With `escalate @user` configured, the contact gets
-  **one** DM per blocker once it has been open past the threshold.
+  one DM at run close listing every blocker that newly crossed the threshold —
+  each blocker is escalated once.
 - **Calendar OOO** (when [enabled](./configuration)): participants with an
   *Out of office* event in Google Calendar are automatically marked away for
   that day's run. Emails are learned from Chat interactions, so this kicks in

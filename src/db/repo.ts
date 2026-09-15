@@ -633,6 +633,23 @@ export class Repo {
     return result.changes > 0;
   }
 
+  /** DM self-service: sets the personal timezone in every standup the user is part of. */
+  async setTimezoneForUser(userName: string, timezone: string | null): Promise<number> {
+    const result = await this.db.run(
+      'UPDATE participants SET timezone = ? WHERE user_name = ? AND active = 1',
+      [timezone, userName],
+    );
+    return result.changes;
+  }
+
+  async getUserTimezone(userName: string): Promise<string | null> {
+    const row = await this.db.get(
+      'SELECT timezone FROM participants WHERE user_name = ? AND active = 1 AND timezone IS NOT NULL LIMIT 1',
+      [userName],
+    );
+    return row?.timezone ?? null;
+  }
+
   async removeParticipant(standupId: number, userName: string): Promise<boolean> {
     const result = await this.db.run(
       'UPDATE participants SET active = 0 WHERE standup_id = ? AND user_name = ?',

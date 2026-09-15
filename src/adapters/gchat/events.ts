@@ -1,3 +1,4 @@
+import { IANAZone } from 'luxon';
 import type { BlockerService } from '../../core/blocker-service.js';
 import type { CommandHandler, Mention } from '../../core/commands.js';
 import type { StandupService } from '../../core/standup-service.js';
@@ -55,7 +56,7 @@ export class EventRouter {
   private onAddedToSpace(event: any): object {
     if (isDm(event)) {
       return {
-        text: "👋 Hi! When your team's standup is due you'll get a card here with a *Fill standup* button. DM me `vacation` / `back` to toggle your vacation mode.",
+        text: "👋 Hi! When your team's standup is due you'll get a card here with a *Fill standup* button. DM me `vacation` / `back` to toggle your vacation mode, or `timezone <IANA>` to get prompts in your own timezone.",
       };
     }
     return {
@@ -80,7 +81,11 @@ export class EventRouter {
   }
 
   private async onDirectMessage(event: any, user: Mention): Promise<object> {
-    const text = (event.message?.argumentText ?? event.message?.text ?? '').trim().toLowerCase();
+    const raw = (event.message?.argumentText ?? event.message?.text ?? '').trim();
+    const text = raw.toLowerCase();
+    if (text === 'timezone' || text.startsWith('timezone ')) {
+      return this.onTimezoneDm(user, raw.split(/\s+/)[1] ?? '');
+    }
     if (text === 'vacation' || text === 'ooo') {
       const affected = await this.repo.setVacationForUser(user.userName, true);
       return {
@@ -100,8 +105,38 @@ export class EventRouter {
     return {
       text:
         'When a standup is due you\'ll get a card here with a *Fill standup* button.\n' +
-        'DM commands: `vacation` (pause prompts while you\'re away) · `back` (resume).\n' +
+        'DM commands: `vacation` (pause prompts while you\'re away) · `back` (resume) · ' +
+        '`timezone <IANA>` (get your prompts at the standup time in *your* zone; `timezone reset` to follow the standup zone).\n' +
         'Team configuration happens in the team space — mention me with `help` there.',
+    };
+  }
+
+  /** DM `timezone` — personal prompt timezone across all the user's standups. */
+  private async onTimezoneDm(user: Mention, arg: string): Promise<object> {
+    if (!arg) {
+      const current = await this.repo.getUserTimezone(user.userName);
+      return {
+        text: current
+          ? `Your prompts follow *${current}*. \`timezone <IANA>\` to change, \`timezone reset\` to follow each standup's timezone.`
+          : 'Your prompts follow each standup\'s timezone. Set your own with `timezone <IANA>`, e.g. `timezone Asia/Kolkata`.',
+      };
+    }
+    if (arg.toLowerCase() === 'reset' || arg.toLowerCase() === 'off') {
+      const affected = await this.repo.setTimezoneForUser(user.userName, null);
+      return {
+        text: affected
+          ? '✅ Personal timezone cleared — prompts follow each standup\'s timezone again.'
+          : "You're not on any standup roster yet.",
+      };
+    }
+    if (!IANAZone.isValidZone(arg)) {
+      return { text: `\`${arg}\` is not a valid IANA timezone — try e.g. \`timezone Asia/Kolkata\` or \`timezone Europe/Berlin\`.` };
+    }
+    const affected = await this.repo.setTimezoneForUser(user.userName, arg);
+    return {
+      text: affected
+        ? `✅ Prompts will reach you at the standup's prompt time in *${arg}*. Deadlines stay in the standup's timezone.`
+        : "You're not on any standup roster yet.",
     };
   }
 

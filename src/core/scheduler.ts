@@ -83,9 +83,16 @@ export class Scheduler {
     const remindAt = deadlineAt.minus({ minutes: standup.reminderMinutesBefore });
 
     let run = await this.repo.getRun(standup.id, today);
-    if (!run && now >= promptAt) {
+    if (!run) {
       const roster = await this.repo.listParticipants(standup.id);
-      if (roster.filter((p) => !p.onVacation).length === 0) return;
+      const active = roster.filter((p) => !p.onVacation);
+      if (active.length === 0) return;
+      // The run opens once promptTime arrives in the earliest zone on the
+      // roster, so participants east of the standup zone aren't held back.
+      const due =
+        now >= promptAt ||
+        active.some((p) => p.timezone && now >= timeOn(today, standup.promptTime, p.timezone));
+      if (!due) return;
       run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
       this.log(`opened run ${run.id} for "${standup.name}" ${today}`);
       await this.applyCalendarOoo(standup, run);

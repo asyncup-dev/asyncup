@@ -98,6 +98,38 @@ describe('EventRouter', () => {
     expect(hint.text).toContain('Fill standup');
   });
 
+  it('handles DM self-service timezone set/show/reset with case preserved', async () => {
+    const { router, repo } = await makeRouter();
+    const standup = await seedStandup(repo);
+    const dm = (text: string) => ({
+      type: 'MESSAGE',
+      space: { name: 'spaces/dm', spaceType: 'DIRECT_MESSAGE' },
+      message: { text },
+      user: { name: 'users/alice', displayName: 'Alice' },
+    });
+
+    const unset: any = await router.handle(dm('timezone'));
+    expect(unset.text).toContain("follow each standup's timezone");
+
+    const bad: any = await router.handle(dm('timezone Mars/Olympus'));
+    expect(bad.text).toContain('not a valid IANA timezone');
+
+    const set: any = await router.handle(dm('timezone Europe/Berlin'));
+    expect(set.text).toContain('Europe/Berlin');
+    expect(
+      (await repo.listParticipants(standup.id)).find((p) => p.userName === 'users/alice')?.timezone,
+    ).toBe('Europe/Berlin');
+
+    const show: any = await router.handle(dm('timezone'));
+    expect(show.text).toContain('Europe/Berlin');
+
+    const reset: any = await router.handle(dm('timezone reset'));
+    expect(reset.text).toContain('cleared');
+    expect(
+      (await repo.listParticipants(standup.id)).find((p) => p.userName === 'users/alice')?.timezone,
+    ).toBeNull();
+  });
+
   it('opens a prefilled dialog from the prompt card', async () => {
     const { router, repo, service } = await makeRouter();
     const standup = await seedStandup(repo);
