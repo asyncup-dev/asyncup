@@ -1,7 +1,6 @@
-import { DateTime } from 'luxon';
-import { rangeStats } from '../core/insights.js';
-import type { Repo } from '../db/repo.js';
-import type { Standup } from '../core/types.js';
+import { type WeekPoint } from '../core/insights.js';
+
+export { weeklySeries, type WeekPoint } from '../core/insights.js';
 
 /**
  * Server-rendered SVG charts for the standup page — no client JS, no chart
@@ -14,45 +13,6 @@ const AMBER = '#e07020';
 const BLUE = '#1f7fae';
 const GRID = 'rgba(21,67,95,.12)';
 const INK_MUTED = '#68798a';
-
-export interface WeekPoint {
-  /** e.g. "18 May" — start of week */
-  label: string;
-  /** null when the week had no runs */
-  participationPct: number | null;
-  /** 1–5 average, null when no moods were recorded */
-  mood: number | null;
-  blockersOpened: number;
-  blockersResolved: number;
-}
-
-export async function weeklySeries(
-  repo: Repo,
-  standup: Standup,
-  now: DateTime,
-  weeks = 8,
-): Promise<WeekPoint[]> {
-  const local = now.setZone(standup.timezone);
-  const points: WeekPoint[] = [];
-  for (let i = weeks - 1; i >= 0; i--) {
-    const start = local.minus({ weeks: i }).startOf('week');
-    const end = local.minus({ weeks: i }).endOf('week');
-    const stats = await rangeStats(repo, standup.id, start.toISODate()!, end.toISODate()!);
-    points.push({
-      label: start.toFormat('dd LLL'),
-      participationPct:
-        stats.runCount === 0
-          ? null
-          : stats.expected === 0
-            ? 100
-            : Math.round((stats.submitted / stats.expected) * 100),
-      mood: stats.moodCount ? Math.round((stats.moodSum / stats.moodCount) * 10) / 10 : null,
-      blockersOpened: await repo.countBlockersOpenedBetween(standup.id, start.toISODate()!, end.toISODate()!),
-      blockersResolved: await repo.countBlockersResolvedBetween(standup.id, start.toISODate()!, end.toISODate()!),
-    });
-  }
-  return points;
-}
 
 // Shared geometry: one 480×168 viewBox, plot area inset for axes.
 const W = 480;

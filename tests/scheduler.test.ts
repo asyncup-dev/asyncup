@@ -139,7 +139,7 @@ describe('Scheduler', () => {
   it('prompts each participant at prompt time in their own timezone', async () => {
     const { repo, adapter, scheduler, clock } = await makeStack();
     const standup = await seedStandup(repo, { deadlineTime: '18:00' });
-    await repo.setParticipantTimezone(standup.id, 'users/bob', 'Europe/London');
+    await repo.setTimezoneForUser('users/bob', 'Europe/London');
 
     clock.set('2026-06-10T09:30');
     await scheduler.tick();
@@ -160,7 +160,7 @@ describe('Scheduler', () => {
     const { repo, adapter, scheduler, clock } = await makeStack();
     const standup = await seedStandup(repo, { deadlineTime: '18:00' });
     // Tokyo is 3.5h ahead of the standup zone (Asia/Kolkata).
-    await repo.setParticipantTimezone(standup.id, 'users/alice', 'Asia/Tokyo');
+    await repo.setTimezoneForUser('users/alice', 'Asia/Tokyo');
 
     clock.set('2026-06-10T09:29', 'Asia/Tokyo');
     await scheduler.tick();

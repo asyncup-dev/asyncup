@@ -3,6 +3,7 @@ import type { Express, Request } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import type { SettingsService } from '../core/settings.js';
 import type { UserDirectory } from '../core/directory.js';
+import { readCookie } from '../core/http.js';
 import { clearSessionCookie, newSession, sealSession, setSessionCookie } from './session.js';
 
 /**
@@ -71,11 +72,7 @@ export function registerAuth(app: Express, deps: AuthDeps): void {
 
   app.get('/auth/callback', async (req, res) => {
     const { oauthClientId, oauthClientSecret } = await deps.settings.get();
-    const stateCookie = req.headers.cookie
-      ?.split(';')
-      .map((c) => c.trim())
-      .find((c) => c.startsWith(`${STATE_COOKIE}=`))
-      ?.slice(STATE_COOKIE.length + 1);
+    const stateCookie = readCookie(req, STATE_COOKIE);
     if (!oauthClientId || !req.query.code || !req.query.state || req.query.state !== stateCookie) {
       res.status(400).send('Sign-in failed (state mismatch) — go back and try again.');
       return;

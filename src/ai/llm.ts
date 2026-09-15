@@ -13,6 +13,9 @@ const MAX_OUTPUT_TOKENS = 1000;
  * Minimal BYO-key client over plain fetch — deliberately no SDK dependency
  * to keep the self-hosted footprint small. One-shot completions only.
  */
+/** The default Anthropic model when none is configured (dashboard AI settings). */
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-4-7';
+
 export function createLlm(config: LlmConfig, fetchFn: typeof fetch = fetch): LlmComplete {
   if (config.provider === 'anthropic') {
     return async (system, prompt) => {

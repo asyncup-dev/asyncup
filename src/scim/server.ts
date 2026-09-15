@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import express, { type Express, type Request, type Response } from 'express';
 import { DateTime } from 'luxon';
 import { tokenEquals } from '../core/crypto.js';
-import type { UserDirectory } from '../core/directory.js';
+import { chatUserName, type UserDirectory } from '../core/directory.js';
+import { bearerToken } from '../core/http.js';
 import type { SettingsService } from '../core/settings.js';
 import type { ScimUser } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
@@ -44,6 +45,13 @@ function render(u: ScimUser): object {
   };
 }
 
+/** Entra sends booleans as "True"/"False" strings; parse both consistently. */
+function scimBool(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value.toLowerCase() === 'true';
+  return fallback;
+}
+
 function parseBody(body: any): { externalId: string | null; userName: string; displayName: string | null; email: string | null; active: boolean } {
   const emails: any[] = Array.isArray(body?.emails) ? body.emails : [];
   const primary = emails.find((e) => e?.primary) ?? emails[0];
@@ -53,7 +61,7 @@ function parseBody(body: any): { externalId: string | null; userName: string; di
     userName,
     displayName: body?.displayName ? String(body.displayName) : body?.name?.formatted ? String(body.name.formatted) : null,
     email: primary?.value ? String(primary.value) : userName.includes('@') ? userName : null,
-    active: body?.active !== false,
+    active: scimBool(body?.active, true),
   };
 }
 
@@ -66,7 +74,7 @@ export function registerScim(app: Express, deps: ScimDeps): void {
 
   const authed = async (req: Request, res: Response): Promise<boolean> => {
     const { scimToken } = await deps.settings.get();
-    const bearer = req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];
+    const bearer = bearerToken(req);
     if (!scimToken) {
       scimError(res, 404, 'SCIM is disabled — generate a SCIM token in dashboard settings.');
       return false;
@@ -87,9 +95,9 @@ export function registerScim(app: Express, deps: ScimDeps): void {
       const directory = await deps.directory();
       const entry = directory && (await directory.lookup(email));
       if (entry?.id) {
-        const chatUserName = `users/${entry.id}`;
-        await repo.setUserEmail(chatUserName, email);
-        return chatUserName;
+        const name = chatUserName(entry.id);
+        await repo.setUserEmail(name, email);
+        return name;
       }
     } catch (err) {
       console.error('[scim] directory lookup failed:', err);
@@ -190,7 +198,7 @@ export function registerScim(app: Express, deps: ScimDeps): void {
       // Okta/Entra send either {path, value} or a bare {value: {field: …}} map.
       const entries: [string, unknown][] = op.path ? [[String(op.path), op.value]] : Object.entries(op.value ?? {});
       for (const [path, value] of entries) {
-        if (path === 'active') fields.active = value === true || value === 'True' || value === 'true';
+        if (path === 'active') fields.active = scimBool(value, false);
         else if (path === 'displayName' || path === 'name.formatted') fields.displayName = value ? String(value) : null;
         else if (path === 'userName') fields.userName = String(value);
         else if (path === 'externalId') fields.externalId = value ? String(value) : null;

@@ -1,17 +1,13 @@
-import { DateTime, IANAZone } from 'luxon';
+import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
+import { runProgress } from './progress.js';
+import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, LIMITS, parseDays } from './validation.js';
 import type { BlockerService } from './blocker-service.js';
 import type { PollService } from './poll-service.js';
 import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
 import { trendsText } from './insights.js';
-import {
-  DEFAULT_QUESTIONS,
-  standupQuestions,
-  WEEKDAYS,
-  type Standup,
-  type Weekday,
-} from './types.js';
+import { DEFAULT_QUESTIONS, standupQuestions, type Standup } from './types.js';
 
 export interface Mention {
   userName: string;
@@ -28,8 +24,6 @@ export interface CommandContext {
   /** Who sent the command. */
   sender: Mention;
 }
-
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const HELP_SHORT = `*AsyncUp — the essentials* (mention me in this space):
 \`setup [name]\` — create a standup reporting to this space (you become its admin)
@@ -56,7 +50,7 @@ const HELP_ALL = `*AsyncUp commands* (mention me in this space — prefix with \
 \`escalate @user\` / \`escalate days N\` / \`escalate off\` — DM someone when blockers stay open
 \`digest on|off\` · \`ai on|off\` — weekly digest, AI summaries
 \`blocker <id> tag @user…\` / \`blocker <id> update <text>\` / \`blocker <id> resolve\` — work a blocker together
-\`poll Question? | Option A | Option B\` — team poll in the space (\`polls\`, \`poll <id> close\`)
+\`poll Question? | Option A | Option B\` — team poll in the space (\`polls\`, \`poll <id> results\`, \`poll <id> close\`)
 \`status\` · \`trends\` · \`blockers\` · \`export\` — insights`;
 
 /** Commands anyone in the space may run; everything else needs an admin. */
@@ -340,7 +334,7 @@ export class CommandHandler {
   }
 
   private async setTime(standup: Standup, value: string, field: 'promptTime' | 'deadlineTime'): Promise<string> {
-    if (!TIME_RE.test(value)) return 'Please give a 24h time like `09:30`.';
+    if (!isValidTime(value)) return 'Please give a 24h time like `09:30`.';
     const next = { promptTime: standup.promptTime, deadlineTime: standup.deadlineTime, [field]: value };
     if (next.promptTime >= next.deadlineTime) {
       return `⚠️ Prompt time (${next.promptTime}) must be before the deadline (${next.deadlineTime}).`;
@@ -353,7 +347,7 @@ export class CommandHandler {
 
   private async setReminder(standup: Standup, value: string): Promise<string> {
     const minutes = Number(value);
-    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 24 * 60) {
+    if (!isReminderMinutes(minutes)) {
       return 'Please give the number of minutes before the deadline, e.g. `remind 60`. Use `remind 0` to disable.';
     }
     await this.repo.updateStandup(standup.id, { reminderMinutesBefore: minutes });
@@ -363,7 +357,7 @@ export class CommandHandler {
   }
 
   private async setTimezone(standup: Standup, value: string): Promise<string> {
-    if (!value || !IANAZone.isValidZone(value)) {
+    if (!value || !isValidZone(value)) {
       return 'Please give a valid IANA timezone, e.g. `timezone Asia/Kolkata`.';
     }
     await this.repo.updateStandup(standup.id, { timezone: value });
@@ -371,15 +365,10 @@ export class CommandHandler {
   }
 
   private async setDays(standup: Standup, value: string): Promise<string> {
-    const days = value
-      .toLowerCase()
-      .split(/[,\s]+/)
-      .filter(Boolean) as Weekday[];
-    const invalid = days.filter((d) => !WEEKDAYS.includes(d));
-    if (days.length === 0 || invalid.length > 0) {
+    const ordered = parseDays(value);
+    if (!ordered) {
       return 'Please list days like `days mon,tue,wed,thu,fri`.';
     }
-    const ordered = WEEKDAYS.filter((d) => days.includes(d));
     await this.repo.updateStandup(standup.id, { days: ordered.join(',') });
     return `✅ Standup runs on: ${ordered.join(', ')}.`;
   }
@@ -397,10 +386,10 @@ export class CommandHandler {
         .split('|')
         .map((q) => q.trim())
         .filter(Boolean);
-      if (parts.length === 0 || parts.length > 10) {
+      if (parts.length === 0 || parts.length > LIMITS.questionsMax) {
         return 'Give 1–10 questions separated by `|`, e.g. `questions set What shipped? | What is next? | Any blockers?`';
       }
-      const tooLong = parts.find((q) => q.length > 200);
+      const tooLong = parts.find((q) => q.length > LIMITS.textMax);
       if (tooLong) return `⚠️ Question too long (max 200 chars): "${tooLong.slice(0, 50)}…"`;
       await this.repo.updateStandup(standup.id, { questions: parts });
       return `✅ Questions updated:\n${parts.map((q, i) => `${i + 1}. ${q}`).join('\n')}\nApplies from the next run.`;
@@ -437,7 +426,7 @@ export class CommandHandler {
     }
     if (sub === 'days') {
       const days = Number(rest[1]);
-      if (!Number.isInteger(days) || days < 1 || days > 30) {
+      if (!isEscalateDays(days)) {
         return 'Give the number of days a blocker may stay open, e.g. `escalate days 3`.';
       }
       await this.repo.updateStandup(standup.id, { escalateAfterDays: days });
@@ -554,7 +543,7 @@ export class CommandHandler {
     if (parts.length < 3 || parts.length > 7) {
       return 'Start a poll with `poll Question? | Option A | Option B` (2–6 options). Also: `poll <id> results`, `poll <id> close`, `polls`.';
     }
-    const tooLong = parts.find((t) => t.length > 200);
+    const tooLong = parts.find((t) => t.length > LIMITS.textMax);
     if (tooLong) return `⚠️ Too long (max 200 chars): "${tooLong.slice(0, 50)}…"`;
     const [question, ...options] = parts;
     const poll = await this.pollService.create(standup, question!, options, ctx.sender);
@@ -614,20 +603,16 @@ export class CommandHandler {
     const today = this.now().setZone(standup.timezone).toISODate()!;
     const run = await this.repo.getRun(standup.id, today);
     if (run) {
-      const submitted = new Set((await this.repo.listSubmissions(run.id)).map((s) => s.userName));
-      const roster = await this.repo.listRunParticipants(run.id);
-      const done = roster.filter((p) => submitted.has(p.userName)).map((p) => p.displayName);
-      const away = roster
-        .filter((p) => !submitted.has(p.userName) && (p.skippedAt || p.onVacation))
-        .map((p) => p.displayName);
-      const pending = roster
-        .filter((p) => !submitted.has(p.userName) && !p.skippedAt && !p.onVacation)
-        .map((p) => p.displayName);
+      const progress = runProgress(
+        await this.repo.listRunParticipants(run.id),
+        await this.repo.listSubmissions(run.id),
+      );
+      const names = (people: { displayName: string }[]) => people.map((p) => p.displayName).join(', ');
       lines.push(
-        `Today (${run.date}, ${run.status}): ${done.length}/${roster.length - away.length} submitted.` +
-          (done.length ? ` ✅ ${done.join(', ')}.` : '') +
-          (pending.length ? ` ⏳ ${pending.join(', ')}.` : '') +
-          (away.length ? ` 🏖️ ${away.join(', ')}.` : ''),
+        `Today (${run.date}, ${run.status}): ${progress.submitted}/${progress.expected} submitted.` +
+          (progress.done.length ? ` ✅ ${names(progress.done)}.` : '') +
+          (progress.pending.length ? ` ⏳ ${names(progress.pending)}.` : '') +
+          (progress.away.length ? ` 🏖️ ${names(progress.away)}.` : ''),
       );
     } else {
       lines.push(`No run yet today (${today}).`);
