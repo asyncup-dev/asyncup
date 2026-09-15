@@ -1,4 +1,4 @@
-import type { Blocker, Run, RunSummary, Standup, Submission } from './types.js';
+import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from './types.js';
 
 /**
  * Platform abstraction. The core never touches Google Chat (or Slack/Teams)
@@ -44,4 +44,10 @@ export interface ChatAdapter {
    * silently at prompt time.
    */
   canDm(userName: string): Promise<boolean>;
+
+  /**
+   * Interactive poll card in the report space (one vote button per option).
+   * Returns the platform message id, or null.
+   */
+  postPoll(standup: Standup, poll: Poll, tallies: number[]): Promise<string | null>;
 }

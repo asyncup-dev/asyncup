@@ -1,6 +1,7 @@
 import { IANAZone } from 'luxon';
 import type { BlockerService } from '../../core/blocker-service.js';
 import type { CommandHandler, Mention } from '../../core/commands.js';
+import type { PollService } from '../../core/poll-service.js';
 import type { StandupService } from '../../core/standup-service.js';
 import type { Repo } from '../../db/repo.js';
 import {
@@ -15,11 +16,13 @@ import {
   blockerUpdateDialog,
   OPEN_BLOCKER_UPDATE_FN,
   OPEN_DIALOG_FN,
+  pollMessage,
   RESOLVE_BLOCKER_FN,
   SKIP_TODAY_FN,
   standupDialog,
   SUBMIT_BLOCKER_UPDATE_FN,
   SUBMIT_DIALOG_FN,
+  VOTE_POLL_FN,
 } from './cards.js';
 
 /**
@@ -34,6 +37,7 @@ export class EventRouter {
     private blockers: BlockerService,
     private repo: Repo,
     private tenantId: string,
+    private polls: PollService | null = null,
   ) {}
 
   async handle(event: any): Promise<object> {
@@ -166,6 +170,22 @@ export class EventRouter {
         not_found: 'This standup prompt is no longer valid.',
       };
       return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: messages[result] };
+    }
+
+    if (fn === VOTE_POLL_FN && this.polls) {
+      const pollId = Number(getParameter(event, 'pollId'));
+      const optionIndex = Number(getParameter(event, 'optionIndex'));
+      const result = await this.polls.vote(pollId, user, optionIndex);
+      if (result.status !== 'ok') {
+        const messages = {
+          closed: 'This poll is closed.',
+          not_found: 'This poll no longer exists.',
+          bad_option: 'That option no longer exists.',
+        };
+        return { actionResponse: { type: 'NEW_MESSAGE' }, text: messages[result.status] };
+      }
+      // Replace the clicked card with fresh tallies — no extra API call needed.
+      return { actionResponse: { type: 'UPDATE_MESSAGE' }, ...pollMessage(result.poll, result.tallies) };
     }
 
     const blockerId = Number(getParameter(event, 'blockerId'));

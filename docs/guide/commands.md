@@ -69,6 +69,17 @@ How collaboration changes the lifecycle:
   thread in the team space, and open blockers keep appearing in wrap-ups,
   digests, and escalation pings until resolved.
 
+## Polls (everyone)
+
+Quick team decisions without a meeting — a card in the space, one tap to vote:
+
+| Command | Effect |
+| --- | --- |
+| `poll Question? \| Option A \| Option B` | Post a poll card (2–6 options). Votes update the card live; voting again changes your vote |
+| `polls` | List open polls with vote counts |
+| `poll <id> results` | Current tallies with voter names |
+| `poll <id> close` | Close it and post final results (creator or admin) |
+
 ## DM self-service
 
 Anyone can DM the bot directly:

@@ -11,6 +11,7 @@ import {
   type RunSummary,
   type Standup,
   type Submission,
+  type Poll,
 } from '../../core/types.js';
 
 export const OPEN_DIALOG_FN = 'openStandupDialog';
@@ -20,6 +21,7 @@ export const ACK_BLOCKER_FN = 'ackBlocker';
 export const RESOLVE_BLOCKER_FN = 'resolveBlocker';
 export const OPEN_BLOCKER_UPDATE_FN = 'openBlockerUpdate';
 export const SUBMIT_BLOCKER_UPDATE_FN = 'submitBlockerUpdate';
+export const VOTE_POLL_FN = 'votePoll';
 
 function humanDate(isoDate: string): string {
   return DateTime.fromISO(isoDate).toFormat('ccc, dd LLL yyyy');
@@ -241,6 +243,60 @@ export function blockerUpdateDialog(blockerId: number) {
         },
       },
     },
+  };
+}
+
+/** Interactive poll card — one vote button per option, live tallies. */
+export function pollMessage(poll: Poll, tallies: number[], closed = false) {
+  const total = tallies.reduce((a, b) => a + b, 0);
+  return {
+    cardsV2: [
+      {
+        cardId: `poll-${poll.id}`,
+        card: {
+          header: {
+            title: `📊 ${poll.question}`,
+            subtitle: `Poll #${poll.id} by ${poll.createdDisplay}${closed ? ' — closed' : ''}`,
+          },
+          sections: [
+            {
+              widgets: [
+                ...poll.options.map((option, i) => ({
+                  decoratedText: {
+                    text: option,
+                    bottomLabel: `${tallies[i] ?? 0} vote${tallies[i] === 1 ? '' : 's'}`,
+                    wrapText: true,
+                    ...(closed
+                      ? {}
+                      : {
+                          button: {
+                            text: 'Vote',
+                            onClick: {
+                              action: {
+                                function: VOTE_POLL_FN,
+                                parameters: [
+                                  { key: 'pollId', value: String(poll.id) },
+                                  { key: 'optionIndex', value: String(i) },
+                                ],
+                              },
+                            },
+                          },
+                        }),
+                  },
+                })),
+                {
+                  textParagraph: {
+                    text: closed
+                      ? `<i>${total} vote${total === 1 ? '' : 's'} — final.</i>`
+                      : `<i>${total} vote${total === 1 ? '' : 's'} so far. Vote again to change yours. Close with</i> <b>poll ${poll.id} close</b>.`,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
   };
 }
 
