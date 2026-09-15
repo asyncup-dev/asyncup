@@ -128,7 +128,7 @@ describe('server', () => {
 
   it('logs the concrete 401 reason and neutralizes log injection', async () => {
     const { url, settings } = await startServer({ verify: true });
-    await settings.update({ chatAudience: '819177304171' }); // turns verification on
+    await settings.update({ chatAudience: '742900314218' }); // turns verification on
     const lines: string[] = [];
     const warn = vi.spyOn(console, 'warn').mockImplementation((m?: unknown) => void lines.push(String(m)));
     const log = vi.spyOn(console, 'log').mockImplementation((m?: unknown) => void lines.push(String(m)));

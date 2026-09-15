@@ -145,7 +145,7 @@ export async function settingsPage(
     <div class="kicker">01 · Google Chat</div>
     <h2>Workspace connection</h2>
     <label>Audience — GCP project <em>number</em> (or app URL)
-      <input name="chatAudience" value="${esc(s.chatAudience)}" placeholder="e.g. 819177304171">
+      <input name="chatAudience" value="${esc(s.chatAudience)}" placeholder="e.g. 742900314218">
       <small class="muted">Verifies webhook calls come from Google Chat. Use the project <b>number</b> (digits, from
       Cloud overview → Project info — <em>not</em> the project ID or org ID). If your Chat API "Audience" is set to
       the App URL instead, paste that URL; you can enter both, space-separated.</small>
