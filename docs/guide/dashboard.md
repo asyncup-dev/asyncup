@@ -16,8 +16,9 @@ The dashboard is **disabled until the token is set**. Open:
 https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>
 ```
 
-The token is then remembered in an HttpOnly cookie, so subsequent navigation
-doesn't need the query parameter.
+The token is then remembered in an HttpOnly cookie and the browser is
+immediately redirected to a clean URL, so the token doesn't linger in the
+address bar, browser history, or proxy access logs.
 
 ## What's there
 
@@ -30,17 +31,20 @@ doesn't need the query parameter.
   encrypted and never echoed back.
 - **Standup list** — every standup with schedule and today's progress.
 - **Standup detail** — edit name, times, timezone, days, reminder, questions,
-  and toggles (mood / anonymous mood / digest / AI / escalation threshold);
-  see participants, admins, open blockers, and a 4-week trend table.
+  toggles (mood / anonymous mood / digest / AI / escalation threshold) and the
+  escalation contact; manage the roster (mandatory/optional, away/back,
+  make/remove admin, remove); a ▶ *Run now* button that opens today's run and
+  prompts everyone immediately; and a CSV download of the last 90 days.
 - **Run history** — the last 14 runs with submission counts and missing names;
   click into any day to read everyone's full answers.
 
-Participants, admins, and the escalation contact are managed from Google Chat
-(`add`, `admin`, `escalate @user`) because they require Chat identities.
+Adding *new* participants happens in Google Chat (`add @user`) because it
+requires a Chat identity the dashboard doesn't know yet; everything about
+people already on the roster is manageable here.
 
 ## Security notes
 
 - Share the token only with people who should read your team's standups.
 - Always serve it behind HTTPS (same reverse proxy as the webhook).
-- The cookie is `HttpOnly` + `SameSite=Strict`, which also guards the config
-  form against cross-site request forgery.
+- The cookie is `HttpOnly` + `SameSite=Strict`, so browsers won't attach it
+  to cross-site requests (the main line of defence against request forgery).

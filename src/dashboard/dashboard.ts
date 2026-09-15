@@ -1,6 +1,6 @@
 import express, { type Express, type Request, type Response } from 'express';
 import { DateTime, IANAZone } from 'luxon';
-import { generateToken } from '../core/crypto.js';
+import { generateToken, tokenEquals } from '../core/crypto.js';
 import { moodEmoji, rangeStats } from '../core/insights.js';
 import type { AppSettings, SettingsService } from '../core/settings.js';
 import {
@@ -11,6 +11,7 @@ import {
   type Weekday,
 } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
+import { buildCsv } from '../core/export.js';
 
 export interface DashboardDeps {
   repo: Repo;
@@ -18,6 +19,8 @@ export interface DashboardDeps {
   /** Empty string disables the dashboard entirely. */
   token: string;
   now?: () => DateTime;
+  /** Opens today's run immediately (scheduler.runNow); enables the button. */
+  runNow?: (standup: Standup) => Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'>;
 }
 
 const COOKIE = 'asyncup_dash';
@@ -31,18 +34,25 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
   app.use('/dashboard', express.urlencoded({ extended: false }));
 
   const authed = (req: Request, res: Response): boolean => {
-    if (req.query.token === token) {
+    if (tokenEquals(req.query.token, token)) {
       res.setHeader(
         'Set-Cookie',
         `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/dashboard`,
       );
+      // Get the token out of the address bar (history, access logs, Referer):
+      // the cookie now carries the session, so bounce to a clean URL. A fixed
+      // destination — echoing any part of the request would be a redirect sink.
+      if (req.method === 'GET') {
+        res.redirect(303, '/dashboard');
+        return false;
+      }
       return true;
     }
     const cookie = req.headers.cookie
       ?.split(';')
       .map((c) => c.trim())
       .find((c) => c.startsWith(`${COOKIE}=`));
-    if (cookie && decodeURIComponent(cookie.slice(COOKIE.length + 1)) === token) return true;
+    if (cookie && tokenEquals(decodeURIComponent(cookie.slice(COOKIE.length + 1)), token)) return true;
     res.status(401).send(layout('Unauthorized', 'home', `<div class="card"><p>Open <code>/dashboard?token=…</code> with your DASHBOARD_TOKEN.</p></div>`));
     return false;
   };
@@ -53,6 +63,16 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
     if (!authed(req, res)) return;
     const standups = await repo.listActiveStandups();
     const s = await settings.get();
+
+    const unverifiedWarning = s.chatAudience
+      ? ''
+      : `<section class="card warn">
+          <div class="kicker">Action needed</div>
+          <h2>Google Chat events are being refused</h2>
+          <p>Until the GCP project number is set in <a href="/dashboard/settings">Settings</a>, incoming
+          Chat webhooks cannot be verified, so AsyncUp answers every event with a setup notice instead of
+          processing it.</p>
+        </section>`;
 
     const steps = [
       { done: !!(s.chatAudience && s.serviceAccountJson), label: 'Connect Google Chat', hint: 'Project number + service-account key in Settings', href: '/dashboard/settings' },
@@ -108,7 +128,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       layout(
         'AsyncUp dashboard',
         'home',
-        `${checklist}
+        `${unverifiedWarning}${checklist}
         <section class="card">
           <div class="kicker">Teams</div>
           <h2>Standups</h2>
@@ -173,7 +193,89 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
       return;
     }
-    res.send(layout(`${standup.name} — AsyncUp`, 'home', await standupPage(repo, standup, now(), req.query.saved === '1', null)));
+    const notice = typeof req.query.notice === 'string' ? req.query.notice : null;
+    res.send(
+      layout(
+        `${standup.name} — AsyncUp`,
+        'home',
+        await standupPage(repo, standup, now(), req.query.saved === '1', null, notice, !!deps.runNow),
+      ),
+    );
+  });
+
+  // Open today's run immediately — the "see it work" button.
+  app.post('/dashboard/standup/:id/run-now', async (req, res) => {
+    if (!authed(req, res)) return;
+    const standup = await repo.getStandupById(Number(req.params.id));
+    if (!standup || !deps.runNow) {
+      res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
+      return;
+    }
+    const result = await deps.runNow(standup);
+    const notices = {
+      started: "Run opened — everyone eligible was just prompted.",
+      already_open: "Today's run was already open — anyone not yet prompted was prompted.",
+      already_closed: "Today's run already closed; the next opens on schedule.",
+      no_participants: 'No one to prompt — add participants first.',
+    };
+    res.redirect(`/dashboard/standup/${standup.id}?notice=${encodeURIComponent(notices[result])}`);
+  });
+
+  // Roster management — everything here already has a Chat identity on file.
+  app.post('/dashboard/standup/:id/roster', async (req, res) => {
+    if (!authed(req, res)) return;
+    const standup = await repo.getStandupById(Number(req.params.id));
+    if (!standup) {
+      res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
+      return;
+    }
+    const userName = String(req.body?.userName ?? '');
+    const action = String(req.body?.action ?? '');
+    let notice: string;
+    if (action === 'remove') {
+      notice = (await repo.removeParticipant(standup.id, userName)) ? 'Participant removed.' : 'Not a participant.';
+    } else if (action === 'mandatory' || action === 'optional') {
+      await repo.setParticipantMandatory(standup.id, userName, action === 'mandatory');
+      notice = `Marked ${action}.`;
+    } else if (action === 'vacation' || action === 'back') {
+      await repo.setParticipantVacation(standup.id, userName, action === 'vacation');
+      notice = action === 'vacation' ? 'Marked away.' : 'Marked back.';
+    } else if (action === 'unadmin') {
+      const admins = await repo.listAdmins(standup.id);
+      if (admins.length === 1 && admins[0]!.userName === userName) {
+        notice = 'A standup must keep at least one admin.';
+      } else {
+        await repo.removeAdmin(standup.id, userName);
+        notice = 'Admin removed.';
+      }
+    } else if (action === 'admin') {
+      const p = (await repo.listParticipants(standup.id)).find((x) => x.userName === userName);
+      if (p) {
+        await repo.addAdmin(standup.id, p.userName, p.displayName);
+        notice = 'Admin added.';
+      } else notice = 'Not a participant.';
+    } else {
+      res.status(400).send(layout('Bad request', 'home', '<div class="card"><p>Unknown roster action.</p></div>'));
+      return;
+    }
+    res.redirect(`/dashboard/standup/${standup.id}?notice=${encodeURIComponent(notice)}`);
+  });
+
+  // CSV for one standup via the dashboard session (no bearer token juggling).
+  app.get('/dashboard/standup/:id/export.csv', async (req, res) => {
+    if (!authed(req, res)) return;
+    const standup = await repo.getStandupById(Number(req.params.id));
+    if (!standup) {
+      res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
+      return;
+    }
+    const days = Math.min(Math.max(Number(req.query.days) || 90, 1), 365);
+    const today = now().setZone(standup.timezone);
+    const csv = await buildCsv(repo, standup, today.minus({ days }).toISODate()!, today.toISODate()!);
+    res
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="standup-${standup.id}-last-${days}d.csv"`)
+      .send(csv);
   });
 
   app.post('/dashboard/standup/:id', async (req, res) => {
@@ -185,7 +287,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
     }
     const error = await applyConfig(repo, standup, req.body);
     if (error) {
-      res.status(400).send(layout(`${standup.name} — AsyncUp`, 'home', await standupPage(repo, (await repo.getStandupById(standup.id))!, now(), false, error)));
+      res.status(400).send(layout(`${standup.name} — AsyncUp`, 'home', await standupPage(repo, (await repo.getStandupById(standup.id))!, now(), false, error, null, !!deps.runNow)));
       return;
     }
     res.redirect(`/dashboard/standup/${standup.id}?saved=1`);
@@ -422,6 +524,17 @@ async function applyConfig(repo: Repo, standup: Standup, body: any): Promise<str
   if (questionLines.length === 0 || questionLines.length > 10) return 'Provide 1–10 questions (one per line).';
   if (questionLines.some((q: string) => q.length > 200)) return 'Questions must be ≤200 characters.';
 
+  // Escalation contact: picked from the roster (they have Chat identities).
+  const escalateUserName = String(body.escalateUserName ?? '');
+  let escalate: { escalateUserName: string | null; escalateDisplayName: string | null } | null = null;
+  if (escalateUserName === '') {
+    escalate = { escalateUserName: null, escalateDisplayName: null };
+  } else {
+    const contact = (await repo.listParticipants(standup.id)).find((p) => p.userName === escalateUserName);
+    if (!contact) return 'Escalation contact must be a current participant.';
+    escalate = { escalateUserName: contact.userName, escalateDisplayName: contact.displayName };
+  }
+
   await repo.updateStandup(standup.id, {
     name,
     promptTime,
@@ -436,18 +549,44 @@ async function applyConfig(repo: Repo, standup: Standup, body: any): Promise<str
     aiEnabled: body.aiEnabled === 'on',
     escalateAfterDays: escalateDays,
     webhookUrl: webhookUrl || null,
+    ...escalate,
   });
   return null;
 }
 
-async function standupPage(repo: Repo, s: Standup, now: DateTime, saved: boolean, error: string | null): Promise<string> {
-  const participants = (await repo.listParticipants(s.id))
+async function standupPage(
+  repo: Repo,
+  s: Standup,
+  now: DateTime,
+  saved: boolean,
+  error: string | null,
+  notice: string | null = null,
+  canRunNow = false,
+): Promise<string> {
+  const roster = await repo.listParticipants(s.id);
+  const rosterAction = (p: { userName: string }, action: string, label: string, danger = false) =>
+    `<form method="post" action="/dashboard/standup/${s.id}/roster" class="inline-form">
+       <input type="hidden" name="userName" value="${esc(p.userName)}">
+       <button class="btn ghost${danger ? ' danger' : ''}" name="action" value="${action}" type="submit">${label}</button>
+     </form>`;
+  const participants = roster
     .map(
       (p) =>
-        `<li>${esc(p.displayName)}${p.mandatory ? '' : ' <span class="tag">optional</span>'}${p.onVacation ? ' 🏖️' : ''}</li>`,
+        `<li>${esc(p.displayName)}${p.mandatory ? '' : ' <span class="tag">optional</span>'}${p.timezone ? ` <span class="tag">${esc(p.timezone)}</span>` : ''}${p.onVacation ? ' 🏖️' : ''}
+          <span class="row-actions">
+            ${rosterAction(p, p.mandatory ? 'optional' : 'mandatory', p.mandatory ? 'Make optional' : 'Make mandatory')}
+            ${rosterAction(p, p.onVacation ? 'back' : 'vacation', p.onVacation ? 'Back' : 'Away')}
+            ${rosterAction(p, 'admin', 'Make admin')}
+            ${rosterAction(p, 'remove', 'Remove', true)}
+          </span></li>`,
     )
     .join('');
-  const admins = (await repo.listAdmins(s.id)).map((a) => esc(a.displayName)).join(', ') || '<i>none (open config)</i>';
+  const adminRows = await repo.listAdmins(s.id);
+  const admins = adminRows.length
+    ? adminRows
+        .map((a) => `${esc(a.displayName)} <span class="row-actions">${rosterAction(a, 'unadmin', 'Remove admin', true)}</span>`)
+        .join(' · ')
+    : '<i>none (open config)</i>';
 
   const runRows: string[] = [];
   for (const run of await repo.listRecentRuns(s.id, 14)) {
@@ -487,9 +626,29 @@ async function standupPage(repo: Repo, s: Standup, now: DateTime, saved: boolean
     .join('');
 
   const check = (v: boolean) => (v ? 'checked' : '');
+  const escalateSelect = `<label>Escalation contact
+      <select name="escalateUserName">
+        <option value="">— off —</option>
+        ${roster
+          .map(
+            (p) =>
+              `<option value="${esc(p.userName)}" ${p.userName === s.escalateUserName ? 'selected' : ''}>${esc(p.displayName)}</option>`,
+          )
+          .join('')}
+      </select> <small class="muted">DMed when blockers stay open past the threshold</small></label>`;
   return `<p class="crumbs"><a href="/dashboard">← All standups</a></p>
-  <h1>#${s.id} ${esc(s.name)}</h1>
+  <h1>#${s.id} ${esc(s.name)}
+    ${
+      canRunNow
+        ? `<form method="post" action="/dashboard/standup/${s.id}/run-now" class="inline-form" style="float:right">
+             <button class="btn" type="submit">▶ Run now</button>
+           </form>`
+        : ''
+    }
+    <a class="btn ghost" style="float:right;margin-right:.5rem" href="/dashboard/standup/${s.id}/export.csv">⬇ CSV (90d)</a>
+  </h1>
   ${saved ? '<div class="toast ok">✓ Saved</div>' : ''}
+  ${notice ? `<div class="toast ok">${esc(notice)}</div>` : ''}
   ${error ? `<div class="toast err">⚠ ${esc(error)}</div>` : ''}
   <div class="cols">
   <form method="post" action="/dashboard/standup/${s.id}" class="card">
@@ -501,6 +660,7 @@ async function standupPage(repo: Repo, s: Standup, now: DateTime, saved: boolean
     <label>Days <input name="days" value="${esc(s.days)}"></label>
     <label>Reminder (min before) <input name="reminderMinutesBefore" value="${s.reminderMinutesBefore}"></label>
     <label>Escalate after (days) <input name="escalateAfterDays" value="${s.escalateAfterDays}"></label>
+    ${escalateSelect}
     <label>Webhook URL <input name="webhookUrl" value="${esc(s.webhookUrl ?? '')}" placeholder="https://… (optional)"> <small class="muted">JSON POST on each submission and wrap-up</small></label>
     <label>Questions (one per line)<textarea name="questions" rows="4">${esc(standupQuestions(s).join('\n'))}</textarea></label>
     <label class="inline"><input type="checkbox" name="moodEnabled" ${check(s.moodEnabled)}> Mood question</label>
@@ -508,8 +668,8 @@ async function standupPage(repo: Repo, s: Standup, now: DateTime, saved: boolean
     <label class="inline"><input type="checkbox" name="digestEnabled" ${check(s.digestEnabled)}> Weekly digest</label>
     <label class="inline"><input type="checkbox" name="aiEnabled" ${check(s.aiEnabled)}> AI summaries</label>
     <button class="btn" type="submit">Save</button>
-    <p><small class="muted">Participants, admins and the escalation contact are managed from Google Chat
-    (<code>add</code>, <code>admin</code>, <code>escalate @user</code> …) since they need Chat identities.</small></p>
+    <p><small class="muted">Adding <em>new</em> people still happens in Google Chat (<code>add @user</code>) —
+    the dashboard can only manage people whose Chat identity it already knows.</small></p>
   </form>
   <div>
     <section class="card">
@@ -619,6 +779,12 @@ function layout(title: string, active: 'home' | 'settings', body: string): strin
   .btn.ghost{background:transparent;border:1.5px solid var(--ink-faint);color:var(--ink);padding:.35rem 1rem;font-weight:600}
   .btn.ghost:hover{border-color:var(--amber);background:rgba(255,174,82,.08)}
   .btn.ghost.danger{color:#a33a17}
+  .inline-form{display:inline}
+  .inline-form .btn{margin-top:0;padding:.15rem .6rem;font-size:.78rem}
+  .row-actions{margin-left:.5rem;opacity:.35;transition:opacity .15s}
+  li:hover .row-actions,h1:hover .row-actions{opacity:1}
+  .card.warn{border-color:#f3cfc2;background:#fdf3ef}
+  .card.warn .kicker{color:#a33a17}
   .toast{border-radius:10px;padding:.6rem 1rem;margin:.4rem 0 1rem;font-weight:600;animation:rise .3s ease both}
   .toast.ok{background:#e8f5ec;color:#176a37;border:1px solid #bfe3cb}
   .toast.err{background:#fdeeea;color:#a33a17;border:1px solid #f3cfc2}

@@ -26,6 +26,8 @@ interface PostedMessage {
 export class FakeAdapter implements ChatAdapter {
   dms: SentDm[] = [];
   posts: PostedMessage[] = [];
+  /** Users canDm() should report as unreachable (no DM space). */
+  unreachable = new Set<string>();
   private messageCounter = 0;
 
   constructor(private log: ((msg: string) => void) | null = null) {}
@@ -94,5 +96,9 @@ export class FakeAdapter implements ChatAdapter {
   async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
     this.dms.push({ kind: 'blockerCard', userName, standupId: standup.id, blockerId: blocker.id, text: note });
     this.log?.(`DM blocker card #${blocker.id} → ${userName} (${note})`);
+  }
+
+  async canDm(userName: string): Promise<boolean> {
+    return !this.unreachable.has(userName);
   }
 }

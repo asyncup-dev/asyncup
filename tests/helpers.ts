@@ -54,7 +54,8 @@ export async function makeStack(
     },
     webhooks,
   );
-  const commands = new CommandHandler(repo, settings, clock.now, blockers);
+  const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter);
+  commands.attachRunner(scheduler);
 
   return { repo, adapter, service, blockers, settings, scheduler, commands, clock };
 }

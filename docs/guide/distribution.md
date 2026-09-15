@@ -136,9 +136,11 @@ your endpoint. Check, in order:
    app is visible to *nobody*. Add the people/Group (Path A) or publish + install
    (Path B).
 3. **Installed, not just published** — complete the Admin-console install (Path B).
-4. **Endpoint reachable over HTTPS** — `curl https://<your-host>/chat/events`
-   should answer (a `401` is fine; it means the app is up and rejecting an
-   unsigned probe). The app now logs every arrival and the concrete 401 reason,
+4. **Endpoint reachable over HTTPS** —
+   `curl -i -X POST -H 'content-type: application/json' -d '{}' https://<your-host>/chat/events`
+   should answer with JSON (a `401` is fine; it means the app is up and
+   rejecting an unsigned probe — a plain GET returns 404, the route is
+   POST-only). The app logs every arrival and the concrete 401 reason,
    so check `docker compose logs` to see whether Google's request even arrived.
 5. **Audience matches** — dashboard Audience = your project **number**, with
    Authentication Audience = **Project Number** on the Google side.
