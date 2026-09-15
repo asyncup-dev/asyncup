@@ -11,7 +11,9 @@ review** with the weekly digest. This is strictly opt-in, twice:
 
 Dashboard → **Settings → AI summaries**: pick the provider (Anthropic or
 OpenAI), paste your API key (stored encrypted), optionally set the model
-(Anthropic defaults to `claude-opus-4-7`; OpenAI requires an explicit model).
+(Anthropic defaults to the app's `DEFAULT_ANTHROPIC_MODEL` constant in
+`src/ai/llm.ts` — currently `claude-opus-4-7`; OpenAI requires an explicit
+model).
 Saving applies immediately.
 
 The integration uses plain HTTPS calls (no SDK dependency) and only ever sends

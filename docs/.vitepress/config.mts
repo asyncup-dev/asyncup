@@ -29,6 +29,7 @@ export default defineConfig({
       {
         text: 'Guide',
         items: [
+          { text: 'The Handbook (everything)', link: '/guide/handbook' },
           { text: 'Getting started', link: '/guide/getting-started' },
           { text: 'Setup guide (all scenarios)', link: '/guide/server-setup' },
           { text: 'Google Chat setup', link: '/guide/google-chat-setup' },

@@ -11,7 +11,9 @@ e.g. `@AsyncUp #2 time 09:30` — `status` lists all standups with their ids.
 The person who runs `setup` becomes the standup's first admin (`setup` itself
 is open to everyone in the space — there is nobody to gate it before the first
 standup exists). Only admins can change configuration; `status`, `trends`,
-`blockers`, `export` and `help` are open to everyone in the space.
+`blockers`, `blocker`, `poll`, `polls`, `export` and `help` are open to
+everyone in the space. `status` without a `#id` prefix reports every standup
+in the space.
 
 | Command | Effect |
 | --- | --- |
@@ -31,7 +33,7 @@ standup exists). Only admins can change configuration; `status`, `trends`,
 | `questions` | Show the current question list |
 | `questions set Q1 \| Q2 \| …` | Replace the questions (1–10, pipe-separated) |
 | `questions reset` | Back to the default three questions |
-| `mood on\|off\|anon` | Mood dropdown; `anon` hides who felt what — the wrap-up shows the team average instead |
+| `mood on\|off\|anon` (also `anonymous`) | Mood dropdown; `anon` hides who felt what — the wrap-up shows the team average instead |
 | `escalate @user` | DM this person when blockers stay open too long |
 | `escalate days N` / `escalate off` | Escalation threshold (default 2 days) / disable |
 | `digest on\|off` | Weekly digest posted after the last run of the week |
