@@ -243,6 +243,11 @@ CREATE TABLE scim_users (
   updated_at TEXT NOT NULL
 );
 `,
+  // 9 — drop idx_blockers_open: every open-blocker query filters on
+  //     resolved_date IS NULL (idx_blockers_unresolved); this one was never used
+  `
+DROP INDEX IF EXISTS idx_blockers_open;
+`,
 ];
 
 /**
@@ -420,6 +425,11 @@ CREATE TABLE scim_users (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+`,
+  // 9 — drop idx_blockers_open: every open-blocker query filters on
+  //     resolved_date IS NULL (idx_blockers_unresolved); this one was never used
+  `
+DROP INDEX IF EXISTS idx_blockers_open;
 `,
 ];
 
@@ -736,14 +746,6 @@ export class Repo {
     return result.changes;
   }
 
-  async setParticipantTimezone(standupId: number, userName: string, timezone: string | null): Promise<boolean> {
-    const result = await this.db.run(
-      'UPDATE participants SET timezone = ? WHERE standup_id = ? AND user_name = ? AND active = 1',
-      [timezone, standupId, userName],
-    );
-    return result.changes > 0;
-  }
-
   /** DM self-service: sets the personal timezone in every standup the user is part of. */
   async setTimezoneForUser(userName: string, timezone: string | null): Promise<number> {
     const result = await this.db.run(
@@ -967,7 +969,7 @@ export class Repo {
     await this.db.run('UPDATE submissions SET message_name = ? WHERE id = ?', [messageName, id]);
   }
 
-  async getSubmissionById(id: number): Promise<Submission | null> {
+  private async getSubmissionById(id: number): Promise<Submission | null> {
     const row = await this.db.get('SELECT * FROM submissions WHERE id = ?', [id]);
     return row ? toSubmission(row) : null;
   }
@@ -1164,18 +1166,35 @@ export class Repo {
 
   /** Unacknowledged tags on open blockers — the daily-nudge worklist. */
   async listUnackedTags(standupId: number): Promise<{ tag: BlockerTag; blocker: Blocker }[]> {
+    // The join already carries the blocker columns — no per-row lookups.
     const rows = await this.db.all(
-      `SELECT bt.*, b.id AS b_id FROM blocker_tags bt
+      `SELECT bt.blocker_id, bt.user_name, bt.display_name, bt.tagged_by, bt.tagged_at,
+              bt.acknowledged_at, bt.last_nudged_at,
+              b.id AS b_id, b.standup_id AS b_standup_id, b.user_name AS b_user_name,
+              b.display_name AS b_display_name, b.text AS b_text, b.opened_run_id AS b_opened_run_id,
+              b.opened_date AS b_opened_date, b.resolved_run_id AS b_resolved_run_id,
+              b.resolved_date AS b_resolved_date, b.resolved_by AS b_resolved_by, b.escalated_at AS b_escalated_at
+       FROM blocker_tags bt
        JOIN blockers b ON b.id = bt.blocker_id
        WHERE b.standup_id = ? AND b.resolved_date IS NULL AND bt.acknowledged_at IS NULL`,
       [standupId],
     );
-    const result: { tag: BlockerTag; blocker: Blocker }[] = [];
-    for (const row of rows) {
-      const blocker = await this.getBlockerById(row.b_id);
-      if (blocker) result.push({ tag: toBlockerTag(row), blocker });
-    }
-    return result;
+    return rows.map((row: any) => ({
+      tag: toBlockerTag(row),
+      blocker: toBlocker({
+        id: row.b_id,
+        standup_id: row.b_standup_id,
+        user_name: row.b_user_name,
+        display_name: row.b_display_name,
+        text: row.b_text,
+        opened_run_id: row.b_opened_run_id,
+        opened_date: row.b_opened_date,
+        resolved_run_id: row.b_resolved_run_id,
+        resolved_date: row.b_resolved_date,
+        resolved_by: row.b_resolved_by,
+        escalated_at: row.b_escalated_at,
+      }),
+    }));
   }
 
   async addBlockerUpdate(input: {

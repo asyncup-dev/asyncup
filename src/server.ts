@@ -4,6 +4,8 @@ import { DateTime } from 'luxon';
 import { errorResponse, type EventRouter } from './adapters/gchat/events.js';
 import { ChatRequestVerifier } from './adapters/gchat/auth.js';
 import { tokenEquals } from './core/crypto.js';
+import { bearerToken } from './core/http.js';
+import { clampExportDays } from './core/validation.js';
 import type { SettingsService } from './core/settings.js';
 import type { Scheduler } from './core/scheduler.js';
 import type { Repo } from './db/repo.js';
@@ -35,10 +37,6 @@ export interface ServerDeps {
   /** Test override for the SAML exchange. */
   samlBroker?: (config: SamlConfig) => SamlBroker;
   now?: () => DateTime;
-}
-
-function bearerToken(req: Request): string | undefined {
-  return req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];
 }
 
 /** Collapse control chars (incl. newlines) and cap length before logging untrusted text — prevents log forging. */
@@ -80,7 +78,8 @@ export function createServer(deps: ServerDeps): Express {
 
   // Brute-force protection for every token-checking endpoint.
   const authLimiter = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
-  app.use(['/dashboard', '/export', '/tick'], authLimiter);
+  // Every surface that checks a credential gets brute-force protection.
+  app.use(['/dashboard', '/export', '/tick', '/auth', '/me', '/scim'], authLimiter);
 
   const signInEnabled = async () => {
     const { oauthClientId, oauthClientSecret } = await settings.get();
@@ -194,7 +193,7 @@ export function createServer(deps: ServerDeps): Express {
       res.status(404).json({ error: 'unknown standupId' });
       return;
     }
-    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    const days = clampExportDays(req.query.days, 30);
     const today = now().setZone(standup.timezone);
     const csv = await buildCsv(repo, standup, today.minus({ days }).toISODate()!, today.toISODate()!);
     res

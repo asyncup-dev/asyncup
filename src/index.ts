@@ -5,7 +5,7 @@ import { Repo } from './db/repo.js';
 import { FakeAdapter } from './adapters/fake/adapter.js';
 import { GoogleChatAdapter } from './adapters/gchat/adapter.js';
 import { EventRouter } from './adapters/gchat/events.js';
-import { createLlm } from './ai/llm.js';
+import { createLlm, DEFAULT_ANTHROPIC_MODEL } from './ai/llm.js';
 import { AiSummarizer } from './ai/summarizer.js';
 import { GoogleCalendarOoo } from './integrations/google-calendar.js';
 import { GoogleDirectory } from './integrations/google-directory.js';
@@ -53,7 +53,7 @@ const providers: SchedulerProviders = {
   summarizer: async () => {
     const s = await settings.get();
     if (!s.llmProvider || !s.llmApiKey) return null;
-    const model = s.llmModel || (s.llmProvider === 'anthropic' ? 'claude-opus-4-7' : '');
+    const model = s.llmModel || (s.llmProvider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : '');
     if (!model) return null;
     return new AiSummarizer(createLlm({ provider: s.llmProvider, apiKey: s.llmApiKey, model }));
   },
@@ -86,7 +86,10 @@ const app = createServer({
   directory: providers.directory,
 });
 if (config.dashboardToken) console.log('[dashboard] enabled at /dashboard');
-else console.warn('[dashboard] DASHBOARD_TOKEN is not set — the dashboard (and all app settings) are unavailable.');
+else
+  console.warn(
+    '[dashboard] DASHBOARD_TOKEN is not set — the dashboard is reachable only via admin sign-in (Google/SAML).',
+  );
 
 const server = app.listen(config.port, () => {
   console.log(`asyncup listening on :${config.port} (adapter: ${config.adapter}, db: ${config.databaseUrl ? 'postgres' : config.dbPath})`);

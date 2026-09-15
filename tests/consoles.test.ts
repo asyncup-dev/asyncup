@@ -111,6 +111,32 @@ describe('Google sign-in', () => {
   });
 });
 
+describe('Dashboard without an operator token', () => {
+  it('still serves admin sessions when DASHBOARD_TOKEN is empty', async () => {
+    const stack = await makeStack();
+    await stack.settings.update({ oauthClientId: 'x.apps.googleusercontent.com', oauthClientSecret: 's' });
+    const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT);
+    const app = createServer({
+      router,
+      scheduler: stack.scheduler,
+      repo: stack.repo,
+      settings: stack.settings,
+      dashboardToken: '', // no break-glass token — sessions must still work
+      skipVerification: true,
+      secretKey: SECRET,
+      now: stack.clock.now,
+    });
+    const server = app.listen(0);
+    close = () => server.close();
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+    const cookie = `asyncup_sess=${sealSession(SECRET, newSession({ sub: '1', email: 'a@o.com', name: 'A', admin: true }))}`;
+    expect((await fetch(`${url}/dashboard`, { headers: { cookie } })).status).toBe(200);
+    // anonymous visitors get the sign-in page, not a 404
+    expect((await fetch(`${url}/dashboard`)).status).toBe(401);
+  });
+});
+
 describe('User console', () => {
   it('asks anonymous visitors to sign in', async () => {
     const { url } = await startServer();

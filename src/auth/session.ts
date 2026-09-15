@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { DateTime } from 'luxon';
+import { readCookie } from '../core/http.js';
 
 export const SESSION_COOKIE = 'asyncup_sess';
 const SESSION_DAYS = 7;
@@ -48,16 +49,8 @@ export function newSession(identity: { sub: string; email: string; name: string;
   return { ...identity, exp: Math.floor(DateTime.utc().plus({ days: SESSION_DAYS }).toSeconds()) };
 }
 
-export function readSessionCookie(req: Request): string | undefined {
-  return req.headers.cookie
-    ?.split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(`${SESSION_COOKIE}=`))
-    ?.slice(SESSION_COOKIE.length + 1);
-}
-
 export function sessionFrom(req: Request, secretKey: string): Session | null {
-  return openSession(secretKey, readSessionCookie(req));
+  return openSession(secretKey, readCookie(req, SESSION_COOKIE));
 }
 
 export function setSessionCookie(res: Response, sealed: string): void {

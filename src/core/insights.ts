@@ -45,7 +45,47 @@ function participationPct(stats: RangeStats): number {
 }
 
 function avgMood(stats: RangeStats): number | null {
-  return stats.moodCount === 0 ? null : Math.round((stats.moodSum / stats.moodCount) * 10) / 10;
+  return stats.moodCount === 0 ? null : roundMood(stats.moodSum / stats.moodCount);
+}
+
+/** One consistent 1-decimal rounding for averaged moods. */
+export function roundMood(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+/** One weekly bucket of stats — feeds trends, digests and the charts. */
+export interface WeekPoint {
+  /** e.g. "18 May" — start of week */
+  label: string;
+  /** null when the week had no runs */
+  participationPct: number | null;
+  /** 1–5 average, null when no moods were recorded */
+  mood: number | null;
+  blockersOpened: number;
+  blockersResolved: number;
+}
+
+export async function weeklySeries(
+  repo: Repo,
+  standup: Standup,
+  now: DateTime,
+  weeks: number,
+): Promise<WeekPoint[]> {
+  const local = now.setZone(standup.timezone);
+  const points: WeekPoint[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const start = local.minus({ weeks: i }).startOf('week');
+    const end = local.minus({ weeks: i }).endOf('week');
+    const stats = await rangeStats(repo, standup.id, start.toISODate()!, end.toISODate()!);
+    points.push({
+      label: start.toFormat('dd LLL'),
+      participationPct: stats.runCount === 0 ? null : participationPct(stats),
+      mood: stats.moodCount ? roundMood(stats.moodSum / stats.moodCount) : null,
+      blockersOpened: await repo.countBlockersOpenedBetween(standup.id, start.toISODate()!, end.toISODate()!),
+      blockersResolved: await repo.countBlockersResolvedBetween(standup.id, start.toISODate()!, end.toISODate()!),
+    });
+  }
+  return points;
 }
 
 export function moodEmoji(score: number): string {
@@ -122,20 +162,14 @@ export function digestText(digest: WeeklyDigest): string {
 
 export async function trendsText(repo: Repo, standup: Standup, now: DateTime, weeks = 4): Promise<string> {
   const lines = [`📈 *${standup.name}* — last ${weeks} weeks`];
-  const local = now.setZone(standup.timezone);
-  for (let i = weeks - 1; i >= 0; i--) {
-    const start = local.minus({ weeks: i }).startOf('week');
-    const end = local.minus({ weeks: i }).endOf('week');
-    const stats = await rangeStats(repo, standup.id, start.toISODate()!, end.toISODate()!);
-    if (stats.runCount === 0) {
-      lines.push(`${start.toFormat('dd LLL')}–${end.toFormat('dd LLL')} ▸ no runs`);
+  for (const week of await weeklySeries(repo, standup, now, weeks)) {
+    if (week.participationPct === null) {
+      lines.push(`${week.label} ▸ no runs`);
       continue;
     }
-    const mood = avgMood(stats);
     lines.push(
-      `${start.toFormat('dd LLL')}–${end.toFormat('dd LLL')} ▸ ` +
-        `participation ${participationPct(stats)}%` +
-        (mood !== null ? ` · mood ${moodEmoji(mood)} ${mood}/5` : ''),
+      `${week.label} ▸ participation ${week.participationPct}%` +
+        (week.mood !== null ? ` · mood ${moodEmoji(week.mood)} ${week.mood}/5` : ''),
     );
   }
   const open = (await repo.listOpenBlockers(standup.id)).length;

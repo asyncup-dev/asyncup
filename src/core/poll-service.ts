@@ -70,7 +70,7 @@ export class PollService {
 
   async resultsText(poll: Poll, final = false): Promise<string> {
     const votes = await this.repo.listPollVotes(poll.id);
-    const max = Math.max(0, ...poll.options.map((_, i) => votes.filter((v) => v.optionIndex === i).length));
+    const max = Math.max(0, ...tallyVotes(poll, votes));
     const lines = poll.options.map((option, i) => {
       const voters = votes.filter((v) => v.optionIndex === i);
       const crown = final && max > 0 && voters.length === max ? ' 🏆' : '';
@@ -81,7 +81,10 @@ export class PollService {
   }
 
   async tallies(poll: Poll): Promise<number[]> {
-    const votes = await this.repo.listPollVotes(poll.id);
-    return poll.options.map((_, i) => votes.filter((v) => v.optionIndex === i).length);
+    return tallyVotes(poll, await this.repo.listPollVotes(poll.id));
   }
+}
+
+function tallyVotes(poll: Poll, votes: { optionIndex: number }[]): number[] {
+  return poll.options.map((_, i) => votes.filter((v) => v.optionIndex === i).length);
 }

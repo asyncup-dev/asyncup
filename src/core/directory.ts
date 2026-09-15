@@ -20,3 +20,8 @@ export interface UserDirectory {
 export function directoryKey(chatUserName: string): string {
   return chatUserName.replace(/^users\//, '');
 }
+
+/** Google user id → the Chat resource name rosters are keyed by. */
+export function chatUserName(googleUserId: string): string {
+  return `users/${googleUserId}`;
+}

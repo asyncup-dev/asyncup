@@ -1,16 +1,18 @@
 import type { Express, Request, Response } from 'express';
-import { IANAZone, type DateTime } from 'luxon';
+import { DateTime } from 'luxon';
+import { chatUserName as toChatUserName } from '../core/directory.js';
+import { isValidZone } from '../core/validation.js';
 import { sessionFrom, type Session } from '../auth/session.js';
 import { MOOD_EMOJI } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
-import { esc, layout } from './dashboard.js';
+import { esc, layout, signInCard } from './chrome.js';
 
 export interface MeDeps {
   repo: Repo;
   secretKey: string;
   now?: () => DateTime;
   /** Whether Google sign-in is configured (renders the login button). */
-  signInEnabled: () => Promise<boolean>;
+  signInEnabled?: () => Promise<boolean>;
   /** Whether SAML sign-in is configured (renders the SSO button). */
   samlEnabled?: () => Promise<boolean>;
 }
@@ -26,24 +28,23 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
   const requireSession = async (req: Request, res: Response): Promise<Session | null> => {
     const session = sessionFrom(req, deps.secretKey);
     if (session) return session;
-    const enabled = deps.secretKey && (await deps.signInEnabled());
-    const saml = deps.secretKey && (await deps.samlEnabled?.());
+    const google = !!(deps.secretKey && (await deps.signInEnabled?.()));
+    const saml = !!(deps.secretKey && (await deps.samlEnabled?.()));
     res.status(401).send(
       layout(
         'Sign in — AsyncUp',
         'me',
-        `<section class="card" style="max-width:420px;margin:3rem auto;text-align:center">
-          <div class="kicker">My standups</div>
-          <h2>Sign in to see your standups</h2>
-          ${enabled ? '<a class="btn" href="/auth/google">Sign in with Google</a>' : ''}
-          ${saml ? `<p${enabled ? ' style="margin-top:.6rem"' : ''}><a class="btn${enabled ? ' ghost' : ''}" href="/auth/saml">Sign in with SSO (SAML)</a></p>` : ''}
-          ${
-            enabled || saml
-              ? '<p><small class="muted">Workspace admins land in the admin dashboard automatically.</small></p>'
-              : `<p class="muted">Sign-in isn't configured yet — an admin can set the OAuth client or SAML IdP
-                 in dashboard settings.</p>`
-          }
-        </section>`,
+        signInCard({
+          kicker: 'My standups',
+          heading: 'Sign in to see your standups',
+          google,
+          saml,
+          footnotes: [
+            google || saml
+              ? 'Workspace admins land in the admin dashboard automatically.'
+              : "Sign-in isn't configured yet — an admin can set the OAuth client or SAML IdP in dashboard settings.",
+          ],
+        }),
       ),
     );
     return null;
@@ -52,13 +53,13 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
   // Google sign-ins carry the Chat user id; SAML sign-ins may only carry an
   // email — then the cached email map (Chat events / Directory) links them.
   const chatUserName = async (session: Session): Promise<string | null> =>
-    session.sub ? `users/${session.sub}` : repo.findUserNameByEmail(session.email);
+    session.sub ? toChatUserName(session.sub) : repo.findUserNameByEmail(session.email);
 
   app.get('/me', async (req, res) => {
     const session = await requireSession(req, res);
     if (!session) return;
     const userName = (await chatUserName(session)) ?? '';
-    const now = (deps.now ?? (() => null))();
+    const now = (deps.now ?? (() => DateTime.utc()))();
 
     const standups = userName ? await repo.listStandupsForUser(userName) : [];
     const timezone = userName ? await repo.getUserTimezone(userName) : null;
@@ -145,7 +146,7 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
       return;
     }
     const tz = String(req.body?.timezone ?? '').trim();
-    if (tz && !IANAZone.isValidZone(tz)) {
+    if (tz && !isValidZone(tz)) {
       res.redirect(`/me?notice=${encodeURIComponent(`Invalid IANA timezone: ${tz}`)}`);
       return;
     }

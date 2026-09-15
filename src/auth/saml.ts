@@ -148,8 +148,11 @@ export function registerSaml(app: Express, deps: SamlDeps): void {
 
       // Admin: the IdP group/attribute and the Google Directory are OR'd —
       // whichever an install has configured grants the role.
-      let admin = samlAdmin(profile.attributes, s.samlAdminAttribute || 'groups', s.samlAdminGroup || 'asyncup-admins');
+      let admin = samlAdmin(profile.attributes, s.samlAdminAttribute, s.samlAdminGroup);
       // Chat identity: the Directory maps email → Google user id (users/<id>).
+      // Unlike Google sign-in, an account the Directory does not know is NOT
+      // rejected: the SAML IdP itself asserted org membership, and the account
+      // may legitimately live outside Google (e.g. Okta-only contractors).
       let sub = '';
       const directory = await deps.directory();
       if (directory) {

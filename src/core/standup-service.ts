@@ -2,6 +2,8 @@ import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { WebhookNotifier } from './webhooks.js';
 import type { Repo } from '../db/repo.js';
+import { runProgress } from './progress.js';
+import { roundMood } from './insights.js';
 import {
   blockerAnswers,
   isTodayQuestion,
@@ -143,24 +145,19 @@ export class StandupService {
     const standup = (await this.repo.getStandupById(run.standupId))!;
     const participants = await this.repo.listRunParticipants(run.id);
     const submissions = await this.repo.listSubmissions(run.id);
-    const submittedBy = new Set(submissions.map((s) => s.userName));
+    const progress = runProgress(participants, submissions);
 
+    // The wrap-up counts mandatory people only (that is its contract).
     const mandatory = participants.filter((p) => p.mandatory);
-    const away: string[] = [];
-    const missing: string[] = [];
-    let submitted = 0;
-    for (const p of mandatory) {
-      if (submittedBy.has(p.userName)) submitted++;
-      else if (p.skippedAt || p.onVacation) away.push(p.displayName);
-      else missing.push(p.displayName);
-    }
+    const submitted = progress.done.filter((p) => p.mandatory).length;
+    const missing = progress.missingMandatory.map((p) => p.displayName);
 
     // With anonymous mood, the wrap-up shows the aggregate instead of per-person emoji.
     let teamMood: number | null = null;
     if (standup.moodAnonymous) {
       const moods = submissions.filter((s) => s.mood !== null).map((s) => MOOD_SCORE[s.mood!]);
       if (moods.length > 0) {
-        teamMood = Math.round((moods.reduce((a, b) => a + b, 0) / moods.length) * 10) / 10;
+        teamMood = roundMood(moods.reduce((a, b) => a + b, 0) / moods.length);
       }
     }
 
@@ -170,7 +167,7 @@ export class StandupService {
       mandatoryTotal: submitted + missing.length,
       mandatorySubmitted: submitted,
       missingMandatory: missing,
-      away,
+      away: progress.away.filter((p) => p.mandatory).map((p) => p.displayName),
       optionalSubmitted: submissions.filter(
         (s) => !mandatory.some((p) => p.userName === s.userName),
       ).length,
