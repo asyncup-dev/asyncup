@@ -11,6 +11,8 @@ import { buildCsv } from './core/export.js';
 import { registerDashboard } from './dashboard/dashboard.js';
 import { registerUserConsole } from './dashboard/me.js';
 import { registerAuth, type IdentityBroker } from './auth/google.js';
+import { registerSaml, type SamlBroker, type SamlConfig } from './auth/saml.js';
+import { registerScim } from './scim/server.js';
 import type { UserDirectory } from './core/directory.js';
 
 export interface ServerDeps {
@@ -30,6 +32,8 @@ export interface ServerDeps {
   directory?: () => Promise<UserDirectory | null>;
   /** Test override for the Google OAuth exchange. */
   identityBroker?: (clientId: string, clientSecret: string) => IdentityBroker;
+  /** Test override for the SAML exchange. */
+  samlBroker?: (config: SamlConfig) => SamlBroker;
   now?: () => DateTime;
 }
 
@@ -82,6 +86,10 @@ export function createServer(deps: ServerDeps): Express {
     const { oauthClientId, oauthClientSecret } = await settings.get();
     return !!(oauthClientId && oauthClientSecret);
   };
+  const samlEnabled = async () => {
+    const { samlIdpEntityId, samlIdpSsoUrl, samlIdpCert } = await settings.get();
+    return !!(samlIdpEntityId && samlIdpSsoUrl && samlIdpCert);
+  };
   app.use(['/me', '/auth'], express.urlencoded({ extended: false }));
   registerAuth(app, {
     settings,
@@ -89,11 +97,24 @@ export function createServer(deps: ServerDeps): Express {
     directory: deps.directory ?? (async () => null),
     broker: deps.identityBroker,
   });
+  registerSaml(app, {
+    settings,
+    secretKey: deps.secretKey ?? '',
+    directory: deps.directory ?? (async () => null),
+    broker: deps.samlBroker,
+  });
+  registerScim(app, {
+    repo,
+    settings,
+    directory: deps.directory ?? (async () => null),
+    now: deps.now,
+  });
   registerUserConsole(app, {
     repo,
     secretKey: deps.secretKey ?? '',
     now: deps.now,
     signInEnabled,
+    samlEnabled,
   });
   registerDashboard(app, {
     repo,
@@ -104,6 +125,7 @@ export function createServer(deps: ServerDeps): Express {
     webhookSecret: deps.webhookSecret,
     secretKey: deps.secretKey,
     signInEnabled,
+    samlEnabled,
   });
 
   app.get('/healthz', async (_req, res) => {

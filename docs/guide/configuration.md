@@ -35,6 +35,8 @@ Open `https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` → **Settings**:
 | Calendar OOO sync | Auto-mark people away on out-of-office days |
 | Workspace admin email | Enables Directory API lookups (email + admin status by Chat user id). With it, Calendar OOO covers people who never interacted with the bot |
 | OAuth client ID / secret | Enables [Sign in with Google](./dashboard#sign-in-with-google--admin-and-user-consoles): Workspace admins get the admin console, everyone else the `/me` user console |
+| SAML IdP entity / SSO URL / cert | Enables [SAML sign-in](./enterprise-sso) with any IdP; admin via IdP group and/or Google Directory |
+| SCIM provisioning token | Enables the [SCIM 2.0 endpoint](./enterprise-sso#scim-provisioning) at `/scim/v2` for Okta/Entra/OneLogin |
 | Scheduler tick token | Authorizes `POST /tick` for external cron |
 | CSV export token | Enables `GET /export` (off until generated) |
 

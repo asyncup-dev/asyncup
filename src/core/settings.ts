@@ -20,6 +20,15 @@ export interface AppSettings {
   /** OAuth web client for "Sign in with Google". Empty = sign-in off. */
   oauthClientId: string;
   oauthClientSecret: string;
+  /** SAML IdP (any provider). All three set = SAML sign-in on. */
+  samlIdpEntityId: string;
+  samlIdpSsoUrl: string;
+  samlIdpCert: string;
+  /** Assertion attribute + value that grants the admin console. */
+  samlAdminAttribute: string;
+  samlAdminGroup: string;
+  /** Bearer token for the SCIM 2.0 provisioning endpoint. Empty = off. */
+  scimToken: string;
   llmProvider: '' | 'anthropic' | 'openai';
   llmApiKey: string;
   llmModel: string;
@@ -35,6 +44,12 @@ export const SETTING_DEFAULTS: AppSettings = {
   workspaceAdminEmail: '',
   oauthClientId: '',
   oauthClientSecret: '',
+  samlIdpEntityId: '',
+  samlIdpSsoUrl: '',
+  samlIdpCert: '',
+  samlAdminAttribute: 'groups',
+  samlAdminGroup: 'asyncup-admins',
+  scimToken: '',
   llmProvider: '',
   llmApiKey: '',
   llmModel: '',
@@ -42,7 +57,7 @@ export const SETTING_DEFAULTS: AppSettings = {
   exportToken: '',
 };
 
-const SECRET_KEYS: (keyof AppSettings)[] = ['serviceAccountJson', 'llmApiKey', 'tickToken', 'exportToken', 'oauthClientSecret'];
+const SECRET_KEYS: (keyof AppSettings)[] = ['serviceAccountJson', 'llmApiKey', 'tickToken', 'exportToken', 'oauthClientSecret', 'scimToken'];
 
 export class SettingsService {
   private box: SecretBox;

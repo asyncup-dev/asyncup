@@ -12,6 +12,7 @@ import type {
   Run,
   RunParticipant,
   RunStatus,
+  ScimUser,
   Standup,
   Submission,
 } from '../core/types.js';
@@ -228,6 +229,20 @@ CREATE TABLE poll_votes (
   PRIMARY KEY (poll_id, user_name)
 );
 `,
+  // 8 — SCIM provisioning
+  `
+CREATE TABLE scim_users (
+  id TEXT PRIMARY KEY,
+  external_id TEXT,
+  user_name TEXT NOT NULL UNIQUE,
+  display_name TEXT,
+  email TEXT,
+  chat_user_name TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`,
 ];
 
 /**
@@ -392,6 +407,20 @@ CREATE TABLE poll_votes (
   PRIMARY KEY (poll_id, user_name)
 );
 `,
+  // 8 — SCIM provisioning
+  `
+CREATE TABLE scim_users (
+  id TEXT PRIMARY KEY,
+  external_id TEXT,
+  user_name TEXT NOT NULL UNIQUE,
+  display_name TEXT,
+  email TEXT,
+  chat_user_name TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`,
 ];
 
 function toStandup(row: any): Standup {
@@ -505,6 +534,18 @@ function toBlockerUpdate(row: any): BlockerUpdate {
     displayName: row.display_name,
     text: row.text,
     createdAt: row.created_at,
+  };
+}
+
+function toScimUser(row: any): ScimUser {
+  return {
+    id: row.id,
+    externalId: row.external_id ?? null,
+    userName: row.user_name,
+    displayName: row.display_name ?? null,
+    email: row.email ?? null,
+    chatUserName: row.chat_user_name ?? null,
+    active: !!row.active,
   };
 }
 
@@ -1241,6 +1282,69 @@ export class Repo {
     }));
   }
 
+
+  // --- SCIM provisioning ---
+
+  async createScimUser(u: {
+    id: string;
+    externalId: string | null;
+    userName: string;
+    displayName: string | null;
+    email: string | null;
+    chatUserName: string | null;
+    active: boolean;
+    at: string;
+  }): Promise<void> {
+    await this.db.run(
+      `INSERT INTO scim_users (id, external_id, user_name, display_name, email, chat_user_name, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [u.id, u.externalId, u.userName, u.displayName, u.email, u.chatUserName, u.active ? 1 : 0, u.at, u.at],
+    );
+  }
+
+  async updateScimUser(
+    id: string,
+    fields: { externalId?: string | null; userName?: string; displayName?: string | null; email?: string | null; chatUserName?: string | null; active?: boolean },
+    at: string,
+  ): Promise<void> {
+    const mapping: Record<string, string> = {
+      externalId: 'external_id',
+      userName: 'user_name',
+      displayName: 'display_name',
+      email: 'email',
+      chatUserName: 'chat_user_name',
+      active: 'active',
+    };
+    const sets: string[] = ['updated_at = ?'];
+    const values: unknown[] = [at];
+    for (const [key, value] of Object.entries(fields)) {
+      if (value === undefined) continue;
+      sets.push(`${mapping[key]} = ?`);
+      values.push(typeof value === 'boolean' ? (value ? 1 : 0) : value);
+    }
+    values.push(id);
+    await this.db.run(`UPDATE scim_users SET ${sets.join(', ')} WHERE id = ?`, values);
+  }
+
+  async getScimUser(id: string): Promise<ScimUser | null> {
+    const row = await this.db.get('SELECT * FROM scim_users WHERE id = ?', [id]);
+    return row ? toScimUser(row) : null;
+  }
+
+  async findScimUserByUserName(userName: string): Promise<ScimUser | null> {
+    const row = await this.db.get('SELECT * FROM scim_users WHERE user_name = ?', [userName]);
+    return row ? toScimUser(row) : null;
+  }
+
+  async listScimUsers(startIndex: number, count: number): Promise<{ total: number; users: ScimUser[] }> {
+    const total = Number((await this.db.get('SELECT COUNT(*) AS n FROM scim_users')).n);
+    const rows = await this.db.all('SELECT * FROM scim_users ORDER BY created_at, id LIMIT ? OFFSET ?', [
+      count,
+      Math.max(0, startIndex - 1),
+    ]);
+    return { total, users: rows.map(toScimUser) };
+  }
+
   // --- user emails (learned from Chat interaction events) ---
 
   async setUserEmail(userName: string, email: string): Promise<void> {
@@ -1254,6 +1358,18 @@ export class Repo {
   async getUserEmail(userName: string): Promise<string | null> {
     const row = await this.db.get('SELECT email FROM user_emails WHERE user_name = ?', [userName]);
     return row?.email ?? null;
+  }
+
+  /** Reverse lookup for email-based identities (SAML, SCIM). */
+  async findUserNameByEmail(email: string): Promise<string | null> {
+    const row = await this.db.get('SELECT user_name FROM user_emails WHERE email = ? LIMIT 1', [email]);
+    return row?.user_name ?? null;
+  }
+
+  /** Offboarding (SCIM deactivate): drop the person from every roster. */
+  async removeParticipantEverywhere(userName: string): Promise<number> {
+    const result = await this.db.run('UPDATE participants SET active = 0 WHERE user_name = ? AND active = 1', [userName]);
+    return result.changes;
   }
 
   // --- settings (key/value, optionally encrypted) ---

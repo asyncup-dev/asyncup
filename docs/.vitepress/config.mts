@@ -37,6 +37,7 @@ export default defineConfig({
           { text: 'Configuration', link: '/guide/configuration' },
           { text: 'AI summaries', link: '/guide/ai' },
           { text: 'Web dashboard', link: '/guide/dashboard' },
+          { text: 'Enterprise SSO (SAML + SCIM)', link: '/guide/enterprise-sso' },
           { text: 'Deployment', link: '/guide/deployment' },
         ],
       },
