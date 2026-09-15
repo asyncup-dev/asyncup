@@ -108,8 +108,10 @@ Anyone can DM the bot directly:
   each blocker is escalated once.
 - **Calendar OOO** (when [enabled](./configuration)): participants with an
   *Out of office* event in Google Calendar are automatically marked away for
-  that day's run. Emails are learned from Chat interactions, so this kicks in
-  after a person has used the bot at least once.
+  that day's run. Emails come from the Directory API when a Workspace admin
+  email is configured (works for everyone immediately), otherwise they are
+  learned from Chat interactions — kicking in after a person has used the
+  bot at least once.
 - **Roster snapshots:** the day's roster is frozen when the run opens;
   `add`/`remove`/`vacation` apply from the next run.
 - **Custom questions** apply from the next run. Questions containing the word

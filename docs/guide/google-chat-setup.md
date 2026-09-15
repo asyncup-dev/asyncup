@@ -92,13 +92,20 @@ event, the service account needs **domain-wide delegation**:
 1. **IAM & Admin → Service Accounts → your account** → copy the **OAuth 2 Client ID** (a long number).
 2. [admin.google.com](https://admin.google.com) → **Security → Access and data control → API controls → Domain-wide delegation → Add new**:
    - Client ID: the number from step 1
-   - Scope: `https://www.googleapis.com/auth/calendar.events.readonly`
-3. Enable the **Google Calendar API** in your GCP project.
-4. Dashboard → **Settings → Workspace** → tick *Google Calendar OOO sync*.
+   - Scopes (comma-separated):
+     `https://www.googleapis.com/auth/calendar.events.readonly, https://www.googleapis.com/auth/admin.directory.user.readonly`
+3. Enable the **Google Calendar API** and **Admin SDK API** in your GCP project.
+4. Dashboard → **Settings → Workspace** → tick *Google Calendar OOO sync* and
+   set the **Workspace admin email**.
 
-AsyncUp learns each person's email the first time they interact with the bot,
-then checks their primary calendar for OOO events when a run opens. People who
-are OOO are listed as 🏖️ away — never as missing.
+With the admin email set, AsyncUp resolves each person's email through the
+Directory API (Directory reads must impersonate an admin), so OOO sync works
+even for people who never interacted with the bot. Without it, emails are
+learned the first time each person uses the bot. People who are OOO are
+listed as 🏖️ away — never as missing.
+
+The `admin.directory.user.readonly` scope is read-only. If you skip it and
+leave the admin email empty, everything else works unchanged.
 
 ## Troubleshooting
 
