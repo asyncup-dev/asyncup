@@ -381,7 +381,10 @@ async function applySettings(settings: SettingsService, body: any): Promise<stri
     const tz = String(body.defaultTimezone ?? '').trim();
     if (!IANAZone.isValidZone(tz)) return `Invalid IANA timezone: ${tz || '(empty)'} — e.g. Asia/Kolkata.`;
     const adminEmail = String(body.workspaceAdminEmail ?? '').trim();
-    if (adminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+    // Shape check without a backtracking regex (CodeQL: polynomial ReDoS).
+    const at = adminEmail.indexOf('@');
+    const dot = adminEmail.lastIndexOf('.');
+    if (adminEmail && (at < 1 || at !== adminEmail.lastIndexOf('@') || dot < at + 2 || dot === adminEmail.length - 1 || /\s/.test(adminEmail))) {
       return `"${adminEmail}" doesn't look like an email address.`;
     }
     await settings.update({
