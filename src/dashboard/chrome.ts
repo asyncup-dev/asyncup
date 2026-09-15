@@ -20,6 +20,8 @@ export function signInCard(opts: {
   heading: string;
   google: boolean;
   saml: boolean;
+  /** Render an operator-token entry form (the dashboard card only). */
+  tokenForm?: boolean;
   footnotes: string[];
 }): string {
   const { google, saml } = opts;
@@ -28,6 +30,14 @@ export function signInCard(opts: {
     <h2>${esc(opts.heading)}</h2>
     ${google ? '<a class="btn" href="/auth/google">Sign in with Google</a>' : ''}
     ${saml ? `<p${google ? ' style="margin-top:.6rem"' : ''}><a class="btn${google ? ' ghost' : ''}" href="/auth/saml">Sign in with SSO (SAML)</a></p>` : ''}
+    ${
+      opts.tokenForm
+        ? `<form method="get" action="/dashboard" style="margin-top:${google || saml ? '1rem' : '.4rem'}">
+            <input name="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off" style="max-width:260px">
+            <button class="btn ghost" type="submit">Enter with token</button>
+          </form>`
+        : ''
+    }
     ${opts.footnotes.map((n) => `<p><small class="muted">${n}</small></p>`).join('')}
   </section>`;
 }
@@ -84,7 +94,8 @@ export function layout(title: string, active: NavState, body: string, opts: { us
     padding:1.1rem 1.3rem 1.2rem;margin:0 0 1.1rem;box-shadow:0 1px 2px rgba(21,67,95,.05),0 10px 30px -18px rgba(21,67,95,.25);
     animation:rise .45s ease both;
   }
-  .card:nth-of-type(2){animation-delay:.06s}.card:nth-of-type(3){animation-delay:.12s}.card:nth-of-type(4){animation-delay:.18s}
+  .card:not(.acc):nth-of-type(2){animation-delay:.06s}.card:not(.acc):nth-of-type(3){animation-delay:.12s}.card:not(.acc):nth-of-type(4){animation-delay:.18s}
+  details.acc{animation:none}
   @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   @media (prefers-reduced-motion: reduce){.card{animation:none}}
   table{border-collapse:collapse;width:100%;margin:.5rem 0;font-size:.93rem}
@@ -111,6 +122,36 @@ export function layout(title: string, active: NavState, body: string, opts: { us
   .btn.ghost{background:transparent;border:1.5px solid var(--ink-faint);color:var(--ink);padding:.35rem 1rem;font-weight:600}
   .btn.ghost:hover{border-color:var(--amber);background:rgba(255,174,82,.08)}
   .btn.ghost.danger{color:#a33a17}
+  /* settings accordions — status readable while collapsed */
+  details.acc{padding:0}
+  details.acc>summary{
+    list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:.7rem;
+    padding:1rem 1.3rem;border-radius:12px;
+  }
+  details.acc>summary::-webkit-details-marker{display:none}
+  details.acc>summary::after{content:"▸";margin-left:auto;color:var(--muted);transition:transform .15s}
+  details.acc[open]>summary::after{transform:rotate(90deg)}
+  details.acc>summary:hover{background:rgba(255,174,82,.06)}
+  .sum-title{font-family:var(--serif);font-weight:600;font-size:1.15rem;color:var(--ink-deep);white-space:nowrap}
+  .sum-desc{color:var(--muted);font-size:.88rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sum-status{flex:none}
+  .acc-body{padding:0 1.3rem 1.2rem;border-top:1px dashed var(--ink-faint);padding-top:.9rem}
+  details.sub{border:1px solid var(--ink-faint);border-radius:10px;margin:.7rem 0;background:rgba(255,255,255,.5)}
+  details.sub>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:.7rem;padding:.7rem 1rem}
+  details.sub>summary::-webkit-details-marker{display:none}
+  details.sub>summary::after{content:"▸";margin-left:auto;color:var(--muted)}
+  details.sub[open]>summary::after{transform:rotate(90deg)}
+  details.sub>summary .sum-title{font-size:.98rem;font-family:var(--sans);font-weight:700}
+  details.sub>form,details.sub>div{padding:0 1rem .9rem}
+  details.hint{margin:.2rem 0 .6rem}
+  details.hint>summary{cursor:pointer;font-size:.85rem;color:#176d94;list-style:none}
+  details.hint>summary::-webkit-details-marker{display:none}
+  details.hint p{font-size:.85rem;color:var(--muted);margin:.35rem 0 0;background:rgba(21,67,95,.05);border-radius:8px;padding:.5rem .7rem}
+  /* master-toggle reveal: fields hidden until the checkbox is on */
+  .gated{display:none}
+  .ai-form:has(input[name="aiOn"]:checked) .gated{display:block}
+  input.wide,select.wide{max-width:100%}
+  label>input,label>select,label>textarea{display:block}
   .inline-form{display:inline}
   .inline-form .btn{margin-top:0;padding:.15rem .6rem;font-size:.78rem}
   .row-actions{margin-left:.5rem;opacity:.35;transition:opacity .15s}

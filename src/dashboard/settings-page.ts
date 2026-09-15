@@ -35,8 +35,15 @@ export async function applySettings(settings: SettingsService, body: any): Promi
   }
 
   if (section === 'ai') {
-    const llmProvider = String(body.llmProvider ?? '');
-    if (!['', 'anthropic', 'openai'].includes(llmProvider)) return 'Unknown AI provider.';
+    // Master toggle: unchecked turns the feature off regardless of the
+    // (CSS-hidden but still submitted) fields below it.
+    if (body.aiOn !== 'on') {
+      await settings.update({ llmProvider: '', llmModel: '' });
+      if (body.clear_llmApiKey === 'on') await settings.update({ llmApiKey: '' });
+      return null;
+    }
+    const llmProvider = String(body.llmProvider ?? 'anthropic');
+    if (!['anthropic', 'openai'].includes(llmProvider)) return 'Unknown AI provider.';
     const llmModel = String(body.llmModel ?? '').trim();
     const key = String(body.llmApiKey ?? '').trim();
     if (llmProvider === 'openai' && !llmModel) return 'OpenAI needs an explicit model name.';
@@ -109,13 +116,27 @@ export async function settingsPage(
   error: string | null,
   revealed: { field: string; value: string } | null,
 ): Promise<string> {
-  const saJsonStatus = secretStatus(s.serviceAccountJson, (v) => {
+  const saEmail = (() => {
     try {
-      return `key for <code>${esc(JSON.parse(v).client_email ?? 'unknown')}</code>`;
+      return JSON.parse(s.serviceAccountJson).client_email ?? '';
     } catch {
-      return 'stored';
+      return '';
     }
-  });
+  })();
+
+  const chip = (on: boolean, onText: string, offText = 'Off') =>
+    `<span class="chip ${on ? 'on' : 'off'}">${esc(on ? onText : offText)}</span>`;
+
+  /** Accordion section: title + one-liner + status chip visible while collapsed. */
+  const section = (opts: { title: string; desc: string; status: string; open?: boolean; body: string }) =>
+    `<details class="card acc"${opts.open ? ' open' : ''}>
+      <summary>
+        <span class="sum-title">${esc(opts.title)}</span>
+        <span class="sum-desc">${esc(opts.desc)}</span>
+        <span class="sum-status">${opts.status}</span>
+      </summary>
+      <div class="acc-body">${opts.body}</div>
+    </details>`;
 
   const tokenRow = (field: 'tickToken' | 'exportToken' | 'scimToken', title: string, hint: string) => {
     const value = s[field];
@@ -133,111 +154,129 @@ export async function settingsPage(
     </div>`;
   };
 
+  const chatConfigured = !!(s.chatAudience && s.serviceAccountJson);
+  const chatBody = `<form method="post" action="/dashboard/settings">
+    <input type="hidden" name="section" value="chat">
+    <label>Audience
+      <input class="wide" name="chatAudience" value="${esc(s.chatAudience)}" placeholder="GCP project number, e.g. 123456789012">
+      <small class="muted">Verifies events really come from Google Chat — the project <b>number</b> and/or the app URL, space-separated.</small>
+    </label>
+    <details class="hint"><summary>What goes here?</summary>
+      <p>Use the project <b>number</b> (digits, Cloud overview → Project info) — <em>not</em> the project ID slug or
+      org ID. If your Chat app configuration shows the <em>App URL</em> as its audience, paste that URL; entering
+      both covers either behaviour.</p>
+    </details>
+    <label>Service-account key (JSON)
+      <textarea name="serviceAccountJson" rows="4" placeholder='${s.serviceAccountJson ? 'Paste a new key to replace the stored one' : '{ "type": "service_account", … } — paste the whole downloaded key file'}'></textarea>
+      <small>${secretStatus(s.serviceAccountJson, () => `key for <code>${esc(saEmail || 'unknown')}</code>`)}${s.serviceAccountJson ? ' · <label class="inline"><input type="checkbox" name="clear_serviceAccountJson"> clear stored key (use ADC)</label>' : ' · <span class="muted">empty = Application Default Credentials</span>'}</small>
+    </label>
+    <button class="btn" type="submit">Save connection</button>
+  </form>`;
+
+  const workspaceBody = `<form method="post" action="/dashboard/settings">
+    <input type="hidden" name="section" value="workspace">
+    <label>Default timezone for new standups
+      <input name="defaultTimezone" value="${esc(s.defaultTimezone)}" placeholder="Asia/Kolkata">
+    </label>
+    <label class="inline big"><input type="checkbox" name="calendarOoo" ${s.calendarOoo ? 'checked' : ''}>
+      Google Calendar OOO sync <small class="muted">auto-mark people away on out-of-office days (activates once the service-account key has domain-wide delegation)</small>
+    </label>
+    <label>Workspace admin email
+      <input name="workspaceAdminEmail" value="${esc(s.workspaceAdminEmail)}" placeholder="admin@yourdomain.com (optional)">
+      <small class="muted">Enables Directory lookups: emails resolve for everyone (OOO works before first bot contact) and Workspace admins are recognised by the consoles. Needs <code>admin.directory.user.readonly</code> in domain-wide delegation.</small>
+    </label>
+    <button class="btn" type="submit">Save workspace</button>
+  </form>`;
+
+  const googleOn = !!(s.oauthClientId && s.oauthClientSecret);
+  const samlOn = !!(s.samlIdpEntityId && s.samlIdpSsoUrl && s.samlIdpCert);
+  const signInBody = `<p class="muted" style="margin-top:0">Two routes into the same consoles — most installs need
+    <b>one</b>. Google sign-in is the zero-friction choice for Google-native Workspaces; SAML is for orgs fronted by
+    Okta, Entra or another IdP. Workspace admins land in this admin console; everyone else gets their personal
+    <code>/me</code> page.</p>
+  <details class="sub"${!samlOn ? ' open' : ''}>
+    <summary><span class="sum-title">Google sign-in</span><span class="sum-desc">recommended for Google-native orgs</span><span class="sum-status">${chip(googleOn, 'Configured')}</span></summary>
+    <form method="post" action="/dashboard/settings">
+      <input type="hidden" name="section" value="oauth">
+      <label>OAuth client ID
+        <input class="wide" name="oauthClientId" value="${esc(s.oauthClientId)}" placeholder="….apps.googleusercontent.com">
+      </label>
+      <label>OAuth client secret
+        <input name="oauthClientSecret" type="password" placeholder="${s.oauthClientSecret ? 'Enter a new secret to replace the stored one' : 'GOCSPX-…'}" autocomplete="off">
+        <small>${secretStatus(s.oauthClientSecret)}${s.oauthClientSecret ? ' · <label class="inline"><input type="checkbox" name="clear_oauthClientSecret"> clear</label>' : ''}</small>
+      </label>
+      <small class="muted">Create a <b>Web application</b> OAuth client (GCP → APIs &amp; Services → Credentials) with
+      redirect URI <code>https://&lt;your-host&gt;/auth/callback</code>.</small>
+      <div><button class="btn" type="submit">Save Google sign-in</button></div>
+    </form>
+  </details>
+  <details class="sub">
+    <summary><span class="sum-title">SAML SSO</span><span class="sum-desc">Okta, Entra, OneLogin, any IdP</span><span class="sum-status">${chip(samlOn, 'Configured')}</span></summary>
+    <form method="post" action="/dashboard/settings">
+      <input type="hidden" name="section" value="saml">
+      <label>IdP entity ID <input class="wide" name="samlIdpEntityId" value="${esc(s.samlIdpEntityId)}" placeholder="e.g. https://accounts.google.com/o/saml2?idpid=…"></label>
+      <label>IdP SSO URL <input class="wide" name="samlIdpSsoUrl" value="${esc(s.samlIdpSsoUrl)}" placeholder="https://…/sso/saml"></label>
+      <label>IdP certificate (X.509 PEM)
+        <textarea name="samlIdpCert" rows="4" placeholder="-----BEGIN CERTIFICATE-----">${esc(s.samlIdpCert)}</textarea>
+      </label>
+      <label>Admin attribute <input name="samlAdminAttribute" value="${esc(s.samlAdminAttribute)}"> <small class="muted">assertion attribute checked for the admin group</small></label>
+      <label>Admin group value <input name="samlAdminGroup" value="${esc(s.samlAdminGroup)}"> <small class="muted">members get the admin console; Google Directory admins always do</small></label>
+      <small class="muted">Point your IdP's custom SAML app at ACS URL <code>https://&lt;your-host&gt;/auth/saml/acs</code>
+      with entity ID <code>https://&lt;your-host&gt;/auth/saml/metadata</code> (SP metadata served there).</small>
+      <div><button class="btn" type="submit">Save SAML</button></div>
+    </form>
+  </details>`;
+
+  const aiOn = !!s.llmProvider;
+  const aiBody = `<form method="post" action="/dashboard/settings" class="ai-form">
+    <input type="hidden" name="section" value="ai">
+    <label class="inline big"><input type="checkbox" name="aiOn" ${aiOn ? 'checked' : ''}>
+      Enable AI summaries <small class="muted">daily TL;DR + week-in-review, via your own key — nothing leaves your infra otherwise</small>
+    </label>
+    <div class="gated">
+      <label>Provider
+        <select name="llmProvider">
+          <option value="anthropic" ${s.llmProvider !== 'openai' ? 'selected' : ''}>Anthropic</option>
+          <option value="openai" ${s.llmProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
+        </select>
+      </label>
+      <label>API key
+        <input name="llmApiKey" type="password" placeholder="${s.llmApiKey ? 'Enter a new key to replace the stored one' : 'sk-…'}" autocomplete="off">
+        <small>${secretStatus(s.llmApiKey)}${s.llmApiKey ? ' · <label class="inline"><input type="checkbox" name="clear_llmApiKey"> clear</label>' : ''}</small>
+      </label>
+      <label>Model
+        <input name="llmModel" value="${esc(s.llmModel)}" placeholder="anthropic default: ${DEFAULT_ANTHROPIC_MODEL}">
+      </label>
+      <small class="muted">Then enable per standup with <code>@AsyncUp ai on</code>.</small>
+    </div>
+    <button class="btn" type="submit">Save AI settings</button>
+  </form>`;
+
+  const tokensSet = [s.tickToken, s.exportToken, s.scimToken].filter(Boolean).length;
+  const tokensBody = `${tokenRow('tickToken', 'Scheduler tick token', 'Authorizes POST /tick for external cron (scale-to-zero deploys).')}
+    ${tokenRow('exportToken', 'CSV export token', 'Enables GET /export. Endpoint stays off until a token exists.')}
+    ${tokenRow('scimToken', 'SCIM provisioning token', 'Bearer token for /scim/v2 (Okta, Entra, OneLogin). Deactivating a user there removes them from every roster.')}`;
+
   return `
   <div class="kicker">Configuration</div>
   <h1>Settings</h1>
   <p class="muted">Stored in your database; secrets are encrypted with your <code>SECRET_KEY</code>. Changes apply immediately — no restart.</p>
   ${saved ? '<div class="toast ok">✓ Saved</div>' : ''}
   ${error ? `<div class="toast err">⚠ ${esc(error)}</div>` : ''}
-
-  <form method="post" action="/dashboard/settings" class="card">
-    <input type="hidden" name="section" value="chat">
-    <div class="kicker">01 · Google Chat</div>
-    <h2>Workspace connection</h2>
-    <label>Audience — GCP project <em>number</em> (or app URL)
-      <input name="chatAudience" value="${esc(s.chatAudience)}" placeholder="e.g. 742900314218">
-      <small class="muted">Verifies webhook calls come from Google Chat. Use the project <b>number</b> (digits, from
-      Cloud overview → Project info — <em>not</em> the project ID or org ID). If your Chat API "Audience" is set to
-      the App URL instead, paste that URL; you can enter both, space-separated.</small>
-    </label>
-    <label>Service-account key (JSON)
-      <textarea name="serviceAccountJson" rows="4" placeholder='${s.serviceAccountJson ? 'Paste a new key to replace the stored one' : '{ "type": "service_account", … } — paste the downloaded key file'}'></textarea>
-      <small>${saJsonStatus}${s.serviceAccountJson ? ' · <label class="inline"><input type="checkbox" name="clear_serviceAccountJson"> clear stored key (use ADC)</label>' : ' · <span class="muted">empty = Application Default Credentials</span>'}</small>
-    </label>
-    <button class="btn" type="submit">Save connection</button>
-  </form>
-
-  <form method="post" action="/dashboard/settings" class="card">
-    <input type="hidden" name="section" value="ai">
-    <div class="kicker">02 · AI summaries</div>
-    <h2>Bring your own key</h2>
-    <label>Provider
-      <select name="llmProvider">
-        <option value="" ${s.llmProvider === '' ? 'selected' : ''}>Off</option>
-        <option value="anthropic" ${s.llmProvider === 'anthropic' ? 'selected' : ''}>Anthropic</option>
-        <option value="openai" ${s.llmProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
-      </select>
-    </label>
-    <label>API key
-      <input name="llmApiKey" type="password" placeholder="${s.llmApiKey ? 'Enter a new key to replace the stored one' : 'sk-…'}" autocomplete="off">
-      <small>${secretStatus(s.llmApiKey)}${s.llmApiKey ? ' · <label class="inline"><input type="checkbox" name="clear_llmApiKey"> clear</label>' : ''}</small>
-    </label>
-    <label>Model
-      <input name="llmModel" value="${esc(s.llmModel)}" placeholder="anthropic default: ${DEFAULT_ANTHROPIC_MODEL}">
-    </label>
-    <small class="muted">Then enable per standup with <code>@AsyncUp ai on</code>.</small>
-    <button class="btn" type="submit">Save AI settings</button>
-  </form>
-
-  <form method="post" action="/dashboard/settings" class="card">
-    <input type="hidden" name="section" value="workspace">
-    <div class="kicker">03 · Workspace</div>
-    <h2>Defaults &amp; integrations</h2>
-    <label>Default timezone for new standups
-      <input name="defaultTimezone" value="${esc(s.defaultTimezone)}" placeholder="Asia/Kolkata">
-    </label>
-    <label class="inline big"><input type="checkbox" name="calendarOoo" ${s.calendarOoo ? 'checked' : ''}>
-      Google Calendar OOO sync <small class="muted">auto-mark people away on out-of-office days (needs the service-account key + domain-wide delegation)</small>
-    </label>
-    <label>Workspace admin email
-      <input name="workspaceAdminEmail" value="${esc(s.workspaceAdminEmail)}" placeholder="admin@yourdomain.com (optional)">
-      <small class="muted">Enables Directory API lookups (impersonated for reads; needs the
-      <code>admin.directory.user.readonly</code> scope in domain-wide delegation). With it, Calendar OOO works
-      for people who never interacted with the bot.</small>
-    </label>
-    <button class="btn" type="submit">Save workspace</button>
-  </form>
-
-  <form method="post" action="/dashboard/settings" class="card">
-    <input type="hidden" name="section" value="oauth">
-    <div class="kicker">04 · Sign in with Google</div>
-    <h2>Admin &amp; user consoles</h2>
-    <label>OAuth client ID
-      <input name="oauthClientId" value="${esc(s.oauthClientId)}" placeholder="….apps.googleusercontent.com">
-    </label>
-    <label>OAuth client secret
-      <input name="oauthClientSecret" type="password" placeholder="${s.oauthClientSecret ? 'Enter a new secret to replace the stored one' : 'GOCSPX-…'}" autocomplete="off">
-      <small>${secretStatus(s.oauthClientSecret)}${s.oauthClientSecret ? ' · <label class="inline"><input type="checkbox" name="clear_oauthClientSecret"> clear</label>' : ''}</small>
-    </label>
-    <small class="muted">Create a <b>Web application</b> OAuth client (GCP → APIs &amp; Services → Credentials) with
-    redirect URI <code>https://&lt;your-host&gt;/auth/callback</code>. Workspace admins (per the Directory API)
-    get this admin console; everyone else gets their personal <code>/me</code> console. Set the
-    <b>Workspace admin email</b> above so admin status can be looked up.</small>
-    <button class="btn" type="submit">Save sign-in</button>
-  </form>
-
-  <form method="post" action="/dashboard/settings" class="card">
-    <input type="hidden" name="section" value="saml">
-    <div class="kicker">05 · Enterprise SSO (SAML)</div>
-    <h2>Bring your own IdP</h2>
-    <label>IdP entity ID <input name="samlIdpEntityId" value="${esc(s.samlIdpEntityId)}" placeholder="e.g. https://accounts.google.com/o/saml2?idpid=…"></label>
-    <label>IdP SSO URL <input name="samlIdpSsoUrl" value="${esc(s.samlIdpSsoUrl)}" placeholder="https://…/sso/saml"></label>
-    <label>IdP certificate (X.509 PEM)
-      <textarea name="samlIdpCert" rows="4" placeholder="-----BEGIN CERTIFICATE-----">${esc(s.samlIdpCert)}</textarea>
-    </label>
-    <label>Admin attribute <input name="samlAdminAttribute" value="${esc(s.samlAdminAttribute)}"> <small class="muted">assertion attribute checked for the admin group</small></label>
-    <label>Admin group value <input name="samlAdminGroup" value="${esc(s.samlAdminGroup)}"> <small class="muted">members get the admin console; Google Directory admins always do</small></label>
-    <small class="muted">Point your IdP's custom SAML app at ACS URL <code>https://&lt;your-host&gt;/auth/saml/acs</code>
-    with entity ID <code>https://&lt;your-host&gt;/auth/saml/metadata</code> (SP metadata is served at that URL).
-    Works with Google Workspace, Okta, Entra, OneLogin — all in the open-source core.</small>
-    <button class="btn" type="submit">Save SAML</button>
-  </form>
-
-  <section class="card">
-    <div class="kicker">06 · Access tokens</div>
-    <h2>Machine endpoints</h2>
-    ${tokenRow('tickToken', 'Scheduler tick token', 'Authorizes POST /tick for external cron (scale-to-zero deploys).')}
-    ${tokenRow('exportToken', 'CSV export token', 'Enables GET /export. Endpoint stays off until a token exists.')}
-    ${tokenRow('scimToken', 'SCIM provisioning token', 'Bearer token for /scim/v2 (Okta, Entra, OneLogin). Deactivating a user there removes them from every roster.')}
-  </section>`;
+  ${section({
+    title: 'Google Chat',
+    desc: 'the connection that makes everything work',
+    status: chatConfigured ? chip(true, saEmail || 'Connected') : chip(false, '', 'Action needed'),
+    open: !chatConfigured,
+    body: chatBody,
+  })}
+  ${section({ title: 'Workspace', desc: 'defaults & Google integrations', status: chip(true, s.defaultTimezone), body: workspaceBody })}
+  ${section({
+    title: 'Sign-in & consoles',
+    desc: 'web access for admins and the team',
+    status: googleOn || samlOn ? chip(true, [googleOn && 'Google', samlOn && 'SAML'].filter(Boolean).join(' + ')) : chip(false, '', 'Token only'),
+    body: signInBody,
+  })}
+  ${section({ title: 'AI summaries', desc: 'bring your own key', status: aiOn ? chip(true, `On · ${s.llmProvider}`) : chip(false, '', 'Off'), body: aiBody })}
+  ${section({ title: 'Access tokens', desc: 'machine endpoints: /tick, /export, /scim', status: chip(tokensSet > 0, `${tokensSet} set`, 'None set'), open: !!revealed, body: tokensBody })}`;
 }

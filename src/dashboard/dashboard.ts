@@ -81,12 +81,10 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
           heading: 'Sign in',
           google,
           saml,
-          footnotes: [
-            ...(google || saml
-              ? ['Workspace admins only — everyone else lands on their own <code>/me</code> page.']
-              : []),
-            'Operators can always open <code>/dashboard?token=…</code> with the DASHBOARD_TOKEN.',
-          ],
+          tokenForm: !!token,
+          footnotes: google || saml
+            ? ['Workspace admins only — everyone else lands on their own <code>/me</code> page.']
+            : ['The token is the DASHBOARD_TOKEN from the server environment.'],
         }),
       ),
     );

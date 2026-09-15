@@ -127,6 +127,10 @@ export function createServer(deps: ServerDeps): Express {
     samlEnabled,
   });
 
+  // The root has no page of its own — land people on the user console,
+  // which explains itself in every configuration state.
+  app.get('/', (_req, res) => res.redirect('/me'));
+
   app.get('/healthz', async (_req, res) => {
     try {
       await repo.ping();

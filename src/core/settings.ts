@@ -40,7 +40,7 @@ export const SETTING_DEFAULTS: AppSettings = {
   chatAudience: '',
   serviceAccountJson: '',
   defaultTimezone: 'UTC',
-  calendarOoo: false,
+  calendarOoo: true,
   workspaceAdminEmail: '',
   oauthClientId: '',
   oauthClientSecret: '',
