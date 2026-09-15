@@ -82,6 +82,8 @@ const app = createServer({
   dashboardToken: config.dashboardToken,
   skipVerification: config.adapter === 'fake',
   webhookSecret: (standupId) => deriveWebhookSecret(config.secretKey, standupId),
+  secretKey: config.secretKey,
+  directory: providers.directory,
 });
 if (config.dashboardToken) console.log('[dashboard] enabled at /dashboard');
 else console.warn('[dashboard] DASHBOARD_TOKEN is not set — the dashboard (and all app settings) are unavailable.');

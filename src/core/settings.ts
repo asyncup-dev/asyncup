@@ -17,6 +17,9 @@ export interface AppSettings {
   calendarOoo: boolean;
   /** Workspace admin impersonated for Directory API lookups. Empty = off. */
   workspaceAdminEmail: string;
+  /** OAuth web client for "Sign in with Google". Empty = sign-in off. */
+  oauthClientId: string;
+  oauthClientSecret: string;
   llmProvider: '' | 'anthropic' | 'openai';
   llmApiKey: string;
   llmModel: string;
@@ -30,6 +33,8 @@ export const SETTING_DEFAULTS: AppSettings = {
   defaultTimezone: 'UTC',
   calendarOoo: false,
   workspaceAdminEmail: '',
+  oauthClientId: '',
+  oauthClientSecret: '',
   llmProvider: '',
   llmApiKey: '',
   llmModel: '',
@@ -37,7 +42,7 @@ export const SETTING_DEFAULTS: AppSettings = {
   exportToken: '',
 };
 
-const SECRET_KEYS: (keyof AppSettings)[] = ['serviceAccountJson', 'llmApiKey', 'tickToken', 'exportToken'];
+const SECRET_KEYS: (keyof AppSettings)[] = ['serviceAccountJson', 'llmApiKey', 'tickToken', 'exportToken', 'oauthClientSecret'];
 
 export class SettingsService {
   private box: SecretBox;

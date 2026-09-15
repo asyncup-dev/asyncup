@@ -977,6 +977,28 @@ export class Repo {
     return rows.map((row: any) => ({ submission: toSubmission(row), runDate: row.run_date }));
   }
 
+  /** A user's recent submissions across standups, newest first (user console). */
+  async listRecentSubmissionsForUser(
+    userName: string,
+    limit: number,
+  ): Promise<{ submission: Submission; runDate: string; standupName: string }[]> {
+    const rows = await this.db.all(
+      `SELECT sub.*, r.date AS run_date, s.name AS standup_name
+       FROM submissions sub
+       JOIN runs r ON r.id = sub.run_id
+       JOIN standups s ON s.id = r.standup_id
+       WHERE sub.user_name = ?
+       ORDER BY r.date DESC, sub.id DESC
+       LIMIT ?`,
+      [userName, limit],
+    );
+    return rows.map((row: any) => ({
+      submission: toSubmission(row),
+      runDate: row.run_date,
+      standupName: row.standup_name,
+    }));
+  }
+
   // --- blockers ---
 
   async openBlocker(input: {

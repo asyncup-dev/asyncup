@@ -34,6 +34,7 @@ Open `https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` → **Settings**:
 | Default timezone | Assigned to newly created standups |
 | Calendar OOO sync | Auto-mark people away on out-of-office days |
 | Workspace admin email | Enables Directory API lookups (email + admin status by Chat user id). With it, Calendar OOO covers people who never interacted with the bot |
+| OAuth client ID / secret | Enables [Sign in with Google](./dashboard#sign-in-with-google--admin-and-user-consoles): Workspace admins get the admin console, everyone else the `/me` user console |
 | Scheduler tick token | Authorizes `POST /tick` for external cron |
 | CSV export token | Enables `GET /export` (off until generated) |
 

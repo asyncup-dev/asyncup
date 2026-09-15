@@ -13,6 +13,7 @@ import {
 } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import { buildCsv } from '../core/export.js';
+import { sessionFrom, type Session } from '../auth/session.js';
 
 export interface DashboardDeps {
   repo: Repo;
@@ -24,6 +25,10 @@ export interface DashboardDeps {
   runNow?: (standup: Standup) => Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'>;
   /** Per-standup webhook signing secret to show next to a configured URL. */
   webhookSecret?: (standupId: number) => string;
+  /** Verifies Google session cookies; empty disables session-based access. */
+  secretKey?: string;
+  /** Whether Google sign-in is configured (renders the login button). */
+  signInEnabled?: () => Promise<boolean>;
 }
 
 const COOKIE = 'asyncup_dash';
@@ -36,7 +41,16 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
 
   app.use('/dashboard', express.urlencoded({ extended: false }));
 
-  const authed = (req: Request, res: Response): boolean => {
+  const authed = async (req: Request, res: Response): Promise<boolean> => {
+    // Google session: Workspace admins get the full dashboard.
+    const session = deps.secretKey ? sessionFrom(req, deps.secretKey) : null;
+    if (session?.admin) return true;
+    if (session) {
+      // Signed in but not a Workspace admin — their place is the user console.
+      if (req.method === 'GET') res.redirect(303, '/me');
+      else res.status(403).send('Admins only.');
+      return false;
+    }
     if (tokenEquals(req.query.token, token)) {
       res.setHeader(
         'Set-Cookie',
@@ -56,14 +70,26 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       .map((c) => c.trim())
       .find((c) => c.startsWith(`${COOKIE}=`));
     if (cookie && tokenEquals(decodeURIComponent(cookie.slice(COOKIE.length + 1)), token)) return true;
-    res.status(401).send(layout('Unauthorized', 'home', `<div class="card"><p>Open <code>/dashboard?token=…</code> with your DASHBOARD_TOKEN.</p></div>`));
+    const canSignIn = deps.secretKey && (await deps.signInEnabled?.());
+    res.status(401).send(
+      layout(
+        'Sign in — AsyncUp',
+        'home',
+        `<section class="card" style="max-width:420px;margin:3rem auto;text-align:center">
+          <div class="kicker">Admin console</div>
+          <h2>Sign in</h2>
+          ${canSignIn ? '<a class="btn" href="/auth/google">Sign in with Google</a><p><small class="muted">Workspace admins only — everyone else lands on their own <code>/me</code> page.</small></p>' : ''}
+          <p><small class="muted">Operators can always open <code>/dashboard?token=…</code> with the DASHBOARD_TOKEN.</small></p>
+        </section>`,
+      ),
+    );
     return false;
   };
 
   // ---------- home: checklist + standups ----------
 
   app.get('/dashboard', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     const standups = await repo.listActiveStandups();
     const s = await settings.get();
 
@@ -145,7 +171,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
   // ---------- settings ----------
 
   app.get('/dashboard/settings', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     res.send(
       layout(
         'Settings — AsyncUp',
@@ -156,7 +182,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
   });
 
   app.post('/dashboard/settings', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     const body = req.body ?? {};
 
     if (typeof body.action === 'string') {
@@ -190,7 +216,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
   // ---------- standup detail + config ----------
 
   app.get('/dashboard/standup/:id', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     const standup = await repo.getStandupById(Number(req.params.id));
     if (!standup) {
       res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
@@ -208,7 +234,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
 
   // Open today's run immediately — the "see it work" button.
   app.post('/dashboard/standup/:id/run-now', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     const standup = await repo.getStandupById(Number(req.params.id));
     if (!standup || !deps.runNow) {
       res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
@@ -226,7 +252,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
 
   // Roster management — everything here already has a Chat identity on file.
   app.post('/dashboard/standup/:id/roster', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     const standup = await repo.getStandupById(Number(req.params.id));
     if (!standup) {
       res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
@@ -266,7 +292,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
 
   // CSV for one standup via the dashboard session (no bearer token juggling).
   app.get('/dashboard/standup/:id/export.csv', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     const standup = await repo.getStandupById(Number(req.params.id));
     if (!standup) {
       res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
@@ -282,7 +308,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
   });
 
   app.post('/dashboard/standup/:id', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     const standup = await repo.getStandupById(Number(req.params.id));
     if (!standup) {
       res.status(404).send(layout('Not found', 'home', '<div class="card"><p>Unknown standup.</p></div>'));
@@ -297,7 +323,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
   });
 
   app.get('/dashboard/standup/:id/run/:date', async (req, res) => {
-    if (!authed(req, res)) return;
+    if (!(await authed(req, res))) return;
     const standup = await repo.getStandupById(Number(req.params.id));
     const run = standup ? await repo.getRun(standup.id, String(req.params.date)) : null;
     if (!standup || !run) {
@@ -377,6 +403,17 @@ async function applySettings(settings: SettingsService, body: any): Promise<stri
       ...(key ? { llmApiKey: key } : {}),
     });
     if (body.clear_llmApiKey === 'on') await settings.update({ llmApiKey: '' });
+    return null;
+  }
+
+  if (section === 'oauth') {
+    const clientId = String(body.oauthClientId ?? '').trim();
+    const secret = String(body.oauthClientSecret ?? '').trim();
+    if (clientId && !clientId.endsWith('.apps.googleusercontent.com')) {
+      return 'That does not look like an OAuth client ID (expected ….apps.googleusercontent.com).';
+    }
+    await settings.update({ oauthClientId: clientId, ...(secret ? { oauthClientSecret: secret } : {}) });
+    if (body.clear_oauthClientSecret === 'on') await settings.update({ oauthClientSecret: '' });
     return null;
   }
 
@@ -502,8 +539,26 @@ async function settingsPage(
     <button class="btn" type="submit">Save workspace</button>
   </form>
 
+  <form method="post" action="/dashboard/settings" class="card">
+    <input type="hidden" name="section" value="oauth">
+    <div class="kicker">04 · Sign in with Google</div>
+    <h2>Admin &amp; user consoles</h2>
+    <label>OAuth client ID
+      <input name="oauthClientId" value="${esc(s.oauthClientId)}" placeholder="….apps.googleusercontent.com">
+    </label>
+    <label>OAuth client secret
+      <input name="oauthClientSecret" type="password" placeholder="${s.oauthClientSecret ? 'Enter a new secret to replace the stored one' : 'GOCSPX-…'}" autocomplete="off">
+      <small>${secretStatus(s.oauthClientSecret)}${s.oauthClientSecret ? ' · <label class="inline"><input type="checkbox" name="clear_oauthClientSecret"> clear</label>' : ''}</small>
+    </label>
+    <small class="muted">Create a <b>Web application</b> OAuth client (GCP → APIs &amp; Services → Credentials) with
+    redirect URI <code>https://&lt;your-host&gt;/auth/callback</code>. Workspace admins (per the Directory API)
+    get this admin console; everyone else gets their personal <code>/me</code> console. Set the
+    <b>Workspace admin email</b> above so admin status can be looked up.</small>
+    <button class="btn" type="submit">Save sign-in</button>
+  </form>
+
   <section class="card">
-    <div class="kicker">04 · Access tokens</div>
+    <div class="kicker">05 · Access tokens</div>
     <h2>Machine endpoints</h2>
     ${tokenRow('tickToken', 'Scheduler tick token', 'Authorizes POST /tick for external cron (scale-to-zero deploys).')}
     ${tokenRow('exportToken', 'CSV export token', 'Enables GET /export. Endpoint stays off until a token exists.')}
@@ -726,7 +781,7 @@ async function standupPage(
 
 // ---------- chrome ----------
 
-function esc(value: string): string {
+export function esc(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -737,7 +792,12 @@ function esc(value: string): string {
 const LOGO_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="28" height="28"><g fill="#fff" opacity=".96"><rect x="24" y="28" width="208" height="168" rx="52"/><path d="M86 188 L60 236 Q54 247 68 240 L132 196 Z"/></g><rect x="66" y="120" width="30" height="44" rx="15" fill="#FFD27D"/><rect x="113" y="92" width="30" height="72" rx="15" fill="#FFAE52"/><rect x="160" y="64" width="30" height="100" rx="15" fill="#FF8A3D"/></svg>';
 
-function layout(title: string, active: 'home' | 'settings', body: string): string {
+export function layout(
+  title: string,
+  active: 'home' | 'settings' | 'me',
+  body: string,
+  opts: { user?: Session } = {},
+): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
@@ -856,8 +916,12 @@ function layout(title: string, active: 'home' | 'settings', body: string): strin
   ${LOGO_SVG}
   <a class="word" href="/dashboard">Async<em>Up</em></a>
   <nav>
-    <a href="/dashboard" class="${active === 'home' ? 'active' : ''}">Standups</a>
-    <a href="/dashboard/settings" class="${active === 'settings' ? 'active' : ''}">Settings</a>
+    ${
+      active === 'me'
+        ? `<a href="/me" class="active">My standups</a>${opts.user?.admin ? '<a href="/dashboard">Admin</a>' : ''}`
+        : `<a href="/dashboard" class="${active === 'home' ? 'active' : ''}">Standups</a>
+    <a href="/dashboard/settings" class="${active === 'settings' ? 'active' : ''}">Settings</a>`
+    }
   </nav>
 </div></header>
 <main>${body}</main>

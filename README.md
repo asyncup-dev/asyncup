@@ -41,7 +41,7 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **Per-participant timezones** — anyone can DM `timezone <IANA>` and prompts go out at 09:30 *their* time; reminder nudge before the deadline, late submissions flagged.
 - **Blocker tracking, collaboration & escalation** — blockers open automatically from answers and can be **worked as items**: tag teammates (interactive DM card with Acknowledge / Update / Resolve), updates broadcast to everyone involved + a per-blocker thread, daily nudges until acknowledged, and escalation DMs when they go stale. Untagged blockers auto-resolve on the next clean submission; tagged ones need an explicit resolve.
 - **Anonymous mood** (`mood anon`) — cards hide who felt what; the wrap-up shows the team average.
-- **Web dashboard** — token-gated, server-rendered config + history UI baked into the same container (`DASHBOARD_TOKEN`).
+- **Web dashboard with Google sign-in** — Workspace admins get the admin console automatically; everyone else gets a personal `/me` console (their standups, history, timezone, vacation). Token access (`DASHBOARD_TOKEN`) stays as break-glass.
 - **Insights** — `trends` (participation + mood over 4 weeks), weekly digest (`digest on`), CSV export endpoint.
 - **Outbound webhooks** — per-standup JSON POSTs on every submission and wrap-up; pipe standups into Sheets, Zapier/n8n, or your own service.
 - **Polls** — `poll Ship Friday? | Yes | No` posts a live-updating card in the space; one tap to vote, change your vote anytime, close for final results.
