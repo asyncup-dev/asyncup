@@ -37,9 +37,11 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
         `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/dashboard`,
       );
       // Get the token out of the address bar (history, access logs, Referer):
-      // the cookie now carries the session, so bounce to a clean URL.
+      // the cookie now carries the session, so bounce to a clean URL. Only
+      // same-site paths — "//host" would be a protocol-relative open redirect.
       if (req.method === 'GET') {
-        res.redirect(303, req.path);
+        const dest = req.path.startsWith('/') && !req.path.startsWith('//') ? req.path : '/dashboard';
+        res.redirect(303, dest);
         return false;
       }
       return true;
