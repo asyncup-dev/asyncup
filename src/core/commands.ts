@@ -1,4 +1,5 @@
 import { DateTime, IANAZone } from 'luxon';
+import type { ChatAdapter } from './adapter.js';
 import type { BlockerService } from './blocker-service.js';
 import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
@@ -29,8 +30,18 @@ export interface CommandContext {
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-const HELP = `*AsyncUp commands* (mention me in this space — prefix with \`#<id>\` when the space has several standups):
+const HELP_SHORT = `*AsyncUp — the essentials* (mention me in this space):
+\`setup [name]\` — create a standup reporting to this space (you become its admin)
+\`add @user…\` — add participants
+\`run now\` — open today's run immediately and prompt everyone (try it!)
+\`time HH:MM\` · \`deadline HH:MM\` · \`timezone <IANA>\` · \`days mon,tue,…\` — schedule
+\`status\` — configuration + today's progress
+\`help all\` — every command (questions, mood, blockers, digests, AI, export…)`;
+
+const HELP_ALL = `*AsyncUp commands* (mention me in this space — prefix with \`#<id>\` when the space has several standups):
 \`setup [name]\` — create a standup reporting to this space (creator becomes admin)
+\`run now\` — open today's run immediately and prompt everyone
+\`archive\` — retire a standup (history stays; prompts stop)
 \`add @user…\` / \`remove @user…\` — manage participants
 \`mandatory @user…\` / \`optional @user…\` — who counts toward the report
 \`vacation @user…\` / \`back @user…\` — mark people away (they can also DM me \`vacation\`/\`back\`)
@@ -49,13 +60,26 @@ const HELP = `*AsyncUp commands* (mention me in this space — prefix with \`#<i
 /** Commands anyone in the space may run; everything else needs an admin. */
 const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'blocker', 'export']);
 
+/** The slice of the scheduler `run now` needs (avoids a circular dependency). */
+export interface RunNowRunner {
+  runNow(standup: Standup): Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'>;
+}
+
 export class CommandHandler {
+  private runner: RunNowRunner | null = null;
+
   constructor(
     private repo: Repo,
     private settings: SettingsService,
     private now: () => DateTime = () => DateTime.utc(),
     private blockerService: BlockerService | null = null,
+    private adapter: ChatAdapter | null = null,
   ) {}
+
+  /** The scheduler is constructed after the handler; attach it once built. */
+  attachRunner(runner: RunNowRunner): void {
+    this.runner = runner;
+  }
 
   async handle(ctx: CommandContext): Promise<string> {
     const tokens = ctx.text.trim().split(/\s+/).filter(Boolean);
@@ -71,7 +95,9 @@ export class CommandHandler {
     const command = verb.toLowerCase();
     const arg = rest.join(' ').trim();
 
-    if (command === '' || command === 'help') return HELP;
+    if (command === '' || command === 'help') {
+      return arg.toLowerCase() === 'all' ? HELP_ALL : HELP_SHORT;
+    }
     if (command === 'setup') return this.setup(ctx, arg);
 
     const standups = await this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
@@ -100,6 +126,10 @@ export class CommandHandler {
     }
 
     switch (command) {
+      case 'run':
+        return this.runNow(standup, arg);
+      case 'archive':
+        return this.archive(standup);
       case 'add':
         return this.addParticipants(standup, ctx.mentions);
       case 'remove':
@@ -160,33 +190,75 @@ export class CommandHandler {
   }
 
   private async setup(ctx: CommandContext, name: string): Promise<string> {
+    const standupName = name || 'Daily Standup';
+    const existing = await this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
+    const duplicate = existing.find((s) => s.name.toLowerCase() === standupName.toLowerCase());
+    if (duplicate) {
+      return (
+        `⚠️ This space already has a standup named *${duplicate.name}* (#${duplicate.id}) — nothing was created.\n` +
+        `Configure it with \`#${duplicate.id} <command>\`, pick a different name (\`setup <name>\`), or retire it first with \`#${duplicate.id} archive\`.`
+      );
+    }
     const standup = await this.repo.createStandup({
       tenantId: ctx.tenantId,
       spaceName: ctx.spaceName,
-      name: name || 'Daily Standup',
+      name: standupName,
       timezone: (await this.settings.get()).defaultTimezone,
     });
     if (ctx.sender.userName) {
       await this.repo.addAdmin(standup.id, ctx.sender.userName, ctx.sender.displayName);
     }
     const siblings = await this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
+    const tzTip =
+      standup.timezone === 'UTC'
+        ? `\n⚠️ Timezone is *UTC* — prompts land at ${standup.promptTime} UTC. Set yours with \`timezone Asia/Kolkata\`-style, or change the default in the dashboard.`
+        : '';
     return (
       `✅ Standup *${standup.name}* created (#${standup.id})${siblings.length > 1 ? ` — this space now has ${siblings.length} standups, prefix commands with \`#${standup.id}\`` : ''}. You are its admin.\n` +
-      `Defaults: prompt ${standup.promptTime}, deadline ${standup.deadlineTime}, reminder ${standup.reminderMinutesBefore}m before, ${standup.timezone}, ${standup.days}.\n` +
-      `Next: \`add @user…\` to add participants.`
+      `Defaults: prompt ${standup.promptTime}, deadline ${standup.deadlineTime}, reminder ${standup.reminderMinutesBefore}m before, ${standup.timezone}, ${standup.days}.${tzTip}\n` +
+      `Next: \`add @user…\` to add participants, then \`run now\` to see the whole flow immediately.`
+    );
+  }
+
+  private async runNow(standup: Standup, arg: string): Promise<string> {
+    if (arg.toLowerCase() !== 'now') return 'Use `run now` to open today\'s run immediately.';
+    if (!this.runner) return 'Run-now is not available.';
+    const result = await this.runner.runNow(standup);
+    const messages = {
+      started: `🚀 Today's run for *${standup.name}* is open — everyone eligible was just prompted. The wrap-up posts at the ${standup.deadlineTime} ${standup.timezone} deadline.`,
+      already_open: `Today's run is already open — anyone not yet prompted was just prompted.`,
+      already_closed: `Today's run already closed. The next one opens on schedule.`,
+      no_participants: 'No one to prompt — `add @user…` first (or everyone is on vacation).',
+    };
+    return messages[result];
+  }
+
+  private async archive(standup: Standup): Promise<string> {
+    await this.repo.updateStandup(standup.id, { active: false });
+    return (
+      `🗄️ Standup *${standup.name}* (#${standup.id}) archived — no more prompts or reports. ` +
+      `History stays in the database and exports. \`setup <name>\` starts a fresh one.`
     );
   }
 
   private async addParticipants(standup: Standup, mentions: Mention[]): Promise<string> {
     if (mentions.length === 0) return 'Mention the people to add, e.g. `add @Asha @Rohit`.';
+    const unreachable: string[] = [];
     for (const m of mentions) {
       await this.repo.upsertParticipant({
         standupId: standup.id,
         userName: m.userName,
         displayName: m.displayName,
       });
+      if (this.adapter && !(await this.adapter.canDm(m.userName))) unreachable.push(m.displayName);
     }
-    return `✅ Added ${mentions.map((m) => m.displayName).join(', ')} (mandatory). Use \`optional @user\` to exclude someone from the report count.`;
+    let reply = `✅ Added ${mentions.map((m) => m.displayName).join(', ')} (mandatory). Use \`optional @user\` to exclude someone from the report count.`;
+    if (unreachable.length > 0) {
+      reply +=
+        `\n⚠️ Can't DM ${unreachable.join(', ')} yet — they need the Chat app installed ` +
+        `(they can add it themselves, or an admin installs it for everyone). They won't get prompts until then.`;
+    }
+    return reply;
   }
 
   private async removeParticipants(standup: Standup, mentions: Mention[]): Promise<string> {

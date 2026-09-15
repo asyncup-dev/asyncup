@@ -12,10 +12,15 @@ function ctx(text: string, mentions: Mention[] = [], sender: Mention = ADMIN) {
 }
 
 describe('CommandHandler', () => {
-  it('shows help for empty or help text', async () => {
+  it('shows the essentials for help, everything for help all', async () => {
     const { commands } = await makeStack();
-    expect(await commands.handle(ctx(''))).toContain('AsyncUp commands');
-    expect(await commands.handle(ctx('help'))).toContain('setup');
+    const short = await commands.handle(ctx(''));
+    expect(short).toContain('the essentials');
+    expect(short).toContain('setup');
+    expect(short).not.toContain('unadmin');
+    const all = await commands.handle(ctx('help all'));
+    expect(all).toContain('AsyncUp commands');
+    expect(all).toContain('unadmin');
   });
 
   it('requires setup before other commands', async () => {
@@ -30,6 +35,63 @@ describe('CommandHandler', () => {
     expect(reply).toContain('You are its admin');
     const standup = (await repo.listStandupsBySpace(TENANT, SPACE))[0]!;
     expect(await repo.isAdmin(standup.id, ADMIN.userName)).toBe(true);
+  });
+
+  it('refuses a duplicate setup name and points at archive', async () => {
+    const { commands, repo } = await makeStack();
+    await commands.handle(ctx('setup Engineering'));
+    const reply = await commands.handle(ctx('setup engineering'));
+    expect(reply).toContain('already has a standup named');
+    expect(reply).toContain('archive');
+    expect(await repo.listStandupsBySpace(TENANT, SPACE)).toHaveLength(1);
+  });
+
+  it('nudges about the UTC default timezone at setup', async () => {
+    const { commands, settings } = await makeStack();
+    await settings.update({ defaultTimezone: 'UTC' });
+    expect(await commands.handle(ctx('setup Eng'))).toContain('Timezone is *UTC*');
+  });
+
+  it('run now opens the run immediately and prompts everyone', async () => {
+    const { commands, repo, adapter, clock } = await makeStack();
+    await commands.handle(ctx('setup Eng'));
+    const standup = (await repo.listStandupsBySpace(TENANT, SPACE))[0]!;
+    await repo.upsertParticipant({ standupId: standup.id, userName: ALICE.userName, displayName: 'Alice' });
+
+    clock.set('2026-06-10T07:00'); // well before the 09:30 prompt time
+    const reply = await commands.handle(ctx('run now'));
+    expect(reply).toContain('open');
+    expect(await repo.getRun(standup.id, '2026-06-10')).not.toBeNull();
+    expect(adapter.dms.filter((d) => d.kind === 'prompt').map((d) => d.userName)).toEqual([
+      ALICE.userName,
+    ]);
+
+    expect(await commands.handle(ctx('run now'))).toContain('already open');
+  });
+
+  it('archive retires the standup from commands and the scheduler', async () => {
+    const { commands, repo, adapter, scheduler, clock } = await makeStack();
+    await commands.handle(ctx('setup Eng'));
+    const standup = (await repo.listStandupsBySpace(TENANT, SPACE))[0]!;
+    await repo.upsertParticipant({ standupId: standup.id, userName: ALICE.userName, displayName: 'Alice' });
+
+    expect(await commands.handle(ctx('archive'))).toContain('archived');
+    expect(await repo.listStandupsBySpace(TENANT, SPACE)).toHaveLength(0);
+    expect(await commands.handle(ctx('status'))).toContain('Run `setup` first');
+
+    clock.set('2026-06-10T09:30');
+    await scheduler.tick();
+    expect(await repo.getRun(standup.id, '2026-06-10')).toBeNull();
+    expect(adapter.dms).toHaveLength(0);
+  });
+
+  it('warns when an added participant cannot be DMed yet', async () => {
+    const { commands, adapter } = await makeStack();
+    await commands.handle(ctx('setup Eng'));
+    adapter.unreachable.add(BOB.userName);
+    const reply = await commands.handle(ctx('add @Alice @Bob', [ALICE, BOB]));
+    expect(reply).toContain('Added Alice, Bob');
+    expect(reply).toContain("Can't DM Bob");
   });
 
   it('supports multiple standups per space via #id addressing', async () => {

@@ -30,13 +30,16 @@ doesn't need the query parameter.
   encrypted and never echoed back.
 - **Standup list** — every standup with schedule and today's progress.
 - **Standup detail** — edit name, times, timezone, days, reminder, questions,
-  and toggles (mood / anonymous mood / digest / AI / escalation threshold);
-  see participants, admins, open blockers, and a 4-week trend table.
+  toggles (mood / anonymous mood / digest / AI / escalation threshold) and the
+  escalation contact; manage the roster (mandatory/optional, away/back,
+  make/remove admin, remove); a ▶ *Run now* button that opens today's run and
+  prompts everyone immediately; and a CSV download of the last 90 days.
 - **Run history** — the last 14 runs with submission counts and missing names;
   click into any day to read everyone's full answers.
 
-Participants, admins, and the escalation contact are managed from Google Chat
-(`add`, `admin`, `escalate @user`) because they require Chat identities.
+Adding *new* participants happens in Google Chat (`add @user`) because it
+requires a Chat identity the dashboard doesn't know yet; everything about
+people already on the roster is manageable here.
 
 ## Security notes
 

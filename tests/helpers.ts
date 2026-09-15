@@ -42,7 +42,8 @@ export async function makeStack(opts: { summarizer?: AiSummarizer | null; ooo?: 
     summarizer: async () => opts.summarizer ?? null,
     ooo: async () => opts.ooo ?? null,
   });
-  const commands = new CommandHandler(repo, settings, clock.now, blockers);
+  const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter);
+  commands.attachRunner(scheduler);
 
   return { repo, adapter, service, blockers, settings, scheduler, commands, clock };
 }

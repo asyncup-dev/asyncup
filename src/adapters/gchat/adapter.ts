@@ -88,6 +88,15 @@ export class GoogleChatAdapter implements ChatAdapter {
     await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note) });
   }
 
+  async canDm(userName: string): Promise<boolean> {
+    try {
+      await this.ensureDmSpace(userName);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async postInThread(
     spaceName: string,
     threadKey: string,

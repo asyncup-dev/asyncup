@@ -4,6 +4,8 @@ Configure AsyncUp by @mentioning it in the space where reports post.
 When a space has **several standups**, prefix commands with the standup id,
 e.g. `@AsyncUp #2 time 09:30` — `status` lists all standups with their ids.
 
+`help` shows the essentials; `help all` lists every command.
+
 ## Configuration (admins only)
 
 The person who runs `setup` becomes the standup's first admin. Only admins can
@@ -12,7 +14,9 @@ open to everyone in the space.
 
 | Command | Effect |
 | --- | --- |
-| `setup [name]` | Create a standup reporting to this space (creator becomes admin) |
+| `setup [name]` | Create a standup reporting to this space (creator becomes admin; duplicate names are refused) |
+| `run now` | Open today's run immediately and prompt everyone — see the whole flow without waiting for the schedule |
+| `archive` | Retire the standup: prompts and reports stop, history stays |
 | `add @user…` | Add participants (mandatory by default) |
 | `remove @user…` | Remove participants |
 | `mandatory @user…` / `optional @user…` | Count toward the wrap-up report, or not |

@@ -142,6 +142,65 @@ describe('dashboard', () => {
     ).toBe(200);
   });
 
+  it('runs today\'s standup from the ▶ Run now button', async () => {
+    const { repo, url, adapter, clock } = await startServer();
+    const standup = await seedStandup(repo);
+    clock.set('2026-06-10T07:00'); // before prompt time
+
+    const res = await fetch(`${url}/dashboard/standup/${standup.id}/run-now`, {
+      method: 'POST',
+      headers: { cookie: 'asyncup_dash=dash-secret' },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toContain('notice=');
+    expect(await repo.getRun(standup.id, '2026-06-10')).not.toBeNull();
+    expect(adapter.dms.filter((d) => d.kind === 'prompt')).toHaveLength(3);
+  });
+
+  it('manages the roster and downloads CSV from the standup page', async () => {
+    const { repo, url, get, service, clock } = await startServer();
+    const standup = await seedStandup(repo);
+    const run = await repo.createRun(standup.id, '2026-06-09', 'k');
+    await service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
+    clock.set('2026-06-10T12:00');
+
+    const post = (body: Record<string, string>) =>
+      fetch(`${url}/dashboard/standup/${standup.id}/roster`, {
+        method: 'POST',
+        headers: {
+          cookie: 'asyncup_dash=dash-secret',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(body).toString(),
+        redirect: 'manual',
+      });
+
+    expect((await post({ action: 'optional', userName: 'users/alice' })).status).toBe(302);
+    expect(
+      (await repo.listParticipants(standup.id)).find((p) => p.userName === 'users/alice')?.mandatory,
+    ).toBe(false);
+
+    expect((await post({ action: 'admin', userName: 'users/alice' })).status).toBe(302);
+    expect(await repo.isAdmin(standup.id, 'users/alice')).toBe(true);
+
+    expect((await post({ action: 'remove', userName: 'users/bob' })).status).toBe(302);
+    expect((await repo.listParticipants(standup.id)).map((p) => p.userName)).not.toContain('users/bob');
+
+    const csv = await get(`/dashboard/standup/${standup.id}/export.csv`);
+    expect(csv.status).toBe(200);
+    expect(csv.headers.get('content-type')).toContain('text/csv');
+    expect(await csv.text()).toContain('Alice');
+
+    // roster writes require auth
+    const unauthed = await fetch(`${url}/dashboard/standup/${standup.id}/roster`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ action: 'remove', userName: 'users/alice' }).toString(),
+    });
+    expect(unauthed.status).toBe(401);
+  });
+
   it('updates configuration via the form and validates input', async () => {
     const { repo, url } = await startServer();
     const standup = await seedStandup(repo);

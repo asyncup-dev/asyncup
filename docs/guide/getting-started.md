@@ -41,7 +41,15 @@ then in the space where reports should go:
 @AsyncUp status
 ```
 
-That's it — prompts go out on the next configured workday.
+Then see the whole flow immediately instead of waiting for tomorrow:
+
+```
+@AsyncUp run now
+```
+
+Everyone gets their prompt DM right away (the dashboard's standup page has a
+▶ *Run now* button too). After that, prompts go out on the configured
+schedule.
 
 ## Try it without Google
 
