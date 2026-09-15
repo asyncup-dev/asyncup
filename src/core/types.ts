@@ -64,6 +64,24 @@ export interface Standup {
   active: boolean;
 }
 
+export interface Poll {
+  id: number;
+  standupId: number;
+  question: string;
+  options: string[];
+  createdBy: string;
+  createdDisplay: string;
+  messageName: string | null;
+  closedAt: string | null;
+}
+
+export interface PollVote {
+  pollId: number;
+  userName: string;
+  displayName: string;
+  optionIndex: number;
+}
+
 export function standupQuestions(standup: Standup): string[] {
   return standup.questions ?? [...DEFAULT_QUESTIONS];
 }

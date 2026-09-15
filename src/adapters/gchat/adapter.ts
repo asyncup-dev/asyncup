@@ -2,9 +2,10 @@ import { auth as chatAuth, chat, type chat_v1 } from '@googleapis/chat';
 import type { ChatAdapter } from '../../core/adapter.js';
 import type { SettingsService } from '../../core/settings.js';
 import type { Repo } from '../../db/repo.js';
-import type { Blocker, Run, RunSummary, Standup, Submission } from '../../core/types.js';
+import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import {
   blockerCard,
+  pollMessage,
   promptMessage,
   reminderMessage,
   submissionMessage,
@@ -95,6 +96,14 @@ export class GoogleChatAdapter implements ChatAdapter {
     } catch {
       return false;
     }
+  }
+
+  async postPoll(standup: Standup, poll: Poll, tallies: number[]): Promise<string | null> {
+    const res = await (await this.getClient()).spaces.messages.create({
+      parent: standup.spaceName,
+      requestBody: pollMessage(poll, tallies),
+    });
+    return res.data.name ?? null;
   }
 
   private async postInThread(

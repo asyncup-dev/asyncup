@@ -3,6 +3,7 @@ import { FakeAdapter } from '../src/adapters/fake/adapter.js';
 import { AiSummarizer } from '../src/ai/summarizer.js';
 import { BlockerService } from '../src/core/blocker-service.js';
 import { CommandHandler } from '../src/core/commands.js';
+import { PollService } from '../src/core/poll-service.js';
 import type { OooChecker } from '../src/core/ooo.js';
 import { Scheduler } from '../src/core/scheduler.js';
 import { SettingsService } from '../src/core/settings.js';
@@ -54,10 +55,11 @@ export async function makeStack(
     },
     webhooks,
   );
-  const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter);
+  const polls = new PollService(repo, adapter, clock.now);
+  const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter, polls);
   commands.attachRunner(scheduler);
 
-  return { repo, adapter, service, blockers, settings, scheduler, commands, clock };
+  return { repo, adapter, service, blockers, polls, settings, scheduler, commands, clock };
 }
 
 export async function seedStandup(repo: Repo, opts: { deadlineTime?: string; spaceName?: string } = {}) {

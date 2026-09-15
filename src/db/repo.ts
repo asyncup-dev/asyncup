@@ -7,6 +7,8 @@ import type {
   BlockerUpdate,
   Mood,
   Participant,
+  Poll,
+  PollVote,
   Run,
   RunParticipant,
   RunStatus,
@@ -204,6 +206,28 @@ CREATE TABLE settings (
   `
 ALTER TABLE standups ADD COLUMN webhook_url TEXT;
 `,
+  // 7 — polls
+  `
+CREATE TABLE polls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  standup_id INTEGER NOT NULL REFERENCES standups(id),
+  question TEXT NOT NULL,
+  options TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_display TEXT NOT NULL,
+  message_name TEXT,
+  created_at TEXT NOT NULL,
+  closed_at TEXT
+);
+CREATE TABLE poll_votes (
+  poll_id INTEGER NOT NULL REFERENCES polls(id),
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  option_index INTEGER NOT NULL,
+  voted_at TEXT NOT NULL,
+  PRIMARY KEY (poll_id, user_name)
+);
+`,
 ];
 
 /**
@@ -346,6 +370,28 @@ CREATE TABLE settings (
   `
 ALTER TABLE standups ADD COLUMN webhook_url TEXT;
 `,
+  // 7 — polls
+  `
+CREATE TABLE polls (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  standup_id INTEGER NOT NULL REFERENCES standups(id),
+  question TEXT NOT NULL,
+  options TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_display TEXT NOT NULL,
+  message_name TEXT,
+  created_at TEXT NOT NULL,
+  closed_at TEXT
+);
+CREATE TABLE poll_votes (
+  poll_id INTEGER NOT NULL REFERENCES polls(id),
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  option_index INTEGER NOT NULL,
+  voted_at TEXT NOT NULL,
+  PRIMARY KEY (poll_id, user_name)
+);
+`,
 ];
 
 function toStandup(row: any): Standup {
@@ -459,6 +505,19 @@ function toBlockerUpdate(row: any): BlockerUpdate {
     displayName: row.display_name,
     text: row.text,
     createdAt: row.created_at,
+  };
+}
+
+function toPoll(row: any): Poll {
+  return {
+    id: row.id,
+    standupId: row.standup_id,
+    question: row.question,
+    options: JSON.parse(row.options),
+    createdBy: row.created_by,
+    createdDisplay: row.created_display,
+    messageName: row.message_name ?? null,
+    closedAt: row.closed_at ?? null,
   };
 }
 
@@ -1096,6 +1155,68 @@ export class Repo {
 
   async markBlockerEscalated(id: number, at: string): Promise<void> {
     await this.db.run('UPDATE blockers SET escalated_at = ? WHERE id = ?', [at, id]);
+  }
+
+
+  // --- polls ---
+
+  async createPoll(input: {
+    standupId: number;
+    question: string;
+    options: string[];
+    createdBy: string;
+    createdDisplay: string;
+    at: string;
+  }): Promise<Poll> {
+    const id = await this.db.insert(
+      `INSERT INTO polls (standup_id, question, options, created_by, created_display, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [input.standupId, input.question, JSON.stringify(input.options), input.createdBy, input.createdDisplay, input.at],
+    );
+    return (await this.getPollById(id))!;
+  }
+
+  async getPollById(id: number): Promise<Poll | null> {
+    const row = await this.db.get('SELECT * FROM polls WHERE id = ?', [id]);
+    return row ? toPoll(row) : null;
+  }
+
+  async setPollMessageName(id: number, messageName: string): Promise<void> {
+    await this.db.run('UPDATE polls SET message_name = ? WHERE id = ?', [messageName, id]);
+  }
+
+  async closePoll(id: number, at: string): Promise<boolean> {
+    const result = await this.db.run('UPDATE polls SET closed_at = ? WHERE id = ? AND closed_at IS NULL', [at, id]);
+    return result.changes > 0;
+  }
+
+  async listOpenPolls(standupId: number): Promise<Poll[]> {
+    const rows = await this.db.all(
+      'SELECT * FROM polls WHERE standup_id = ? AND closed_at IS NULL ORDER BY id',
+      [standupId],
+    );
+    return rows.map(toPoll);
+  }
+
+  /** Upsert — changing your mind replaces the previous vote. */
+  async votePoll(input: { pollId: number; userName: string; displayName: string; optionIndex: number; at: string }): Promise<void> {
+    await this.db.run(
+      `INSERT INTO poll_votes (poll_id, user_name, display_name, option_index, voted_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (poll_id, user_name)
+       DO UPDATE SET option_index = excluded.option_index, voted_at = excluded.voted_at, display_name = excluded.display_name`,
+      [input.pollId, input.userName, input.displayName, input.optionIndex, input.at],
+    );
+  }
+
+  async listPollVotes(pollId: number): Promise<PollVote[]> {
+    const rows = await this.db.all('SELECT * FROM poll_votes WHERE poll_id = ? ORDER BY voted_at', [pollId]);
+    return rows.map((row: any) => ({
+      pollId: row.poll_id,
+      userName: row.user_name,
+      displayName: row.display_name,
+      optionIndex: row.option_index,
+    }));
   }
 
   // --- user emails (learned from Chat interaction events) ---

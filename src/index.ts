@@ -10,6 +10,7 @@ import { AiSummarizer } from './ai/summarizer.js';
 import { GoogleCalendarOoo } from './integrations/google-calendar.js';
 import { BlockerService } from './core/blocker-service.js';
 import { CommandHandler } from './core/commands.js';
+import { PollService } from './core/poll-service.js';
 import { Scheduler, type SchedulerProviders } from './core/scheduler.js';
 import { SettingsService } from './core/settings.js';
 import { StandupService } from './core/standup-service.js';
@@ -38,8 +39,9 @@ const adapter =
 const webhooks = new WebhookNotifier();
 const service = new StandupService(repo, adapter, undefined, webhooks);
 const blockerService = new BlockerService(repo, adapter);
-const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter);
-const router = new EventRouter(commands, service, blockerService, repo, config.tenantId);
+const pollService = new PollService(repo, adapter);
+const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter, pollService);
+const router = new EventRouter(commands, service, blockerService, repo, config.tenantId, pollService);
 
 // Integrations are resolved from settings per use, so dashboard changes
 // apply immediately — no restart.

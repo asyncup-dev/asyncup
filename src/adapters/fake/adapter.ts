@@ -1,5 +1,5 @@
 import type { ChatAdapter } from '../../core/adapter.js';
-import type { Blocker, Run, RunSummary, Standup, Submission } from '../../core/types.js';
+import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 
 interface SentDm {
   kind: 'prompt' | 'reminder' | 'text' | 'blockerCard';
@@ -11,12 +11,12 @@ interface SentDm {
 }
 
 interface PostedMessage {
-  kind: 'parent' | 'submission' | 'summary' | 'update' | 'text';
+  kind: 'parent' | 'submission' | 'summary' | 'update' | 'text' | 'poll';
   spaceName: string;
   threadKey?: string;
   messageName?: string;
   text?: string;
-  payload?: Submission | RunSummary;
+  payload?: Submission | RunSummary | Poll;
 }
 
 /**
@@ -100,5 +100,12 @@ export class FakeAdapter implements ChatAdapter {
 
   async canDm(userName: string): Promise<boolean> {
     return !this.unreachable.has(userName);
+  }
+
+  async postPoll(standup: Standup, poll: Poll, _tallies: number[]): Promise<string | null> {
+    const messageName = `messages/fake-${++this.messageCounter}`;
+    this.posts.push({ kind: 'poll', spaceName: standup.spaceName, messageName, payload: poll });
+    this.log?.(`Poll #${poll.id} "${poll.question}" → ${standup.spaceName}`);
+    return messageName;
   }
 }

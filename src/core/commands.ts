@@ -1,6 +1,7 @@
 import { DateTime, IANAZone } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { BlockerService } from './blocker-service.js';
+import type { PollService } from './poll-service.js';
 import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
 import { trendsText } from './insights.js';
@@ -55,10 +56,11 @@ const HELP_ALL = `*AsyncUp commands* (mention me in this space — prefix with \
 \`escalate @user\` / \`escalate days N\` / \`escalate off\` — DM someone when blockers stay open
 \`digest on|off\` · \`ai on|off\` — weekly digest, AI summaries
 \`blocker <id> tag @user…\` / \`blocker <id> update <text>\` / \`blocker <id> resolve\` — work a blocker together
+\`poll Question? | Option A | Option B\` — team poll in the space (\`polls\`, \`poll <id> close\`)
 \`status\` · \`trends\` · \`blockers\` · \`export\` — insights`;
 
 /** Commands anyone in the space may run; everything else needs an admin. */
-const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'blocker', 'export']);
+const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'blocker', 'export', 'poll', 'polls']);
 
 /** The slice of the scheduler `run now` needs (avoids a circular dependency). */
 export interface RunNowRunner {
@@ -74,6 +76,7 @@ export class CommandHandler {
     private now: () => DateTime = () => DateTime.utc(),
     private blockerService: BlockerService | null = null,
     private adapter: ChatAdapter | null = null,
+    private pollService: PollService | null = null,
   ) {}
 
   /** The scheduler is constructed after the handler; attach it once built. */
@@ -174,6 +177,10 @@ export class CommandHandler {
         return this.blockers(standup);
       case 'blocker':
         return this.blockerCmd(standup, ctx, rest);
+      case 'poll':
+        return this.pollCmd(standup, ctx, rest);
+      case 'polls':
+        return this.pollList(standup);
       case 'export':
         return this.exportInfo(standup);
       default:
@@ -516,6 +523,55 @@ export class CommandHandler {
       not_found: `No blocker #${id}.`,
     };
     return messages[result];
+  }
+
+  private async pollCmd(standup: Standup, ctx: CommandContext, rest: string[]): Promise<string> {
+    if (!this.pollService) return 'Polls are not available.';
+    const id = Number(rest[0]);
+    const sub = (rest[1] ?? '').toLowerCase();
+
+    if (Number.isInteger(id) && (sub === 'close' || sub === 'results')) {
+      if (sub === 'results') {
+        const poll = await this.repo.getPollById(id);
+        if (!poll || poll.standupId !== standup.id) return `No poll #${id} here.`;
+        return this.pollService.resultsText(poll, !!poll.closedAt);
+      }
+      const result = await this.pollService.close(standup, id, ctx.sender);
+      const messages = {
+        closed: `✅ Poll #${id} closed — results posted to the space.`,
+        already_closed: `Poll #${id} is already closed.`,
+        not_allowed: 'Only the poll creator or a standup admin can close it.',
+        not_found: `No poll #${id} here.`,
+      };
+      return messages[result];
+    }
+
+    const parts = rest
+      .join(' ')
+      .split('|')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (parts.length < 3 || parts.length > 7) {
+      return 'Start a poll with `poll Question? | Option A | Option B` (2–6 options). Also: `poll <id> results`, `poll <id> close`, `polls`.';
+    }
+    const tooLong = parts.find((t) => t.length > 200);
+    if (tooLong) return `⚠️ Too long (max 200 chars): "${tooLong.slice(0, 50)}…"`;
+    const [question, ...options] = parts;
+    const poll = await this.pollService.create(standup, question!, options, ctx.sender);
+    return `📊 Poll *#${poll.id}* posted — vote on the card. \`poll ${poll.id} close\` posts the results.`;
+  }
+
+  private async pollList(standup: Standup): Promise<string> {
+    const open = await this.repo.listOpenPolls(standup.id);
+    if (open.length === 0) {
+      return 'No open polls. Start one with `poll Question? | Option A | Option B`.';
+    }
+    const lines: string[] = [];
+    for (const poll of open) {
+      const total = (await this.repo.listPollVotes(poll.id)).length;
+      lines.push(`#${poll.id} ${poll.question} — ${total} vote${total === 1 ? '' : 's'} (by ${poll.createdDisplay})`);
+    }
+    return `*Open polls:*\n${lines.join('\n')}\n\`poll <id> results\` · \`poll <id> close\``;
   }
 
   private exportInfo(standup: Standup): string {
