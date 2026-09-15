@@ -28,7 +28,7 @@ Open `https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` → **Settings**:
 
 | Setting | What it does |
 | --- | --- |
-| GCP project number | Verifies incoming webhooks are signed by Google Chat |
+| Audience (GCP project number and/or app URL) | Verifies incoming webhooks are signed by Google Chat — space/comma separated when both |
 | Service-account key (JSON) | Paste the downloaded key file — used for Chat API calls and Calendar OOO. Empty = [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) (e.g. Cloud Run service identity) |
 | AI provider / API key / model | Bring-your-own-key [AI summaries](./ai) |
 | Default timezone | Assigned to newly created standups |
@@ -50,8 +50,15 @@ service account's email), never the material itself.
 | `POST /chat/events` | Google Chat webhook — point the Chat app here |
 | `POST /tick` | Manually advance the scheduler (for external cron). Requires `Authorization: Bearer <tick token>` when one is set |
 | `GET /export?standupId=N&days=30` | CSV download (long format). Requires the export token; disabled until one is generated |
-| `GET /dashboard` | [Web dashboard](./dashboard) — settings, config, history |
+| `GET /dashboard` | [Admin console](./dashboard) — settings, config, history |
+| `GET /me` | [User console](./dashboard) — personal standups + self-service |
+| `/auth/*` | Google and [SAML](./enterprise-sso) sign-in |
+| `/scim/v2/*` | [SCIM 2.0 provisioning](./enterprise-sso#scim-provisioning) |
 | `GET /healthz` | Liveness check (pings the database) |
+
+Every credential-checking surface sits behind a shared rate limiter
+(60 requests/min/IP). The full per-route table with auth requirements is in
+the [Handbook reference](./handbook#42-http-endpoints).
 
 ## Outbound webhooks
 

@@ -13,13 +13,16 @@ hero:
       text: Get started →
       link: /guide/getting-started
     - theme: alt
+      text: The Handbook
+      link: /guide/handbook
+    - theme: alt
       text: View on GitHub
       link: https://github.com/asyncup-dev/asyncup
 
 features:
   - icon: 💬
     title: One-tap standups
-    details: A DM card opens a four-question form — yesterday, today, blockers, mood. Edit until the deadline; the posted card updates in place.
+    details: A DM card opens one form — yesterday, today, blockers, plus a mood dropdown. Edit until the deadline; the posted card updates in place.
   - icon: 🧵
     title: Tidy date threads
     details: Every answer lands as one card per person under the day's thread. The wrap-up posts the count and exactly who's missing.
@@ -28,13 +31,16 @@ features:
     details: Skip-today button, vacation mode, and automatic Google Calendar OOO sync — away people are never nagged or counted as missing.
   - icon: ⚠️
     title: Blockers that follow up
-    details: Blockers open from answers, auto-resolve on the next clean submission, and escalate to a contact when they go stale.
+    details: Blockers open from answers and can be worked as items — tag teammates, acknowledge, post updates, resolve — with daily nudges and stale-blocker escalation.
   - icon: 📊
     title: Insights built in
-    details: Mood trends, weekly digests, anonymous team-mood mode, CSV export, and a token-gated web dashboard for config and history.
+    details: Trend charts (participation, mood, blockers), weekly digests, anonymous team-mood mode, CSV export, polls, and signed outbound webhooks.
   - icon: 🤖
     title: AI summaries, your key
     details: Opt-in daily TL;DR and week-in-review via your own Anthropic or OpenAI key. Nothing leaves your infra otherwise.
+  - icon: 🖥️
+    title: Consoles with SSO
+    details: Workspace admins sign into the admin dashboard; everyone else gets a personal /me console. Google sign-in or SAML, SCIM provisioning — all in the MIT core.
   - icon: 🪶
     title: Lightweight forever
     details: One ~300 MB container on 1 vCPU / 512 MB. Embedded SQLite by default — or bring your own PostgreSQL with one env var.

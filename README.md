@@ -13,7 +13,7 @@
 **Open-source, self-hosted async daily standups for Google Chat.**
 No meetings, no SaaS, no telemetry — one small container you run yourself, forever free.
 
-Every workday AsyncUp DMs each participant a card; one tap opens a form with four questions:
+Every workday AsyncUp DMs each participant a card; one tap opens a form with three questions plus a mood dropdown (on by default):
 
 1. What did you do yesterday?
 2. What will you do today?
@@ -29,7 +29,7 @@ Each answer is posted as one card per person under a **per-date thread** in your
  └─ 📊 wrap-up: ✅ 7/9 mandatory submitted · ❌ Missing: Asha, Rohit
 ```
 
-**Docs: [Getting started](docs/guide/getting-started.md) · [Google Chat setup](docs/guide/google-chat-setup.md) · [Commands](docs/guide/commands.md) · [Configuration](docs/guide/configuration.md) · [AI summaries](docs/guide/ai.md) · [Deployment](docs/guide/deployment.md)**
+**Docs: [The Handbook](docs/guide/handbook.md) · [Getting started](docs/guide/getting-started.md) · [Google Chat setup](docs/guide/google-chat-setup.md) · [Commands](docs/guide/commands.md) · [Configuration](docs/guide/configuration.md) · [AI summaries](docs/guide/ai.md) · [Deployment](docs/guide/deployment.md)**
 
 ## Features
 
@@ -43,7 +43,8 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **Anonymous mood** (`mood anon`) — cards hide who felt what; the wrap-up shows the team average.
 - **Web dashboard with Google sign-in** — Workspace admins get the admin console automatically; everyone else gets a personal `/me` console (their standups, history, timezone, vacation). Token access (`DASHBOARD_TOKEN`) stays as break-glass.
 - **Enterprise SSO without the SSO tax** — SAML 2.0 sign-in (Google Workspace, Okta, Entra, OneLogin) and a SCIM 2.0 provisioning endpoint (deactivate in the IdP → removed from every roster), all in the MIT core.
-- **Insights** — `trends` (participation + mood over 4 weeks), weekly digest (`digest on`), CSV export endpoint.
+- **Insights** — `trends` in chat, 8-week dashboard charts (participation, mood, blockers), weekly digest (`digest on`), CSV export.
+- **See it work immediately** — `run now` opens today's run and prompts everyone on the spot; `archive` retires a standup with history intact.
 - **Outbound webhooks** — per-standup JSON POSTs on every submission and wrap-up; pipe standups into Sheets, Zapier/n8n, or your own service.
 - **Polls** — `poll Ship Friday? | Yes | No` posts a live-updating card in the space; one tap to vote, change your vote anytime, close for final results.
 - **AI summaries, bring your own key** — opt-in daily TL;DR and week-in-review via your Anthropic/OpenAI key; nothing leaves your infra otherwise.
@@ -85,7 +86,10 @@ npm run docs:dev           # docs site locally
 ```
 
 Architecture: `src/core` (domain, scheduler, commands — no platform code),
-`src/adapters/gchat` (cards, event routing, API calls), `src/db` (SQLite repo).
+`src/adapters/gchat` (cards, event routing, API calls), `src/db` (repo over
+SQLite/PostgreSQL), `src/dashboard` (admin + `/me` consoles), `src/auth`
+(sessions, Google OIDC, SAML), `src/scim` (provisioning), `src/integrations`
+(Calendar, Directory), `src/ai` (summaries).
 Adding a platform means implementing the `ChatAdapter` interface in
 [src/core/adapter.ts](src/core/adapter.ts) — see [CONTRIBUTING.md](CONTRIBUTING.md).
 

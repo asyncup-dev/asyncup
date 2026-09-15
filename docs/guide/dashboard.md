@@ -39,23 +39,28 @@ accounts the Directory doesn't know (or that are suspended); without the
 Directory configured, everyone signs in as a regular user and the admin
 console stays token-only.
 
-`DASHBOARD_TOKEN` keeps working as break-glass operator access either way.
+`DASHBOARD_TOKEN` remains as break-glass operator access — and with sign-in
+configured the admin console works even with no token set at all.
 
 ## What's there
 
 - **First-run checklist** — a setup meter (connect Google Chat, create a
   standup, add your team, optional AI) that disappears once you're rolling.
 - **Settings** — *all app configuration lives here*: Google Chat connection
-  (project number + paste-in service-account key), AI provider and key,
-  default timezone, Calendar OOO sync, and the machine tokens for `/tick`
-  and `/export` (generate/clear; shown exactly once). Secrets are stored
-  encrypted and never echoed back.
+  (audience + paste-in service-account key), AI provider and key, default
+  timezone, Calendar OOO sync, the Workspace admin email (Directory),
+  the Google OAuth client, the SAML IdP, and the machine tokens for
+  `/tick`, `/export` and `/scim/v2` (generate/clear; shown exactly once).
+  Secrets are stored encrypted and never echoed back.
 - **Standup list** — every standup with schedule and today's progress.
 - **Standup detail** — edit name, times, timezone, days, reminder, questions,
   toggles (mood / anonymous mood / digest / AI / escalation threshold) and the
-  escalation contact; manage the roster (mandatory/optional, away/back,
-  make/remove admin, remove); a ▶ *Run now* button that opens today's run and
-  prompts everyone immediately; and a CSV download of the last 90 days.
+  escalation contact and the webhook URL (with its signing secret revealed
+  for receiver setup); manage the roster (mandatory/optional, away/back,
+  make/remove admin, remove); **8-week trend charts** for participation,
+  mood and blockers with a data-table fallback; a ▶ *Run now* button that
+  opens today's run and prompts everyone immediately; and a CSV download of
+  the last 90 days.
 - **Run history** — the last 14 runs with submission counts and missing names;
   click into any day to read everyone's full answers.
 
@@ -67,5 +72,7 @@ people already on the roster is manageable here.
 
 - Share the token only with people who should read your team's standups.
 - Always serve it behind HTTPS (same reverse proxy as the webhook).
-- The cookie is `HttpOnly` + `SameSite=Strict`, so browsers won't attach it
-  to cross-site requests (the main line of defence against request forgery).
+- The token cookie is `HttpOnly` + `SameSite=Strict` (scoped to
+  `/dashboard`); the sign-in session cookie is `HttpOnly` + `SameSite=Lax`
+  (it must survive the IdP redirect) and is HMAC-signed with `SECRET_KEY`,
+  expiring after 7 days.

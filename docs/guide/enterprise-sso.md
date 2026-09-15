@@ -34,6 +34,11 @@ console:
    is configured, Workspace admins (super or delegated) are admins
    automatically, same as with Google sign-in.
 
+Membership note: Google sign-in rejects accounts the Directory doesn't know;
+SAML deliberately doesn't — the IdP itself asserted org membership, and the
+account may live outside Google (e.g. Okta-only contractors). Suspended
+accounts are rejected on both paths.
+
 Everyone else lands on their personal [`/me` console](./dashboard).
 
 ### How SAML users map to Chat
@@ -55,8 +60,10 @@ provisioning — Okta, Entra, OneLogin.
 
 Setup: generate the **SCIM provisioning token** (Settings → Access tokens),
 then configure your IdP with base URL `https://<your-host>/scim/v2` and the
-token as the bearer credential. Supported: create, `userName eq` filter
-(dedupe), PUT/PATCH updates, deactivate/delete.
+token as the bearer credential. Supported: `ServiceProviderConfig`, list
+(`startIndex`/`count`, max 200), get by id, the `userName eq "…"` filter
+(dedupe — other filters answer 501), create, PUT/PATCH updates,
+deactivate/delete. While no token exists the endpoints answer 404.
 
 What provisioning does:
 
