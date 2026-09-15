@@ -58,7 +58,8 @@ describe('dashboard', () => {
   });
 
   it('lists standups and shows the detail page with history and blockers', async () => {
-    const { repo, service, get, clock } = await startServer();
+    const { repo, service, get, clock, settings } = await startServer();
+    await settings.update({ setupComplete: true }); // skip the first-run walkthrough redirect
     const standup = await seedStandup(repo);
     const run = await repo.createRun(standup.id, '2026-06-10', 'k');
     await service.submit(run.id, 'users/alice', 'Alice', {
@@ -210,6 +211,108 @@ describe('dashboard', () => {
       body: new URLSearchParams({ action: 'remove', userName: 'users/alice' }).toString(),
     });
     expect(unauthed.status).toBe(401);
+  });
+
+  it('walks a fresh install through setup and lands on home when finished', async () => {
+    const { url, settings, get } = await startServer();
+
+    // Fresh install: home hands over to the walkthrough.
+    const home = await fetch(`${url}/dashboard`, {
+      headers: { cookie: 'asyncup_dash=dash-secret' },
+      redirect: 'manual',
+    });
+    expect(home.status).toBe(303);
+    expect(home.headers.get('location')).toBe('/dashboard/setup');
+
+    const wizard = await (await get('/dashboard/setup')).text();
+    expect(wizard).toContain('Welcome to AsyncUp');
+    expect(wizard).toContain('How will people sign in?');
+
+    const post = (body: Record<string, string>) =>
+      fetch(`${url}/dashboard/setup`, {
+        method: 'POST',
+        headers: {
+          cookie: 'asyncup_dash=dash-secret',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(body).toString(),
+        redirect: 'manual',
+      });
+
+    // Step 2 saves the Chat connection and advances.
+    const step2 = await post({
+      section: 'chat',
+      step: '2',
+      chatAudience: '987654',
+      serviceAccountJson: JSON.stringify({ client_email: 'bot@p.iam.gserviceaccount.com', private_key: 'k' }),
+    });
+    expect(step2.status).toBe(303);
+    expect(step2.headers.get('location')).toBe('/dashboard/setup?step=3');
+
+    // A bad value re-renders the step with the error.
+    const bad = await post({ section: 'workspace', step: '3', defaultTimezone: 'Not/AZone' });
+    expect(bad.status).toBe(400);
+    expect(await bad.text()).toContain('Invalid IANA timezone');
+
+    // Finish marks setup complete; home serves the standup list from now on.
+    const done = await post({ action: 'finish' });
+    expect(done.status).toBe(303);
+    expect(done.headers.get('location')).toBe('/dashboard');
+    expect((await settings.get()).setupComplete).toBe(true);
+    expect(await (await get('/dashboard')).text()).toContain('Standups');
+  });
+
+  it('saves one value per box and enforces the token sign-in lockout guard', async () => {
+    const { url, settings } = await startServer();
+    const post = (body: Record<string, string>) =>
+      fetch(`${url}/dashboard/settings`, {
+        method: 'POST',
+        headers: {
+          cookie: 'asyncup_dash=dash-secret',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(body).toString(),
+        redirect: 'manual',
+      });
+
+    // Per-field save with validation.
+    expect((await post({ section: 'field', key: 'chatAudience', value: 'not-a-number' })).status).toBe(400);
+    expect((await post({ section: 'field', key: 'chatAudience', value: '987654' })).status).toBe(302);
+    expect((await settings.get()).chatAudience).toBe('987654');
+    expect((await post({ section: 'field', key: 'nope', value: 'x' })).status).toBe(400);
+
+    // Empty save keeps a stored secret; the clear checkbox wipes it.
+    await settings.update({ llmApiKey: 'sk-keepme' });
+    expect((await post({ section: 'field', key: 'llmApiKey', value: '' })).status).toBe(302);
+    expect((await settings.get()).llmApiKey).toBe('sk-keepme');
+    expect((await post({ section: 'field', key: 'llmApiKey', value: '', clear: 'on' })).status).toBe(302);
+    expect((await settings.get()).llmApiKey).toBe('');
+
+    // Token sign-in cannot be switched off while it is the only way in.
+    const refused = await post({ section: 'field', key: 'tokenSignIn' });
+    expect(refused.status).toBe(400);
+    expect(await refused.text()).toContain('Configure Google or SAML');
+    expect((await settings.get()).tokenSignIn).toBe(true);
+
+    // With Google sign-in configured the switch works — and the token dies.
+    await settings.update({ oauthClientId: 'x.apps.googleusercontent.com', oauthClientSecret: 'GOCSPX-x' });
+    expect((await post({ section: 'field', key: 'tokenSignIn' })).status).toBe(302);
+    expect((await settings.get()).tokenSignIn).toBe(false);
+    const denied = await fetch(`${url}/dashboard`, { headers: { cookie: 'asyncup_dash=dash-secret' } });
+    expect(denied.status).toBe(401);
+    expect(await denied.text()).not.toContain('name="token"'); // form gone from the sign-in page
+
+    // Clearing the OAuth client now would remove the last way in — refused.
+    const lockout = await fetch(`${url}/dashboard/settings`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ section: 'field', key: 'oauthClientId', value: '' }).toString(),
+    });
+    expect(lockout.status).toBe(401); // token access is off, so even the request is unauthenticated
+    // Re-enable via the documented DB path: delete the row (fresh service sees the default again).
+    await settings.update({ tokenSignIn: true });
+    const restored = await fetch(`${url}/dashboard`, { headers: { cookie: 'asyncup_dash=dash-secret' } });
+    expect(restored.status).toBe(200);
   });
 
   it('updates configuration via the form and validates input', async () => {

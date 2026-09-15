@@ -46,12 +46,17 @@ database.
 ### 1.2 Connect Google Chat
 
 Follow the [Google Chat setup guide](./google-chat-setup): create a GCP
-project, enable the Chat API, create a service account, point the Chat app
-at `https://<your-host>/chat/events`, then open
-`https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` and paste the
-project **number** and the service-account key into Settings. Until the
-audience is set, AsyncUp **refuses to process events** (fail closed) and the
-dashboard shows an action-needed banner.
+project, enable the Chat API, create a service account, and point the Chat
+app at `https://<your-host>/chat/events`. Then open
+`https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` — on a fresh
+install the dashboard opens the **setup walkthrough**: pick a sign-in
+method (Google, SAML, or stay token-only), paste the project **number**
+and service-account key, set workspace defaults, optionally enable AI
+summaries, and finish onto the home page. Every step can be skipped and
+everything can be changed later in Settings (the walkthrough itself is
+re-runnable from `/dashboard/setup`). Until the audience is set, AsyncUp
+**refuses to process events** (fail closed) and the dashboard shows an
+action-needed banner.
 
 Then make the app installable for your people — the
 [distribution guide](./distribution) covers the 5-person allowlist path
@@ -151,7 +156,16 @@ lists everything open with age and tags.
 ### 2.5 The admin web console
 
 Workspace admins sign straight into `/dashboard` (Google or SAML); operators
-can always use `?token=`. It covers app settings, per-standup config, roster
+can use `?token=` while token sign-in is enabled. Once Google or SAML works
+you can switch the token off (Settings → Sign-in & consoles → Token
+sign-in). If you later lose the other method, re-enable it directly in the
+database and restart:
+
+```sql
+DELETE FROM settings WHERE key = 'tokenSignIn';
+```
+
+The console covers app settings, per-standup config, roster
 management (mandatory/away/admin/remove for people already known to Chat),
 Run now, charts, history and CSV. Adding *new* people happens in Chat
 (`add @user`) because it needs a Chat identity.
@@ -247,7 +261,7 @@ All token comparisons are constant-time; ✱ = covered by the rate limiter
 | `POST /chat/events` | Google-signed JWT (verified against your audience) | Chat webhook — refuses events until the audience is configured |
 | `POST /tick` ✱ | Bearer tick token (open until one exists) | External cron for scale-to-zero |
 | `GET /export?standupId=N&days=D` ✱ | Bearer export token (404 until one exists) | CSV, D clamped 1–365 |
-| `GET /dashboard`, `/dashboard/settings`, `/dashboard/standup/:id[...]` ✱ | Admin session or `?token=`/cookie | Admin console (home, settings, standup page, run-now, roster actions, per-standup CSV, run pages) |
+| `GET /dashboard`, `/dashboard/setup`, `/dashboard/settings`, `/dashboard/standup/:id[...]` ✱ | Admin session or `?token=`/cookie (token only while token sign-in is enabled) | Admin console (home, setup walkthrough, settings, standup page, run-now, roster actions, per-standup CSV, run pages) |
 | `GET /me`, `POST /me/timezone`, `POST /me/vacation` ✱ | Session | User console |
 | `GET /auth/google`, `GET /auth/callback`, `POST /auth/logout` ✱ | — (OAuth state nonce) | Google sign-in |
 | `GET /auth/saml`, `POST /auth/saml/acs`, `GET /auth/saml/metadata` ✱ | — (signed assertions) | SAML sign-in + SP metadata |
@@ -268,12 +282,16 @@ All token comparisons are constant-time; ✱ = covered by the rate limiter
 | `ADAPTER` | `google` | `fake` for a credential-free local demo |
 | `TENANT_ID` | `default` | Tenant scoping (multi-tenant installs) |
 
-**Dashboard settings** (stored in the DB, secrets encrypted, applied live):
+**Dashboard settings** (stored in the DB, secrets encrypted, applied live;
+each value has its own box and saves on its own):
 Chat audience + service-account key · AI provider/key/model · default
 timezone · Calendar OOO · Workspace admin email · OAuth client ·
 SAML IdP (entity ID, SSO URL, certificate, admin attribute + group) ·
+token sign-in on/off (off only reachable once Google or SAML works;
+recover with `DELETE FROM settings WHERE key = 'tokenSignIn'` + restart) ·
 tick / export / SCIM tokens. Secrets are write-only — the UI shows *that*
-they're set, never the value.
+they're set, never the value. The settings UI refuses any change that
+would remove the last working sign-in method.
 
 ### 4.4 Webhooks {#webhooks-ref}
 

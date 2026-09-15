@@ -29,6 +29,15 @@ export interface AppSettings {
   samlAdminGroup: string;
   /** Bearer token for the SCIM 2.0 provisioning endpoint. Empty = off. */
   scimToken: string;
+  /**
+   * Whether DASHBOARD_TOKEN is accepted for dashboard sign-in. Off is only
+   * reachable once Google or SAML sign-in works; recover from a lockout by
+   * deleting the row (DELETE FROM settings WHERE key = 'tokenSignIn') and
+   * restarting — settings are cached in memory.
+   */
+  tokenSignIn: boolean;
+  /** Set when the first-run walkthrough finishes (or is skipped). */
+  setupComplete: boolean;
   llmProvider: '' | 'anthropic' | 'openai';
   llmApiKey: string;
   llmModel: string;
@@ -50,6 +59,8 @@ export const SETTING_DEFAULTS: AppSettings = {
   samlAdminAttribute: 'groups',
   samlAdminGroup: 'asyncup-admins',
   scimToken: '',
+  tokenSignIn: true,
+  setupComplete: false,
   llmProvider: '',
   llmApiKey: '',
   llmModel: '',

@@ -150,6 +150,32 @@ export function layout(title: string, active: NavState, body: string, opts: { us
   /* master-toggle reveal: fields hidden until the checkbox is on */
   .gated{display:none}
   .ai-form:has(input[name="aiOn"]:checked) .gated{display:block}
+  .ai-grp:has(option[value="anthropic"]:checked) .gated,
+  .ai-grp:has(option[value="openai"]:checked) .gated{display:block}
+  /* one value, one box */
+  .field{border:1px solid var(--ink-faint);border-radius:10px;background:rgba(255,255,255,.55);padding:.75rem 1rem .85rem;margin:.7rem 0}
+  .field form{margin:0}
+  .f-head{display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}
+  .f-label{font-weight:700;font-size:.95rem;color:var(--ink-deep)}
+  .f-head .chip{margin-left:auto}
+  .f-head small{margin-left:0}
+  .f-hint{margin:.25rem 0 .45rem;font-size:.85rem;color:var(--muted)}
+  .f-row{display:flex;gap:.6rem;align-items:flex-start;flex-wrap:wrap}
+  .f-row input:not([type=checkbox]),.f-row select{flex:1;min-width:220px;max-width:100%;margin-top:0}
+  .f-row textarea{flex-basis:100%;margin-top:0}
+  .f-row .btn{margin-top:0;padding:.45rem 1.1rem}
+  .f-clear{margin:.4rem 0 0;font-size:.85rem;color:var(--muted)}
+  .subhead{font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:1.2rem 0 .1rem}
+  /* setup walkthrough stepper */
+  .stepper{display:flex;gap:.35rem;align-items:center;margin:.4rem 0 1.1rem;flex-wrap:wrap}
+  .stepper .st{display:flex;gap:.45rem;align-items:center;padding:.3rem .8rem;border-radius:999px;font-size:.88rem;color:var(--muted)}
+  .stepper .st .n{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--ink-faint);font-size:.76rem;font-weight:700;background:#fff}
+  .stepper .st.cur{background:rgba(255,174,82,.14);color:var(--ink-deep);font-weight:600}
+  .stepper .st.cur .n{background:var(--amber);border-color:var(--amber);color:#3b2204}
+  .stepper .st.done .n{background:#e8f5ec;border-color:#bfe3cb;color:#176a37}
+  .stepper .sep{color:var(--ink-faint)}
+  .wiz-actions{display:flex;gap:.8rem;align-items:center;margin-top:1rem;flex-wrap:wrap}
+  .wiz-actions .skip{color:var(--muted);font-size:.9rem}
   input.wide,select.wide{max-width:100%}
   label>input,label>select,label>textarea{display:block}
   .inline-form{display:inline}
@@ -168,13 +194,14 @@ export function layout(title: string, active: NavState, body: string, opts: { us
   .tag{background:rgba(21,67,95,.08);border-radius:4px;padding:.05rem .4rem;font-size:.78rem;margin-left:.3rem}
   .chip{font-size:.75rem;font-weight:700;border-radius:999px;padding:.12rem .6rem}
   .chip.on{background:#e8f5ec;color:#176a37}.chip.off{background:rgba(21,67,95,.08);color:var(--muted)}
+  .chip.warn{background:#fdf3ef;color:#a33a17}
   .cols{display:grid;grid-template-columns:1.1fr .9fr;gap:1.1rem}
   @media(max-width:760px){.cols{grid-template-columns:1fr}}
   .sub h3{margin:.1rem 0 .5rem}
-  .token-row{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;padding:.8rem 0;border-bottom:1px solid var(--ink-faint)}
-  .token-row:last-child{border-bottom:none}
-  .token-row small{display:block;margin:.1rem 0 .35rem}
-  .token-actions{display:flex;gap:.5rem;flex-shrink:0}
+  .token-row{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}
+  .token-row>div:first-child{flex:1}
+  .token-actions{display:flex;gap:.5rem;flex-shrink:0;margin-top:.2rem}
+  .token-actions .btn{margin-top:0}
   .reveal{margin-top:.5rem;background:#fff7ea;border:1px dashed var(--amber);border-radius:8px;padding:.5rem .8rem;font-size:.85rem}
   .reveal code{display:block;font-family:var(--mono);font-size:.85rem;margin-top:.25rem;word-break:break-all}
   /* setup checklist — the logo's ascending bars as a progress meter */
