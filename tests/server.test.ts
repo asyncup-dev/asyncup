@@ -34,6 +34,13 @@ afterEach(() => {
 });
 
 describe('server', () => {
+  it('redirects the root to the user console', async () => {
+    const { url } = await startServer();
+    const res = await fetch(`${url}/`, { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/me');
+  });
+
   it('responds to health checks', async () => {
     const { url } = await startServer();
     const res = await fetch(`${url}/healthz`);
