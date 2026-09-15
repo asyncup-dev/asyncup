@@ -75,6 +75,19 @@ export interface Poll {
   closedAt: string | null;
 }
 
+export interface ScimUser {
+  /** SCIM resource id (uuid, ours). */
+  id: string;
+  externalId: string | null;
+  /** IdP userName — unique, usually the email. */
+  userName: string;
+  displayName: string | null;
+  email: string | null;
+  /** Chat resource name "users/<id>" once resolved via the Directory. */
+  chatUserName: string | null;
+  active: boolean;
+}
+
 export interface PollVote {
   pollId: number;
   userName: string;

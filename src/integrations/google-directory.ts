@@ -31,15 +31,17 @@ export class GoogleDirectory implements UserDirectory {
     });
     try {
       const res = await jwt.request<{
+        id?: string;
         primaryEmail?: string;
         isAdmin?: boolean;
         isDelegatedAdmin?: boolean;
         suspended?: boolean;
       }>({
         url: `https://admin.googleapis.com/admin/directory/v1/users/${encodeURIComponent(userKey)}`,
-        params: { fields: 'primaryEmail,isAdmin,isDelegatedAdmin,suspended' },
+        params: { fields: 'id,primaryEmail,isAdmin,isDelegatedAdmin,suspended' },
       });
       return {
+        id: res.data.id ?? null,
         email: res.data.primaryEmail ?? null,
         isAdmin: !!(res.data.isAdmin || res.data.isDelegatedAdmin),
         suspended: !!res.data.suspended,

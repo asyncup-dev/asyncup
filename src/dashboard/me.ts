@@ -11,6 +11,8 @@ export interface MeDeps {
   now?: () => DateTime;
   /** Whether Google sign-in is configured (renders the login button). */
   signInEnabled: () => Promise<boolean>;
+  /** Whether SAML sign-in is configured (renders the SSO button). */
+  samlEnabled?: () => Promise<boolean>;
 }
 
 /**
@@ -25,6 +27,7 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
     const session = sessionFrom(req, deps.secretKey);
     if (session) return session;
     const enabled = deps.secretKey && (await deps.signInEnabled());
+    const saml = deps.secretKey && (await deps.samlEnabled?.());
     res.status(401).send(
       layout(
         'Sign in — AsyncUp',
@@ -32,11 +35,12 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
         `<section class="card" style="max-width:420px;margin:3rem auto;text-align:center">
           <div class="kicker">My standups</div>
           <h2>Sign in to see your standups</h2>
+          ${enabled ? '<a class="btn" href="/auth/google">Sign in with Google</a>' : ''}
+          ${saml ? `<p${enabled ? ' style="margin-top:.6rem"' : ''}><a class="btn${enabled ? ' ghost' : ''}" href="/auth/saml">Sign in with SSO (SAML)</a></p>` : ''}
           ${
-            enabled
-              ? `<a class="btn" href="/auth/google">Sign in with Google</a>
-                 <p><small class="muted">Workspace admins land in the admin dashboard automatically.</small></p>`
-              : `<p class="muted">Google sign-in isn't configured yet — an admin can set the OAuth client
+            enabled || saml
+              ? '<p><small class="muted">Workspace admins land in the admin dashboard automatically.</small></p>'
+              : `<p class="muted">Sign-in isn't configured yet — an admin can set the OAuth client or SAML IdP
                  in dashboard settings.</p>`
           }
         </section>`,
@@ -45,14 +49,19 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
     return null;
   };
 
+  // Google sign-ins carry the Chat user id; SAML sign-ins may only carry an
+  // email — then the cached email map (Chat events / Directory) links them.
+  const chatUserName = async (session: Session): Promise<string | null> =>
+    session.sub ? `users/${session.sub}` : repo.findUserNameByEmail(session.email);
+
   app.get('/me', async (req, res) => {
     const session = await requireSession(req, res);
     if (!session) return;
-    const userName = `users/${session.sub}`;
+    const userName = (await chatUserName(session)) ?? '';
     const now = (deps.now ?? (() => null))();
 
-    const standups = await repo.listStandupsForUser(userName);
-    const timezone = await repo.getUserTimezone(userName);
+    const standups = userName ? await repo.listStandupsForUser(userName) : [];
+    const timezone = userName ? await repo.getUserTimezone(userName) : null;
     const onVacation =
       standups.length > 0 &&
       (await repo.listParticipants(standups[0]!.id)).find((p) => p.userName === userName)?.onVacation === true;
@@ -91,7 +100,13 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
         ${typeof req.query.notice === 'string' ? `<div class="toast ok">${esc(req.query.notice)}</div>` : ''}
         <section class="card">
           <div class="kicker">My standups</div>
-          ${standups.length === 0 ? '<p class="muted">You are not on any standup roster yet — ask an admin to <code>add</code> you in the team space.</p>' : ''}
+          ${
+            !userName
+              ? '<p class="muted">Your account isn\'t linked to Google Chat yet — it links automatically the first time you use the AsyncUp bot in Chat (or when an admin configures the Directory integration).</p>'
+              : standups.length === 0
+                ? '<p class="muted">You are not on any standup roster yet — ask an admin to <code>add</code> you in the team space.</p>'
+                : ''
+          }
           ${standups.length ? `<table><tr><th>Standup</th><th>Schedule</th><th>Today</th></tr>${rows.join('')}</table>` : ''}
         </section>
         <div class="cols">
@@ -124,20 +139,30 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
   app.post('/me/timezone', async (req, res) => {
     const session = await requireSession(req, res);
     if (!session) return;
+    const userName = await chatUserName(session);
+    if (!userName) {
+      res.redirect(`/me?notice=${encodeURIComponent('Account not linked to Chat yet.')}`);
+      return;
+    }
     const tz = String(req.body?.timezone ?? '').trim();
     if (tz && !IANAZone.isValidZone(tz)) {
       res.redirect(`/me?notice=${encodeURIComponent(`Invalid IANA timezone: ${tz}`)}`);
       return;
     }
-    await repo.setTimezoneForUser(`users/${session.sub}`, tz || null);
+    await repo.setTimezoneForUser(userName, tz || null);
     res.redirect(`/me?notice=${encodeURIComponent(tz ? `Prompts now follow ${tz}.` : "Following each standup's timezone.")}`);
   });
 
   app.post('/me/vacation', async (req, res) => {
     const session = await requireSession(req, res);
     if (!session) return;
+    const userName = await chatUserName(session);
+    if (!userName) {
+      res.redirect(`/me?notice=${encodeURIComponent('Account not linked to Chat yet.')}`);
+      return;
+    }
     const on = String(req.body?.state) === 'on';
-    await repo.setVacationForUser(`users/${session.sub}`, on);
+    await repo.setVacationForUser(userName, on);
     res.redirect(`/me?notice=${encodeURIComponent(on ? 'Vacation mode on — prompts paused.' : 'Welcome back — prompts resume.')}`);
   });
 }

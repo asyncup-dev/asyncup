@@ -36,7 +36,8 @@ export function openSession(secretKey: string, token: string | undefined): Sessi
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString()) as Session;
-    if (!session.sub || session.exp < DateTime.utc().toSeconds()) return null;
+    // SAML sign-ins without the Directory have no Google id — email carries identity.
+    if ((!session.sub && !session.email) || session.exp < DateTime.utc().toSeconds()) return null;
     return session;
   } catch {
     return null;

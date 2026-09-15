@@ -29,6 +29,8 @@ export interface DashboardDeps {
   secretKey?: string;
   /** Whether Google sign-in is configured (renders the login button). */
   signInEnabled?: () => Promise<boolean>;
+  /** Whether SAML sign-in is configured (renders the SSO button). */
+  samlEnabled?: () => Promise<boolean>;
 }
 
 const COOKIE = 'asyncup_dash';
@@ -71,6 +73,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       .find((c) => c.startsWith(`${COOKIE}=`));
     if (cookie && tokenEquals(decodeURIComponent(cookie.slice(COOKIE.length + 1)), token)) return true;
     const canSignIn = deps.secretKey && (await deps.signInEnabled?.());
+    const canSaml = deps.secretKey && (await deps.samlEnabled?.());
     res.status(401).send(
       layout(
         'Sign in — AsyncUp',
@@ -78,7 +81,9 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
         `<section class="card" style="max-width:420px;margin:3rem auto;text-align:center">
           <div class="kicker">Admin console</div>
           <h2>Sign in</h2>
-          ${canSignIn ? '<a class="btn" href="/auth/google">Sign in with Google</a><p><small class="muted">Workspace admins only — everyone else lands on their own <code>/me</code> page.</small></p>' : ''}
+          ${canSignIn ? '<a class="btn" href="/auth/google">Sign in with Google</a>' : ''}
+          ${canSaml ? `<p${canSignIn ? ' style="margin-top:.6rem"' : ''}><a class="btn${canSignIn ? ' ghost' : ''}" href="/auth/saml">Sign in with SSO (SAML)</a></p>` : ''}
+          ${canSignIn || canSaml ? '<p><small class="muted">Workspace admins only — everyone else lands on their own <code>/me</code> page.</small></p>' : ''}
           <p><small class="muted">Operators can always open <code>/dashboard?token=…</code> with the DASHBOARD_TOKEN.</small></p>
         </section>`,
       ),
@@ -187,7 +192,8 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
 
     if (typeof body.action === 'string') {
       const [verb, which] = body.action.split('-');
-      const field = which === 'tick' ? 'tickToken' : which === 'export' ? 'exportToken' : null;
+      const field =
+        which === 'tick' ? 'tickToken' : which === 'export' ? 'exportToken' : which === 'scim' ? 'scimToken' : null;
       if (field && verb === 'generate') {
         const fresh = generateToken();
         await settings.update({ [field]: fresh });
@@ -417,6 +423,26 @@ async function applySettings(settings: SettingsService, body: any): Promise<stri
     return null;
   }
 
+  if (section === 'saml') {
+    const entityId = String(body.samlIdpEntityId ?? '').trim();
+    const ssoUrl = String(body.samlIdpSsoUrl ?? '').trim();
+    const cert = String(body.samlIdpCert ?? '').trim();
+    if (ssoUrl && !/^https:\/\/\S+$/i.test(ssoUrl)) return 'The IdP SSO URL must be https://.';
+    if (cert && !cert.includes('CERTIFICATE') && !/^[A-Za-z0-9+/=\s]+$/.test(cert)) {
+      return 'The IdP certificate should be the PEM (or base64) X.509 certificate from your IdP.';
+    }
+    const attribute = String(body.samlAdminAttribute ?? '').trim() || 'groups';
+    const group = String(body.samlAdminGroup ?? '').trim() || 'asyncup-admins';
+    await settings.update({
+      samlIdpEntityId: entityId,
+      samlIdpSsoUrl: ssoUrl,
+      samlIdpCert: cert,
+      samlAdminAttribute: attribute,
+      samlAdminGroup: group,
+    });
+    return null;
+  }
+
   if (section === 'workspace') {
     const tz = String(body.defaultTimezone ?? '').trim();
     if (!IANAZone.isValidZone(tz)) return `Invalid IANA timezone: ${tz || '(empty)'} — e.g. Asia/Kolkata.`;
@@ -458,9 +484,9 @@ async function settingsPage(
     }
   });
 
-  const tokenRow = (field: 'tickToken' | 'exportToken', title: string, hint: string) => {
+  const tokenRow = (field: 'tickToken' | 'exportToken' | 'scimToken', title: string, hint: string) => {
     const value = s[field];
-    const which = field === 'tickToken' ? 'tick' : 'export';
+    const which = field === 'tickToken' ? 'tick' : field === 'exportToken' ? 'export' : 'scim';
     const reveal =
       revealed?.field === field
         ? `<div class="reveal">New token (copy now — it won't be shown again):<code>${esc(revealed.value)}</code></div>`
@@ -557,11 +583,29 @@ async function settingsPage(
     <button class="btn" type="submit">Save sign-in</button>
   </form>
 
+  <form method="post" action="/dashboard/settings" class="card">
+    <input type="hidden" name="section" value="saml">
+    <div class="kicker">05 · Enterprise SSO (SAML)</div>
+    <h2>Bring your own IdP</h2>
+    <label>IdP entity ID <input name="samlIdpEntityId" value="${esc(s.samlIdpEntityId)}" placeholder="e.g. https://accounts.google.com/o/saml2?idpid=…"></label>
+    <label>IdP SSO URL <input name="samlIdpSsoUrl" value="${esc(s.samlIdpSsoUrl)}" placeholder="https://…/sso/saml"></label>
+    <label>IdP certificate (X.509 PEM)
+      <textarea name="samlIdpCert" rows="4" placeholder="-----BEGIN CERTIFICATE-----">${esc(s.samlIdpCert)}</textarea>
+    </label>
+    <label>Admin attribute <input name="samlAdminAttribute" value="${esc(s.samlAdminAttribute)}"> <small class="muted">assertion attribute checked for the admin group</small></label>
+    <label>Admin group value <input name="samlAdminGroup" value="${esc(s.samlAdminGroup)}"> <small class="muted">members get the admin console; Google Directory admins always do</small></label>
+    <small class="muted">Point your IdP's custom SAML app at ACS URL <code>https://&lt;your-host&gt;/auth/saml/acs</code>
+    with entity ID <code>https://&lt;your-host&gt;/auth/saml/metadata</code> (SP metadata is served at that URL).
+    Works with Google Workspace, Okta, Entra, OneLogin — all in the open-source core.</small>
+    <button class="btn" type="submit">Save SAML</button>
+  </form>
+
   <section class="card">
-    <div class="kicker">05 · Access tokens</div>
+    <div class="kicker">06 · Access tokens</div>
     <h2>Machine endpoints</h2>
     ${tokenRow('tickToken', 'Scheduler tick token', 'Authorizes POST /tick for external cron (scale-to-zero deploys).')}
     ${tokenRow('exportToken', 'CSV export token', 'Enables GET /export. Endpoint stays off until a token exists.')}
+    ${tokenRow('scimToken', 'SCIM provisioning token', 'Bearer token for /scim/v2 (Okta, Entra, OneLogin). Deactivating a user there removes them from every roster.')}
   </section>`;
 }
 

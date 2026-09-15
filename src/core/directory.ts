@@ -3,6 +3,8 @@
  * — directory access is an optional integration, never a hard dependency.
  */
 export interface DirectoryUser {
+  /** Google user id — the digits in Chat's "users/<id>" resource names. */
+  id: string | null;
   email: string | null;
   /** Google Workspace super admin or delegated admin. */
   isAdmin: boolean;
