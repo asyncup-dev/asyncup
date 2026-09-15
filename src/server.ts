@@ -19,6 +19,8 @@ export interface ServerDeps {
   dashboardToken: string;
   /** Skip Chat webhook verification (fake adapter / local development). */
   skipVerification?: boolean;
+  /** Per-standup webhook signing secret (shown to admins on the dashboard). */
+  webhookSecret?: (standupId: number) => string;
   now?: () => DateTime;
 }
 
@@ -73,6 +75,7 @@ export function createServer(deps: ServerDeps): Express {
     token: deps.dashboardToken,
     now: deps.now,
     runNow: (standup) => scheduler.runNow(standup),
+    webhookSecret: deps.webhookSecret,
   });
 
   app.get('/healthz', async (_req, res) => {

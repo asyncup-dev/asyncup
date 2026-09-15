@@ -62,8 +62,18 @@ Zapier/n8n, or your own service:
   run closes (same numbers as the posted wrap-up).
 
 Deliveries time out after 5 s and failures are only logged — a dead webhook
-never breaks the standup. Use an HTTPS endpoint you control; there is no
-signing secret yet, so treat the URL itself as the credential.
+never breaks the standup.
+
+Every delivery is signed: the `X-AsyncUp-Signature` header carries
+`sha256=<hex>`, the HMAC-SHA256 of the raw request body with the standup's
+signing secret. The secret is shown on the standup's dashboard page (derived
+from `SECRET_KEY`, so rotating `SECRET_KEY` rotates it). Verify it in your
+receiver and reject anything that doesn't match:
+
+```js
+const expected = 'sha256=' + crypto.createHmac('sha256', SECRET).update(rawBody).digest('hex');
+crypto.timingSafeEqual(Buffer.from(header), Buffer.from(expected));
+```
 
 ## Data
 

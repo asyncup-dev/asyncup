@@ -1,3 +1,4 @@
+import { signWebhookBody } from './crypto.js';
 import type { RunSummary, Standup, Submission } from './types.js';
 
 export type WebhookEvent =
@@ -29,6 +30,8 @@ export class WebhookNotifier {
     private log: (msg: string) => void = (msg) => console.log(`[webhook] ${msg}`),
     private fetchFn: typeof fetch = fetch,
     private timeoutMs = 5_000,
+    /** Per-standup signing secret; empty string disables signing. */
+    private secretFor: (standupId: number) => string = () => '',
   ) {}
 
   async submission(standup: Standup, date: string, submission: Submission, edited: boolean): Promise<void> {
@@ -56,10 +59,16 @@ export class WebhookNotifier {
   private async send(standup: Standup, payload: WebhookEvent): Promise<void> {
     if (!standup.webhookUrl) return;
     try {
+      const body = JSON.stringify(payload);
+      const secret = this.secretFor(standup.id);
       const res = await this.fetchFn(standup.webhookUrl, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'user-agent': 'asyncup-webhook' },
-        body: JSON.stringify(payload),
+        headers: {
+          'content-type': 'application/json',
+          'user-agent': 'asyncup-webhook',
+          ...(secret ? { 'x-asyncup-signature': `sha256=${signWebhookBody(secret, body)}` } : {}),
+        },
+        body,
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (!res.ok) this.log(`${payload.event} → ${standup.webhookUrl} answered ${res.status}`);
