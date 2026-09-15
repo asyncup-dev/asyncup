@@ -66,11 +66,22 @@ const LOCKOUT_MSG =
 // ---------- save paths ----------
 
 export async function applySettings(settings: SettingsService, body: any): Promise<string | null> {
-  const section = String(body.section ?? '');
   const s = await settings.get();
+  const staged = stageChange(s, body);
+  if (typeof staged === 'string') return staged;
+  // The lockout guard runs on every save, whichever form was submitted —
+  // no input can select a path around it.
+  if (locksOut(s, staged)) return LOCKOUT_MSG;
+  if (Object.keys(staged).length) await settings.update(staged);
+  return null;
+}
+
+/** Validate the submitted form and stage its change — no writes here. */
+function stageChange(s: AppSettings, body: any): Partial<AppSettings> | string {
+  const section = String(body.section ?? '');
 
   // One box, one value — the settings page saves each field on its own.
-  if (section === 'field') return applyField(settings, s, body);
+  if (section === 'field') return stageField(s, body);
 
   // Grouped forms — the setup walkthrough saves a step at a time.
   if (section === 'chat') {
@@ -82,31 +93,29 @@ export async function applySettings(settings: SettingsService, body: any): Promi
       const keyErr = badSaKey(json);
       if (keyErr) return keyErr;
     }
-    await settings.update({ chatAudience, ...(json ? { serviceAccountJson: json } : {}) });
-    if (body.clear_serviceAccountJson === 'on') await settings.update({ serviceAccountJson: '' });
-    return null;
+    return {
+      chatAudience,
+      ...(json ? { serviceAccountJson: json } : {}),
+      ...(body.clear_serviceAccountJson === 'on' ? { serviceAccountJson: '' } : {}),
+    };
   }
 
   if (section === 'ai') {
     // Master toggle: unchecked turns the feature off regardless of the
     // (CSS-hidden but still submitted) fields below it.
-    if (body.aiOn !== 'on') {
-      await settings.update({ llmProvider: '', llmModel: '' });
-      if (body.clear_llmApiKey === 'on') await settings.update({ llmApiKey: '' });
-      return null;
-    }
+    const clearKey = body.clear_llmApiKey === 'on' ? { llmApiKey: '' } : {};
+    if (body.aiOn !== 'on') return { llmProvider: '', llmModel: '', ...clearKey };
     const llmProvider = String(body.llmProvider ?? 'anthropic');
     if (!['anthropic', 'openai'].includes(llmProvider)) return 'Unknown AI provider.';
     const llmModel = String(body.llmModel ?? '').trim();
     const key = String(body.llmApiKey ?? '').trim();
     if (llmProvider === 'openai' && !llmModel) return 'OpenAI needs an explicit model name.';
-    await settings.update({
+    return {
       llmProvider: llmProvider as AppSettings['llmProvider'],
       llmModel,
       ...(key ? { llmApiKey: key } : {}),
-    });
-    if (body.clear_llmApiKey === 'on') await settings.update({ llmApiKey: '' });
-    return null;
+      ...clearKey,
+    };
   }
 
   if (section === 'oauth') {
@@ -114,11 +123,11 @@ export async function applySettings(settings: SettingsService, body: any): Promi
     const idErr = badOauthId(clientId);
     if (idErr) return idErr;
     const secret = String(body.oauthClientSecret ?? '').trim();
-    const change = { oauthClientId: clientId, ...(secret ? { oauthClientSecret: secret } : {}) };
-    if (!clientId && locksOut(s, { ...change, oauthClientSecret: '' })) return LOCKOUT_MSG;
-    await settings.update(change);
-    if (body.clear_oauthClientSecret === 'on') await settings.update({ oauthClientSecret: '' });
-    return null;
+    return {
+      oauthClientId: clientId,
+      ...(secret ? { oauthClientSecret: secret } : {}),
+      ...(body.clear_oauthClientSecret === 'on' ? { oauthClientSecret: '' } : {}),
+    };
   }
 
   if (section === 'saml') {
@@ -128,16 +137,13 @@ export async function applySettings(settings: SettingsService, body: any): Promi
     if (err) return err;
     // Empty attribute/group values delete the row, falling back to the
     // SETTING_DEFAULTS — no fallback literals here.
-    const change = {
+    return {
       samlIdpEntityId: String(body.samlIdpEntityId ?? '').trim(),
       samlIdpSsoUrl: ssoUrl,
       samlIdpCert: cert,
       samlAdminAttribute: String(body.samlAdminAttribute ?? '').trim(),
       samlAdminGroup: String(body.samlAdminGroup ?? '').trim(),
     };
-    if (locksOut(s, change)) return LOCKOUT_MSG;
-    await settings.update(change);
-    return null;
   }
 
   if (section === 'workspace') {
@@ -147,12 +153,11 @@ export async function applySettings(settings: SettingsService, body: any): Promi
     const adminEmail = String(body.workspaceAdminEmail ?? '').trim();
     const emailErr = badAdminEmail(adminEmail);
     if (emailErr) return emailErr;
-    await settings.update({
+    return {
       defaultTimezone: tz,
       calendarOoo: body.calendarOoo === 'on',
       workspaceAdminEmail: adminEmail,
-    });
-    return null;
+    };
   }
 
   return 'Unknown settings section.';
@@ -181,33 +186,30 @@ const FIELD_CHECKS: Record<string, (v: string) => string | null> = {
   tokenSignIn: () => null,
 };
 
-async function applyField(settings: SettingsService, s: AppSettings, body: any): Promise<string | null> {
+function stageField(s: AppSettings, body: any): Partial<AppSettings> | string {
   const key = String(body.key ?? '');
   if (!(key in FIELD_CHECKS)) return 'Unknown setting.';
 
   if (BOOL_FIELDS.has(key)) {
     const on = body.value === 'on';
     if (key === 'tokenSignIn' && !on && !googleSignInOn(s) && !samlSignInOn(s)) {
+      // Friendlier wording than the generic lockout message; the guard in
+      // applySettings would refuse this change regardless.
       return 'Configure Google or SAML sign-in before turning the token off — otherwise nobody can sign in.';
     }
-    await settings.update({ [key]: on });
-    return null;
+    return { [key]: on };
   }
 
   const value = String(body.value ?? '').trim();
   if (SECRET_FIELDS.has(key)) {
-    if (body.clear === 'on') {
-      if (locksOut(s, { [key]: '' })) return LOCKOUT_MSG;
-      await settings.update({ [key]: '' });
-      return null;
-    }
-    if (!value) return null; // empty box = keep the stored secret
+    if (body.clear === 'on') return { [key]: '' };
+    if (!value) return {}; // empty box = keep the stored secret
   }
-  const err = value ? FIELD_CHECKS[key]!(value) : null;
-  if (err) return err;
-  if (!value && locksOut(s, { [key]: '' })) return LOCKOUT_MSG;
-  await settings.update({ [key]: value });
-  return null;
+  if (value) {
+    const err = FIELD_CHECKS[key]!(value);
+    if (err) return err;
+  }
+  return { [key]: value };
 }
 
 // ---------- rendering ----------
