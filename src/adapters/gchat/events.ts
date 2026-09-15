@@ -270,6 +270,15 @@ function dialogOk(message: string): object {
   };
 }
 
+/**
+ * Failure reply in the shape the event expects: dialog events need a DIALOG
+ * actionResponse — a plain text body silently drops the error in the modal.
+ */
+export function errorResponse(event: any): object {
+  const message = '⚠️ Something went wrong handling that — please try again.';
+  return event?.isDialogEvent ? dialogError(message) : { text: message };
+}
+
 function dialogError(message: string): object {
   return {
     actionResponse: {

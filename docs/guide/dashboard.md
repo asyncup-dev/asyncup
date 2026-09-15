@@ -16,8 +16,9 @@ The dashboard is **disabled until the token is set**. Open:
 https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>
 ```
 
-The token is then remembered in an HttpOnly cookie, so subsequent navigation
-doesn't need the query parameter.
+The token is then remembered in an HttpOnly cookie and the browser is
+immediately redirected to a clean URL, so the token doesn't linger in the
+address bar, browser history, or proxy access logs.
 
 ## What's there
 
@@ -42,5 +43,5 @@ Participants, admins, and the escalation contact are managed from Google Chat
 
 - Share the token only with people who should read your team's standups.
 - Always serve it behind HTTPS (same reverse proxy as the webhook).
-- The cookie is `HttpOnly` + `SameSite=Strict`, which also guards the config
-  form against cross-site request forgery.
+- The cookie is `HttpOnly` + `SameSite=Strict`, so browsers won't attach it
+  to cross-site requests (the main line of defence against request forgery).

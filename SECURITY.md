@@ -14,7 +14,8 @@ reproduction steps and the deployment mode (Docker, bare Node, proxy setup).
 
 - `POST /chat/events` should only be reachable via HTTPS, and
   the GCP project number must be set in dashboard settings — it cryptographically
-  verifies that requests come from Google Chat.
+  verifies that requests come from Google Chat. Until it is set, AsyncUp
+  refuses to process events (it answers with a setup notice instead).
 - Generate a tick token (dashboard → Settings) if `/tick` is internet-reachable.
 - Keep `SECRET_KEY` out of database backups — it decrypts stored credentials.
 - The SQLite database contains your team's standup answers — treat backups
