@@ -1,7 +1,8 @@
 import express, { type Express, type Request, type Response } from 'express';
 import { DateTime, IANAZone } from 'luxon';
 import { generateToken, tokenEquals } from '../core/crypto.js';
-import { moodEmoji, rangeStats } from '../core/insights.js';
+import { moodEmoji } from '../core/insights.js';
+import { blockersChart, moodChart, participationChart, weeklySeries } from './charts.js';
 import type { AppSettings, SettingsService } from '../core/settings.js';
 import {
   MOOD_EMOJI,
@@ -604,22 +605,16 @@ async function standupPage(
       </tr>`);
   }
 
-  const local = now.setZone(s.timezone);
-  const trendRows: string[] = [];
-  for (const i of [3, 2, 1, 0]) {
-    const start = local.minus({ weeks: i }).startOf('week');
-    const end = local.minus({ weeks: i }).endOf('week');
-    const stats = await rangeStats(repo, s.id, start.toISODate()!, end.toISODate()!);
-    if (stats.runCount === 0) {
-      trendRows.push(`<tr><td>${start.toFormat('dd LLL')}</td><td colspan="2">no runs</td></tr>`);
-      continue;
-    }
-    const pct = stats.expected === 0 ? 100 : Math.round((stats.submitted / stats.expected) * 100);
-    const mood = stats.moodCount ? Math.round((stats.moodSum / stats.moodCount) * 10) / 10 : null;
-    trendRows.push(`<tr><td>${start.toFormat('dd LLL')}–${end.toFormat('dd LLL')}</td><td>${pct}%</td><td>${
-      mood !== null ? `${moodEmoji(mood)} ${mood}/5` : '—'
-    }</td></tr>`);
-  }
+  const weekly = await weeklySeries(repo, s, now);
+  const trendRows = weekly
+    .map((w) =>
+      w.participationPct === null
+        ? `<tr><td>${w.label}</td><td colspan="3">no runs</td></tr>`
+        : `<tr><td>${w.label}</td><td>${w.participationPct}%</td><td>${
+            w.mood !== null ? `${moodEmoji(w.mood)} ${w.mood}/5` : '—'
+          }</td><td>${w.blockersOpened} / ${w.blockersResolved}</td></tr>`,
+    )
+    .join('');
 
   const blockers = (await repo.listOpenBlockers(s.id))
     .map((b) => `<li>⚠️ <b>${esc(b.displayName)}</b>: ${esc(b.text)} <small>(since ${b.openedDate}${b.escalatedAt ? ', escalated' : ''})</small></li>`)
@@ -682,8 +677,17 @@ async function standupPage(
       <ul>${blockers || '<li>✅ none</li>'}</ul>
     </section>
     <section class="card">
-      <div class="kicker">Trends</div>
-      <table><tr><th>Week</th><th>Participation</th><th>Mood</th></tr>${trendRows.join('')}</table>
+      <div class="kicker">Trends · last 8 weeks</div>
+      <h3 class="chart-title">Participation</h3>
+      ${participationChart(weekly)}
+      <h3 class="chart-title">Mood</h3>
+      ${moodChart(weekly)}
+      <h3 class="chart-title">Blockers</h3>
+      ${blockersChart(weekly)}
+      <details class="chart-data">
+        <summary>Data table</summary>
+        <table><tr><th>Week of</th><th>Participation</th><th>Mood</th><th>Blockers open/res.</th></tr>${trendRows}</table>
+      </details>
     </section>
   </div>
   </div>
@@ -783,6 +787,10 @@ function layout(title: string, active: 'home' | 'settings', body: string): strin
   .inline-form .btn{margin-top:0;padding:.15rem .6rem;font-size:.78rem}
   .row-actions{margin-left:.5rem;opacity:.35;transition:opacity .15s}
   li:hover .row-actions,h1:hover .row-actions{opacity:1}
+  .chart-title{font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:.9rem 0 .3rem}
+  .chart-title:first-of-type{margin-top:.2rem}
+  .chart-data{margin-top:.6rem}
+  .chart-data summary{cursor:pointer;font-size:.85rem;color:var(--muted)}
   .card.warn{border-color:#f3cfc2;background:#fdf3ef}
   .card.warn .kicker{color:#a33a17}
   .toast{border-radius:10px;padding:.6rem 1rem;margin:.4rem 0 1rem;font-weight:600;animation:rise .3s ease both}
