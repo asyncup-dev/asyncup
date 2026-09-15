@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventRouter } from '../src/adapters/gchat/events.js';
+import { errorResponse, EventRouter } from '../src/adapters/gchat/events.js';
 import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 async function makeRouter() {
@@ -29,6 +29,15 @@ function dialogSubmitEvent(
 }
 
 const FULL_FORM = { q0: 'Did X', q1: 'Will do Y', q2: 'none', mood: 'good' };
+
+describe('errorResponse', () => {
+  it('matches the event shape: DIALOG envelope for dialog events, text otherwise', () => {
+    expect(errorResponse({ isDialogEvent: true })).toMatchObject({
+      actionResponse: { type: 'DIALOG' },
+    });
+    expect(errorResponse({ type: 'MESSAGE' })).toMatchObject({ text: expect.stringContaining('⚠️') });
+  });
+});
 
 describe('EventRouter', () => {
   it('routes space messages to the command handler with sender and mentions', async () => {

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /**
  * AES-256-GCM for settings marked secret. The key is derived from the
@@ -31,4 +31,12 @@ export class SecretBox {
 
 export function generateToken(): string {
   return randomBytes(24).toString('base64url');
+}
+
+/** Constant-time token comparison; hashing first hides the length too. */
+export function tokenEquals(candidate: unknown, expected: string): boolean {
+  if (typeof candidate !== 'string' || !expected) return false;
+  const a = createHash('sha256').update(candidate).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
 }

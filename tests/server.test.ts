@@ -88,6 +88,44 @@ describe('server', () => {
     expect(body.text).toContain('Crew');
   });
 
+  it('refuses to process events while verification is unconfigured (fail closed)', async () => {
+    const { url, repo } = await startServer({ verify: true }); // no chatAudience set
+    const res = await fetch(`${url}/chat/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'MESSAGE',
+        space: { name: 'spaces/team', type: 'ROOM' },
+        message: { argumentText: ' setup Crew' },
+        user: { name: 'users/anyone', displayName: 'Anyone' },
+      }),
+    });
+    const body: any = await res.json();
+    expect(body.text).toContain('not connected');
+    // the unsigned command must not have executed
+    expect(await repo.listStandupsBySpace(TENANT, 'spaces/team')).toHaveLength(0);
+  });
+
+  it('answers failing dialog events in the dialog envelope, not plain text', async () => {
+    const { url } = await startServer();
+    const res = await fetch(`${url}/chat/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // runId "1" for a run that does not exist → router replies with a DIALOG
+      // actionStatus; a thrown error must come back in the same shape.
+      body: JSON.stringify({
+        type: 'CARD_CLICKED',
+        isDialogEvent: true,
+        common: { invokedFunction: 'submitStandup', parameters: { runId: '1' } },
+        space: { name: 'spaces/dm', type: 'DM' },
+        user: { name: 'users/alice', displayName: 'Alice' },
+      }),
+    });
+    const body: any = await res.json();
+    expect(body.actionResponse?.type).toBe('DIALOG');
+    expect(body.text).toBeUndefined();
+  });
+
   it('logs the concrete 401 reason and neutralizes log injection', async () => {
     const { url, settings } = await startServer({ verify: true });
     await settings.update({ chatAudience: '819177304171' }); // turns verification on

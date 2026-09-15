@@ -87,7 +87,11 @@ export class StandupService {
     input: SubmissionInput,
     opts: { resolveOthers: boolean },
   ): Promise<void> {
-    const texts = blockerAnswers(input);
+    // Collaborative blockers survive an edit; don't reopen them as duplicates.
+    const surviving = new Set(
+      (await this.repo.listBlockersOpenedBy(run.id, userName)).map((b) => b.text),
+    );
+    const texts = blockerAnswers(input).filter((t) => !surviving.has(t));
     for (const text of texts) {
       await this.repo.openBlocker({
         standupId: standup.id,

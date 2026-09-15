@@ -1,6 +1,6 @@
 import express, { type Express, type Request, type Response } from 'express';
 import { DateTime, IANAZone } from 'luxon';
-import { generateToken } from '../core/crypto.js';
+import { generateToken, tokenEquals } from '../core/crypto.js';
 import { moodEmoji, rangeStats } from '../core/insights.js';
 import type { AppSettings, SettingsService } from '../core/settings.js';
 import {
@@ -31,18 +31,24 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
   app.use('/dashboard', express.urlencoded({ extended: false }));
 
   const authed = (req: Request, res: Response): boolean => {
-    if (req.query.token === token) {
+    if (tokenEquals(req.query.token, token)) {
       res.setHeader(
         'Set-Cookie',
         `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/dashboard`,
       );
+      // Get the token out of the address bar (history, access logs, Referer):
+      // the cookie now carries the session, so bounce to a clean URL.
+      if (req.method === 'GET') {
+        res.redirect(303, req.path);
+        return false;
+      }
       return true;
     }
     const cookie = req.headers.cookie
       ?.split(';')
       .map((c) => c.trim())
       .find((c) => c.startsWith(`${COOKIE}=`));
-    if (cookie && decodeURIComponent(cookie.slice(COOKIE.length + 1)) === token) return true;
+    if (cookie && tokenEquals(decodeURIComponent(cookie.slice(COOKIE.length + 1)), token)) return true;
     res.status(401).send(layout('Unauthorized', 'home', `<div class="card"><p>Open <code>/dashboard?token=…</code> with your DASHBOARD_TOKEN.</p></div>`));
     return false;
   };
@@ -53,6 +59,16 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
     if (!authed(req, res)) return;
     const standups = await repo.listActiveStandups();
     const s = await settings.get();
+
+    const unverifiedWarning = s.chatAudience
+      ? ''
+      : `<section class="card warn">
+          <div class="kicker">Action needed</div>
+          <h2>Google Chat events are being refused</h2>
+          <p>Until the GCP project number is set in <a href="/dashboard/settings">Settings</a>, incoming
+          Chat webhooks cannot be verified, so AsyncUp answers every event with a setup notice instead of
+          processing it.</p>
+        </section>`;
 
     const steps = [
       { done: !!(s.chatAudience && s.serviceAccountJson), label: 'Connect Google Chat', hint: 'Project number + service-account key in Settings', href: '/dashboard/settings' },
@@ -108,7 +124,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       layout(
         'AsyncUp dashboard',
         'home',
-        `${checklist}
+        `${unverifiedWarning}${checklist}
         <section class="card">
           <div class="kicker">Teams</div>
           <h2>Standups</h2>
@@ -614,6 +630,8 @@ function layout(title: string, active: 'home' | 'settings', body: string): strin
   .btn.ghost{background:transparent;border:1.5px solid var(--ink-faint);color:var(--ink);padding:.35rem 1rem;font-weight:600}
   .btn.ghost:hover{border-color:var(--amber);background:rgba(255,174,82,.08)}
   .btn.ghost.danger{color:#a33a17}
+  .card.warn{border-color:#f3cfc2;background:#fdf3ef}
+  .card.warn .kicker{color:#a33a17}
   .toast{border-radius:10px;padding:.6rem 1rem;margin:.4rem 0 1rem;font-weight:600;animation:rise .3s ease both}
   .toast.ok{background:#e8f5ec;color:#176a37;border:1px solid #bfe3cb}
   .toast.err{background:#fdeeea;color:#a33a17;border:1px solid #f3cfc2}
