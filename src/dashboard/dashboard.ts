@@ -1,7 +1,8 @@
 import express, { type Express, type Request, type Response } from 'express';
 import { DateTime, IANAZone } from 'luxon';
 import { generateToken, tokenEquals } from '../core/crypto.js';
-import { moodEmoji, rangeStats } from '../core/insights.js';
+import { moodEmoji } from '../core/insights.js';
+import { blockersChart, moodChart, participationChart, weeklySeries } from './charts.js';
 import type { AppSettings, SettingsService } from '../core/settings.js';
 import {
   MOOD_EMOJI,
@@ -21,6 +22,8 @@ export interface DashboardDeps {
   now?: () => DateTime;
   /** Opens today's run immediately (scheduler.runNow); enables the button. */
   runNow?: (standup: Standup) => Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'>;
+  /** Per-standup webhook signing secret to show next to a configured URL. */
+  webhookSecret?: (standupId: number) => string;
 }
 
 const COOKIE = 'asyncup_dash';
@@ -198,7 +201,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       layout(
         `${standup.name} — AsyncUp`,
         'home',
-        await standupPage(repo, standup, now(), req.query.saved === '1', null, notice, !!deps.runNow),
+        await standupPage(repo, standup, now(), req.query.saved === '1', null, notice, !!deps.runNow, deps.webhookSecret),
       ),
     );
   });
@@ -287,7 +290,7 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
     }
     const error = await applyConfig(repo, standup, req.body);
     if (error) {
-      res.status(400).send(layout(`${standup.name} — AsyncUp`, 'home', await standupPage(repo, (await repo.getStandupById(standup.id))!, now(), false, error, null, !!deps.runNow)));
+      res.status(400).send(layout(`${standup.name} — AsyncUp`, 'home', await standupPage(repo, (await repo.getStandupById(standup.id))!, now(), false, error, null, !!deps.runNow, deps.webhookSecret)));
       return;
     }
     res.redirect(`/dashboard/standup/${standup.id}?saved=1`);
@@ -579,6 +582,7 @@ async function standupPage(
   error: string | null,
   notice: string | null = null,
   canRunNow = false,
+  webhookSecret?: (standupId: number) => string,
 ): Promise<string> {
   const roster = await repo.listParticipants(s.id);
   const rosterAction = (p: { userName: string }, action: string, label: string, danger = false) =>
@@ -621,22 +625,16 @@ async function standupPage(
       </tr>`);
   }
 
-  const local = now.setZone(s.timezone);
-  const trendRows: string[] = [];
-  for (const i of [3, 2, 1, 0]) {
-    const start = local.minus({ weeks: i }).startOf('week');
-    const end = local.minus({ weeks: i }).endOf('week');
-    const stats = await rangeStats(repo, s.id, start.toISODate()!, end.toISODate()!);
-    if (stats.runCount === 0) {
-      trendRows.push(`<tr><td>${start.toFormat('dd LLL')}</td><td colspan="2">no runs</td></tr>`);
-      continue;
-    }
-    const pct = stats.expected === 0 ? 100 : Math.round((stats.submitted / stats.expected) * 100);
-    const mood = stats.moodCount ? Math.round((stats.moodSum / stats.moodCount) * 10) / 10 : null;
-    trendRows.push(`<tr><td>${start.toFormat('dd LLL')}–${end.toFormat('dd LLL')}</td><td>${pct}%</td><td>${
-      mood !== null ? `${moodEmoji(mood)} ${mood}/5` : '—'
-    }</td></tr>`);
-  }
+  const weekly = await weeklySeries(repo, s, now);
+  const trendRows = weekly
+    .map((w) =>
+      w.participationPct === null
+        ? `<tr><td>${w.label}</td><td colspan="3">no runs</td></tr>`
+        : `<tr><td>${w.label}</td><td>${w.participationPct}%</td><td>${
+            w.mood !== null ? `${moodEmoji(w.mood)} ${w.mood}/5` : '—'
+          }</td><td>${w.blockersOpened} / ${w.blockersResolved}</td></tr>`,
+    )
+    .join('');
 
   const blockers = (await repo.listOpenBlockers(s.id))
     .map((b) => `<li>⚠️ <b>${esc(b.displayName)}</b>: ${esc(b.text)} <small>(since ${b.openedDate}${b.escalatedAt ? ', escalated' : ''})</small></li>`)
@@ -679,6 +677,12 @@ async function standupPage(
     <label>Escalate after (days) <input name="escalateAfterDays" value="${s.escalateAfterDays}"></label>
     ${escalateSelect}
     <label>Webhook URL <input name="webhookUrl" value="${esc(s.webhookUrl ?? '')}" placeholder="https://… (optional)"> <small class="muted">JSON POST on each submission and wrap-up</small></label>
+    ${
+      s.webhookUrl && webhookSecret?.(s.id)
+        ? `<p class="reveal">Deliveries carry <code>X-AsyncUp-Signature: sha256=HMAC_SHA256(body, secret)</code> — signing secret:
+           <code>${esc(webhookSecret(s.id))}</code></p>`
+        : ''
+    }
     <label>Questions (one per line)<textarea name="questions" rows="4">${esc(standupQuestions(s).join('\n'))}</textarea></label>
     <label class="inline"><input type="checkbox" name="moodEnabled" ${check(s.moodEnabled)}> Mood question</label>
     <label class="inline"><input type="checkbox" name="moodAnonymous" ${check(s.moodAnonymous)}> Anonymous mood</label>
@@ -699,8 +703,17 @@ async function standupPage(
       <ul>${blockers || '<li>✅ none</li>'}</ul>
     </section>
     <section class="card">
-      <div class="kicker">Trends</div>
-      <table><tr><th>Week</th><th>Participation</th><th>Mood</th></tr>${trendRows.join('')}</table>
+      <div class="kicker">Trends · last 8 weeks</div>
+      <h3 class="chart-title">Participation</h3>
+      ${participationChart(weekly)}
+      <h3 class="chart-title">Mood</h3>
+      ${moodChart(weekly)}
+      <h3 class="chart-title">Blockers</h3>
+      ${blockersChart(weekly)}
+      <details class="chart-data">
+        <summary>Data table</summary>
+        <table><tr><th>Week of</th><th>Participation</th><th>Mood</th><th>Blockers open/res.</th></tr>${trendRows}</table>
+      </details>
     </section>
   </div>
   </div>
@@ -800,6 +813,10 @@ function layout(title: string, active: 'home' | 'settings', body: string): strin
   .inline-form .btn{margin-top:0;padding:.15rem .6rem;font-size:.78rem}
   .row-actions{margin-left:.5rem;opacity:.35;transition:opacity .15s}
   li:hover .row-actions,h1:hover .row-actions{opacity:1}
+  .chart-title{font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:.9rem 0 .3rem}
+  .chart-title:first-of-type{margin-top:.2rem}
+  .chart-data{margin-top:.6rem}
+  .chart-data summary{cursor:pointer;font-size:.85rem;color:var(--muted)}
   .card.warn{border-color:#f3cfc2;background:#fdf3ef}
   .card.warn .kicker{color:#a33a17}
   .toast{border-radius:10px;padding:.6rem 1rem;margin:.4rem 0 1rem;font-weight:600;animation:rise .3s ease both}

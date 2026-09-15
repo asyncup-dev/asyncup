@@ -9,6 +9,7 @@ import type { OooChecker } from '../src/core/ooo.js';
 import { Scheduler } from '../src/core/scheduler.js';
 import { SettingsService } from '../src/core/settings.js';
 import { StandupService } from '../src/core/standup-service.js';
+import { deriveWebhookSecret } from '../src/core/crypto.js';
 import { WebhookNotifier } from '../src/core/webhooks.js';
 import { DEFAULT_QUESTIONS, type SubmissionInput } from '../src/core/types.js';
 import { Repo } from '../src/db/repo.js';
@@ -46,7 +47,9 @@ export async function makeStack(
 
   const settings = new SettingsService(repo, 'test-secret-key', clock.now);
   await settings.update({ defaultTimezone: TZ });
-  const webhooks = opts.webhookFetch ? new WebhookNotifier(() => {}, opts.webhookFetch) : null;
+  const webhooks = opts.webhookFetch
+    ? new WebhookNotifier(() => {}, opts.webhookFetch, 5_000, (id) => deriveWebhookSecret('test-secret-key', id))
+    : null;
   const service = new StandupService(repo, adapter, clock.now, webhooks);
   const blockers = new BlockerService(repo, adapter, clock.now);
   const scheduler = new Scheduler(

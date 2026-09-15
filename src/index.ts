@@ -15,6 +15,7 @@ import { PollService } from './core/poll-service.js';
 import { Scheduler, type SchedulerProviders } from './core/scheduler.js';
 import { SettingsService } from './core/settings.js';
 import { StandupService } from './core/standup-service.js';
+import { deriveWebhookSecret } from './core/crypto.js';
 import { WebhookNotifier } from './core/webhooks.js';
 import { createServer } from './server.js';
 
@@ -37,7 +38,9 @@ const adapter =
     ? new GoogleChatAdapter(repo, settings)
     : new FakeAdapter((msg) => console.log(`[fake-adapter] ${msg}`));
 
-const webhooks = new WebhookNotifier();
+const webhooks = new WebhookNotifier(undefined, undefined, undefined, (standupId) =>
+  deriveWebhookSecret(config.secretKey, standupId),
+);
 const service = new StandupService(repo, adapter, undefined, webhooks);
 const blockerService = new BlockerService(repo, adapter);
 const pollService = new PollService(repo, adapter);
@@ -78,6 +81,7 @@ const app = createServer({
   settings,
   dashboardToken: config.dashboardToken,
   skipVerification: config.adapter === 'fake',
+  webhookSecret: (standupId) => deriveWebhookSecret(config.secretKey, standupId),
 });
 if (config.dashboardToken) console.log('[dashboard] enabled at /dashboard');
 else console.warn('[dashboard] DASHBOARD_TOKEN is not set — the dashboard (and all app settings) are unavailable.');
