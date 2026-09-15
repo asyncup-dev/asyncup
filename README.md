@@ -43,6 +43,7 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **Anonymous mood** (`mood anon`) — cards hide who felt what; the wrap-up shows the team average.
 - **Web dashboard** — token-gated, server-rendered config + history UI baked into the same container (`DASHBOARD_TOKEN`).
 - **Insights** — `trends` (participation + mood over 4 weeks), weekly digest (`digest on`), CSV export endpoint.
+- **Outbound webhooks** — per-standup JSON POSTs on every submission and wrap-up; pipe standups into Sheets, Zapier/n8n, or your own service.
 - **AI summaries, bring your own key** — opt-in daily TL;DR and week-in-review via your Anthropic/OpenAI key; nothing leaves your infra otherwise.
 - **Team admins & multiple standups per space** — config restricted to admins; address standups by `#id`.
 - **Lightweight forever** — one container, SQLite inside (auto-migrating schema), scale-to-zero friendly (`/tick` + free-tier cron ≈ $0/month). Runs happily on 1 vCPU / 512 MB.

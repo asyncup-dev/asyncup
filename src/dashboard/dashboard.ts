@@ -412,6 +412,9 @@ async function applyConfig(repo: Repo, standup: Standup, body: any): Promise<str
     return 'Days must be a comma list of mon,tue,wed,thu,fri,sat,sun.';
   }
 
+  const webhookUrl = String(body.webhookUrl ?? '').trim();
+  if (webhookUrl && !/^https:\/\/\S+$/i.test(webhookUrl)) return 'Webhook URL must be https:// (or empty to disable).';
+
   const questionLines = String(body.questions ?? '')
     .split('\n')
     .map((q: string) => q.trim())
@@ -432,6 +435,7 @@ async function applyConfig(repo: Repo, standup: Standup, body: any): Promise<str
     digestEnabled: body.digestEnabled === 'on',
     aiEnabled: body.aiEnabled === 'on',
     escalateAfterDays: escalateDays,
+    webhookUrl: webhookUrl || null,
   });
   return null;
 }
@@ -497,6 +501,7 @@ async function standupPage(repo: Repo, s: Standup, now: DateTime, saved: boolean
     <label>Days <input name="days" value="${esc(s.days)}"></label>
     <label>Reminder (min before) <input name="reminderMinutesBefore" value="${s.reminderMinutesBefore}"></label>
     <label>Escalate after (days) <input name="escalateAfterDays" value="${s.escalateAfterDays}"></label>
+    <label>Webhook URL <input name="webhookUrl" value="${esc(s.webhookUrl ?? '')}" placeholder="https://… (optional)"> <small class="muted">JSON POST on each submission and wrap-up</small></label>
     <label>Questions (one per line)<textarea name="questions" rows="4">${esc(standupQuestions(s).join('\n'))}</textarea></label>
     <label class="inline"><input type="checkbox" name="moodEnabled" ${check(s.moodEnabled)}> Mood question</label>
     <label class="inline"><input type="checkbox" name="moodAnonymous" ${check(s.moodAnonymous)}> Anonymous mood</label>

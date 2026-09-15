@@ -49,6 +49,21 @@ service account's email), never the material itself.
 | `GET /dashboard` | [Web dashboard](./dashboard) — settings, config, history |
 | `GET /healthz` | Liveness check (pings the database) |
 
+## Outbound webhooks
+
+Give a standup a **Webhook URL** (dashboard → standup page) and AsyncUp POSTs
+JSON to it as things happen — the cheap path into Sheets (Apps Script),
+Zapier/n8n, or your own service:
+
+- `{"event": "submission", "standup": {…}, "date", "user", "answers", "mood",
+  "late", "edited"}` — on every submission and edit.
+- `{"event": "wrap_up", "standup": {…}, "date", "summary": {…}}` — when the
+  run closes (same numbers as the posted wrap-up).
+
+Deliveries time out after 5 s and failures are only logged — a dead webhook
+never breaks the standup. Use an HTTPS endpoint you control; there is no
+signing secret yet, so treat the URL itself as the credential.
+
 ## Data
 
 All state — standups, participants, admins, runs, submissions, blockers, app

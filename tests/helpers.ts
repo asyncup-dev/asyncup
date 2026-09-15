@@ -7,6 +7,7 @@ import type { OooChecker } from '../src/core/ooo.js';
 import { Scheduler } from '../src/core/scheduler.js';
 import { SettingsService } from '../src/core/settings.js';
 import { StandupService } from '../src/core/standup-service.js';
+import { WebhookNotifier } from '../src/core/webhooks.js';
 import { DEFAULT_QUESTIONS, type SubmissionInput } from '../src/core/types.js';
 import { Repo } from '../src/db/repo.js';
 
@@ -15,7 +16,9 @@ export const TENANT = 'default';
 
 let schemaCounter = 0;
 
-export async function makeStack(opts: { summarizer?: AiSummarizer | null; ooo?: OooChecker | null } = {}) {
+export async function makeStack(
+  opts: { summarizer?: AiSummarizer | null; ooo?: OooChecker | null; webhookFetch?: typeof fetch } = {},
+) {
   let repo: Repo;
   if (process.env.TEST_DATABASE_URL) {
     const schema = `t_${process.pid}_${Date.now()}_${schemaCounter++}`;
@@ -36,12 +39,21 @@ export async function makeStack(opts: { summarizer?: AiSummarizer | null; ooo?: 
 
   const settings = new SettingsService(repo, 'test-secret-key', clock.now);
   await settings.update({ defaultTimezone: TZ });
-  const service = new StandupService(repo, adapter, clock.now);
+  const webhooks = opts.webhookFetch ? new WebhookNotifier(() => {}, opts.webhookFetch) : null;
+  const service = new StandupService(repo, adapter, clock.now, webhooks);
   const blockers = new BlockerService(repo, adapter, clock.now);
-  const scheduler = new Scheduler(repo, adapter, service, clock.now, () => {}, {
-    summarizer: async () => opts.summarizer ?? null,
-    ooo: async () => opts.ooo ?? null,
-  });
+  const scheduler = new Scheduler(
+    repo,
+    adapter,
+    service,
+    clock.now,
+    () => {},
+    {
+      summarizer: async () => opts.summarizer ?? null,
+      ooo: async () => opts.ooo ?? null,
+    },
+    webhooks,
+  );
   const commands = new CommandHandler(repo, settings, clock.now, blockers);
 
   return { repo, adapter, service, blockers, settings, scheduler, commands, clock };
