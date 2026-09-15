@@ -200,6 +200,10 @@ CREATE TABLE settings (
   updated_at TEXT NOT NULL
 );
 `,
+  // 6 — outbound webhooks per standup
+  `
+ALTER TABLE standups ADD COLUMN webhook_url TEXT;
+`,
 ];
 
 /**
@@ -338,6 +342,10 @@ CREATE TABLE settings (
   updated_at TEXT NOT NULL
 );
 `,
+  // 6 — outbound webhooks per standup
+  `
+ALTER TABLE standups ADD COLUMN webhook_url TEXT;
+`,
 ];
 
 function toStandup(row: any): Standup {
@@ -359,6 +367,7 @@ function toStandup(row: any): Standup {
     escalateUserName: row.escalate_user_name ?? null,
     escalateDisplayName: row.escalate_display_name ?? null,
     escalateAfterDays: row.escalate_after_days,
+    webhookUrl: row.webhook_url ?? null,
     active: !!row.active,
   };
 }
@@ -549,6 +558,7 @@ export class Repo {
         | 'escalateUserName'
         | 'escalateDisplayName'
         | 'escalateAfterDays'
+        | 'webhookUrl'
         | 'active'
       >
     >,
@@ -568,6 +578,7 @@ export class Repo {
       escalateUserName: 'escalate_user_name',
       escalateDisplayName: 'escalate_display_name',
       escalateAfterDays: 'escalate_after_days',
+      webhookUrl: 'webhook_url',
       active: 'active',
     };
     const sets: string[] = [];

@@ -13,6 +13,7 @@ import { CommandHandler } from './core/commands.js';
 import { Scheduler, type SchedulerProviders } from './core/scheduler.js';
 import { SettingsService } from './core/settings.js';
 import { StandupService } from './core/standup-service.js';
+import { WebhookNotifier } from './core/webhooks.js';
 import { createServer } from './server.js';
 
 const config = loadConfig();
@@ -34,7 +35,8 @@ const adapter =
     ? new GoogleChatAdapter(repo, settings)
     : new FakeAdapter((msg) => console.log(`[fake-adapter] ${msg}`));
 
-const service = new StandupService(repo, adapter);
+const webhooks = new WebhookNotifier();
+const service = new StandupService(repo, adapter, undefined, webhooks);
 const blockerService = new BlockerService(repo, adapter);
 const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter);
 const router = new EventRouter(commands, service, blockerService, repo, config.tenantId);
@@ -56,7 +58,7 @@ const providers: SchedulerProviders = {
   },
 };
 
-const scheduler = new Scheduler(repo, adapter, service, undefined, undefined, providers);
+const scheduler = new Scheduler(repo, adapter, service, undefined, undefined, providers, webhooks);
 commands.attachRunner(scheduler);
 const timer = scheduler.start();
 scheduler.tick().catch((err) => console.error('[scheduler] initial tick failed:', err));

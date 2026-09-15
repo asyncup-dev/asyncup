@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
+import type { WebhookNotifier } from './webhooks.js';
 import type { Repo } from '../db/repo.js';
 import {
   blockerAnswers,
@@ -24,6 +25,7 @@ export class StandupService {
     private repo: Repo,
     private adapter: ChatAdapter,
     private now: () => DateTime = () => DateTime.utc(),
+    private webhooks: WebhookNotifier | null = null,
   ) {}
 
   /**
@@ -59,6 +61,7 @@ export class StandupService {
       await this.repo.deleteBlockersOpenedBy(run.id, userName);
       await this.trackBlockers(standup, run, userName, displayName, input, { resolveOthers: false });
       if (updated.messageName) await this.adapter.updateSubmission(standup, updated);
+      await this.webhooks?.submission(standup, run.date, updated, true);
       return { ok: true, late: false, edited: true };
     }
 
@@ -76,6 +79,7 @@ export class StandupService {
 
     const messageName = await this.adapter.postSubmission(standup, run, submission);
     if (messageName) await this.repo.setSubmissionMessageName(submission.id, messageName);
+    await this.webhooks?.submission(standup, run.date, submission, false);
     return { ok: true, late, edited: false };
   }
 

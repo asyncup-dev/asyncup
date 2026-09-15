@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+import { ANSWERS, makeStack, seedStandup } from './helpers.js';
+
+function captureFetch(calls: { url: string; body: any }[], status = 200): typeof fetch {
+  return (async (url: any, init: any) => {
+    calls.push({ url: String(url), body: JSON.parse(init.body) });
+    return new Response('', { status });
+  }) as typeof fetch;
+}
+
+describe('Webhooks', () => {
+  it('POSTs submission and wrap_up events to the configured URL', async () => {
+    const calls: { url: string; body: any }[] = [];
+    const stack = await makeStack({ webhookFetch: captureFetch(calls) });
+    const standup = await seedStandup(stack.repo);
+    await stack.repo.updateStandup(standup.id, { webhookUrl: 'https://hooks.example/asyncup' });
+
+    stack.clock.set('2026-06-10T09:30');
+    await stack.scheduler.tick();
+    const run = (await stack.repo.getRun(standup.id, '2026-06-10'))!;
+    await stack.service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe('https://hooks.example/asyncup');
+    expect(calls[0]!.body).toMatchObject({
+      event: 'submission',
+      user: 'Alice',
+      date: '2026-06-10',
+      late: false,
+      edited: false,
+    });
+
+    // editing sends another event, flagged edited
+    await stack.service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
+    expect(calls[1]!.body).toMatchObject({ event: 'submission', edited: true });
+
+    stack.clock.set('2026-06-10T11:30');
+    await stack.scheduler.tick();
+    const wrap = calls.find((c) => c.body.event === 'wrap_up')!;
+    expect(wrap.body.summary).toMatchObject({ mandatorySubmitted: 1 });
+  });
+
+  it('stays silent without a webhook URL and survives webhook failures', async () => {
+    const calls: { url: string; body: any }[] = [];
+    const stack = await makeStack({ webhookFetch: captureFetch(calls, 500) });
+    const standup = await seedStandup(stack.repo);
+
+    stack.clock.set('2026-06-10T09:30');
+    await stack.scheduler.tick();
+    const run = (await stack.repo.getRun(standup.id, '2026-06-10'))!;
+    await stack.service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
+    expect(calls).toHaveLength(0); // no URL configured
+
+    // now configure a URL that answers 500 — submissions must still succeed
+    await stack.repo.updateStandup(standup.id, { webhookUrl: 'https://hooks.example/dead' });
+    const result = await stack.service.submit(run.id, 'users/bob', 'Bob', ANSWERS);
+    expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+});

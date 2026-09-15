@@ -3,6 +3,7 @@ import type { ChatAdapter } from './adapter.js';
 import type { OooChecker } from './ooo.js';
 import type { Repo } from '../db/repo.js';
 import type { StandupService } from './standup-service.js';
+import type { WebhookNotifier } from './webhooks.js';
 import type { AiSummarizer } from '../ai/summarizer.js';
 import { buildWeeklyDigest, digestText, lastConfiguredWeekday } from './insights.js';
 import { standupDays, type Run, type Standup, type Weekday } from './types.js';
@@ -44,6 +45,7 @@ export class Scheduler {
     private now: () => DateTime = () => DateTime.utc(),
     private log: (msg: string) => void = (msg) => console.log(`[scheduler] ${msg}`),
     private providers: SchedulerProviders = {},
+    private webhooks: WebhookNotifier | null = null,
   ) {}
 
   start(intervalMs = 60_000): NodeJS.Timeout {
@@ -198,7 +200,9 @@ export class Scheduler {
     await this.repo.closeRun(run.id);
     this.log(`closed run ${run.id} for "${standup.name}" ${run.date}`);
     try {
-      await this.adapter.postSummary(standup, run, await this.service.buildSummary(run.id));
+      const summary = await this.service.buildSummary(run.id);
+      await this.webhooks?.wrapUp(standup, run.date, summary);
+      await this.adapter.postSummary(standup, run, summary);
     } catch (err) {
       this.log(`postSummary failed for run ${run.id}: ${err}`);
     }

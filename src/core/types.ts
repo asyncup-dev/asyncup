@@ -59,6 +59,8 @@ export interface Standup {
   escalateUserName: string | null;
   escalateDisplayName: string | null;
   escalateAfterDays: number;
+  /** JSON POSTs on submissions and wrap-ups; null = off. */
+  webhookUrl: string | null;
   active: boolean;
 }
 
