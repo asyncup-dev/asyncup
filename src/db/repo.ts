@@ -633,6 +633,23 @@ export class Repo {
     return result.changes > 0;
   }
 
+  /** DM self-service: sets the personal timezone in every standup the user is part of. */
+  async setTimezoneForUser(userName: string, timezone: string | null): Promise<number> {
+    const result = await this.db.run(
+      'UPDATE participants SET timezone = ? WHERE user_name = ? AND active = 1',
+      [timezone, userName],
+    );
+    return result.changes;
+  }
+
+  async getUserTimezone(userName: string): Promise<string | null> {
+    const row = await this.db.get(
+      'SELECT timezone FROM participants WHERE user_name = ? AND active = 1 AND timezone IS NOT NULL LIMIT 1',
+      [userName],
+    );
+    return row?.timezone ?? null;
+  }
+
   async removeParticipant(standupId: number, userName: string): Promise<boolean> {
     const result = await this.db.run(
       'UPDATE participants SET active = 0 WHERE standup_id = ? AND user_name = ?',
@@ -907,9 +924,27 @@ export class Repo {
     );
   }
 
-  /** Used when a submission is edited: re-derive its blockers from scratch. */
+  /**
+   * Used when a submission is edited: re-derive its blockers from scratch.
+   * Blockers that already gathered tags or updates are collaborative — they
+   * survive the edit (and keep their FK rows) and need an explicit resolve.
+   */
   async deleteBlockersOpenedBy(runId: number, userName: string): Promise<void> {
-    await this.db.run('DELETE FROM blockers WHERE opened_run_id = ? AND user_name = ?', [runId, userName]);
+    await this.db.run(
+      `DELETE FROM blockers WHERE opened_run_id = ? AND user_name = ?
+         AND NOT EXISTS (SELECT 1 FROM blocker_tags bt WHERE bt.blocker_id = blockers.id)
+         AND NOT EXISTS (SELECT 1 FROM blocker_updates bu WHERE bu.blocker_id = blockers.id)`,
+      [runId, userName],
+    );
+  }
+
+  /** Open blockers a user's submission opened in this run (edit re-derivation). */
+  async listBlockersOpenedBy(runId: number, userName: string): Promise<Blocker[]> {
+    const rows = await this.db.all(
+      'SELECT * FROM blockers WHERE opened_run_id = ? AND user_name = ? AND resolved_date IS NULL',
+      [runId, userName],
+    );
+    return rows.map(toBlocker);
   }
 
   /**

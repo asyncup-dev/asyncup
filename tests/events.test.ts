@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventRouter } from '../src/adapters/gchat/events.js';
+import { errorResponse, EventRouter } from '../src/adapters/gchat/events.js';
 import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
 
 async function makeRouter() {
@@ -29,6 +29,15 @@ function dialogSubmitEvent(
 }
 
 const FULL_FORM = { q0: 'Did X', q1: 'Will do Y', q2: 'none', mood: 'good' };
+
+describe('errorResponse', () => {
+  it('matches the event shape: DIALOG envelope for dialog events, text otherwise', () => {
+    expect(errorResponse({ isDialogEvent: true })).toMatchObject({
+      actionResponse: { type: 'DIALOG' },
+    });
+    expect(errorResponse({ type: 'MESSAGE' })).toMatchObject({ text: expect.stringContaining('⚠️') });
+  });
+});
 
 describe('EventRouter', () => {
   it('routes space messages to the command handler with sender and mentions', async () => {
@@ -96,6 +105,38 @@ describe('EventRouter', () => {
 
     const hint: any = await router.handle(dm('hello there'));
     expect(hint.text).toContain('Fill standup');
+  });
+
+  it('handles DM self-service timezone set/show/reset with case preserved', async () => {
+    const { router, repo } = await makeRouter();
+    const standup = await seedStandup(repo);
+    const dm = (text: string) => ({
+      type: 'MESSAGE',
+      space: { name: 'spaces/dm', spaceType: 'DIRECT_MESSAGE' },
+      message: { text },
+      user: { name: 'users/alice', displayName: 'Alice' },
+    });
+
+    const unset: any = await router.handle(dm('timezone'));
+    expect(unset.text).toContain("follow each standup's timezone");
+
+    const bad: any = await router.handle(dm('timezone Mars/Olympus'));
+    expect(bad.text).toContain('not a valid IANA timezone');
+
+    const set: any = await router.handle(dm('timezone Europe/Berlin'));
+    expect(set.text).toContain('Europe/Berlin');
+    expect(
+      (await repo.listParticipants(standup.id)).find((p) => p.userName === 'users/alice')?.timezone,
+    ).toBe('Europe/Berlin');
+
+    const show: any = await router.handle(dm('timezone'));
+    expect(show.text).toContain('Europe/Berlin');
+
+    const reset: any = await router.handle(dm('timezone reset'));
+    expect(reset.text).toContain('cleared');
+    expect(
+      (await repo.listParticipants(standup.id)).find((p) => p.userName === 'users/alice')?.timezone,
+    ).toBeNull();
   });
 
   it('opens a prefilled dialog from the prompt card', async () => {

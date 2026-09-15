@@ -459,7 +459,7 @@ export class CommandHandler {
     if (v !== 'on' && v !== 'off') return `Use \`on\` or \`off\`, e.g. \`${label.split(' ')[0]?.toLowerCase()} on\`.`;
     await this.repo.updateStandup(standup.id, { [field]: v === 'on' });
     if (field === 'aiEnabled' && v === 'on') {
-      return `✅ ${label} on. Requires LLM_PROVIDER + LLM_API_KEY in the server environment — summaries are skipped silently otherwise.`;
+      return `✅ ${label} on. Requires an AI provider and API key in the dashboard settings — summaries are skipped silently otherwise.`;
     }
     return `✅ ${label} ${v}.`;
   }
@@ -523,8 +523,8 @@ export class CommandHandler {
       `Export *${standup.name}* (#${standup.id}) as CSV via the HTTP endpoint:\n` +
       '`GET /export?standupId=' +
       String(standup.id) +
-      '&days=30` with header `Authorization: Bearer $EXPORT_TOKEN`.\n' +
-      'The endpoint is disabled until the EXPORT_TOKEN environment variable is set on the server.'
+      '&days=30` with header `Authorization: Bearer <export token>`.\n' +
+      'The endpoint is disabled until an export token is generated in the dashboard settings.'
     );
   }
 

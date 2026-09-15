@@ -206,7 +206,7 @@ describe('CommandHandler', () => {
     await commands.handle(ctx('setup'));
     expect(await commands.handle(ctx('mood off'))).toContain('Mood question off');
     expect(await commands.handle(ctx('digest on'))).toContain('Weekly digest on');
-    expect(await commands.handle(ctx('ai on'))).toContain('LLM_PROVIDER');
+    expect(await commands.handle(ctx('ai on'))).toContain('dashboard settings');
     expect(await commands.handle(ctx('ai banana'))).toContain('`on` or `off`');
     const standup = (await repo.listStandupsBySpace(TENANT, SPACE))[0]!;
     expect(standup.moodEnabled).toBe(false);
@@ -235,7 +235,7 @@ describe('CommandHandler', () => {
     expect(await commands.handle(ctx('trends'))).toContain('last 4 weeks');
     const exportReply = await commands.handle(ctx('export'));
     expect(exportReply).toContain('/export?standupId=');
-    expect(exportReply).toContain('EXPORT_TOKEN');
+    expect(exportReply).toContain('dashboard settings');
   });
 
   it('reports status including today’s progress with away handling', async () => {

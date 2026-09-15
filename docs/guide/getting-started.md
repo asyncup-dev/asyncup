@@ -1,6 +1,7 @@
 # Getting started
 
-AsyncUp asks every participant four questions in a DM each workday:
+AsyncUp asks every participant three questions in a DM each workday, plus a
+mood dropdown (on by default, toggleable with `mood on|off|anon`):
 
 1. What did you do yesterday?
 2. What will you do today?

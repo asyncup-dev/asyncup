@@ -44,8 +44,11 @@ describe('dashboard', () => {
       (await fetch(`${url}/dashboard`, { headers: { cookie: 'asyncup_dash=wrong' } })).status,
     ).toBe(401);
 
-    const viaQuery = await fetch(`${url}/dashboard?token=dash-secret`);
-    expect(viaQuery.status).toBe(200);
+    // A valid ?token= sets the cookie and immediately bounces to a clean URL
+    // so the token never lingers in history, logs, or Referer headers.
+    const viaQuery = await fetch(`${url}/dashboard?token=dash-secret`, { redirect: 'manual' });
+    expect(viaQuery.status).toBe(303);
+    expect(viaQuery.headers.get('location')).toBe('/dashboard');
     expect(viaQuery.headers.get('set-cookie')).toContain('asyncup_dash=');
 
     expect((await get('/dashboard')).status).toBe(200);

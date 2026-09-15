@@ -1,8 +1,9 @@
 import express, { type Express, type Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { DateTime } from 'luxon';
-import type { EventRouter } from './adapters/gchat/events.js';
+import { errorResponse, type EventRouter } from './adapters/gchat/events.js';
 import { ChatRequestVerifier } from './adapters/gchat/auth.js';
+import { tokenEquals } from './core/crypto.js';
 import type { SettingsService } from './core/settings.js';
 import type { Scheduler } from './core/scheduler.js';
 import type { Repo } from './db/repo.js';
@@ -37,17 +38,17 @@ export function createServer(deps: ServerDeps): Express {
   // The audience lives in DB settings and can change at runtime.
   let verifierCache: { audience: string; verifier: ChatRequestVerifier } | null = null;
   let warnedUnverified = false;
-  const getVerifier = async (): Promise<ChatRequestVerifier | null> => {
+  const getVerifier = async (): Promise<ChatRequestVerifier | 'unconfigured' | null> => {
     if (deps.skipVerification) return null;
     const { chatAudience } = await settings.get();
     if (!chatAudience) {
       if (!warnedUnverified) {
         warnedUnverified = true;
         console.warn(
-          '[server] Chat webhook verification is OFF — set the GCP project number in dashboard settings.',
+          '[server] Chat events cannot be verified until the GCP project number is set in dashboard settings — refusing to process them.',
         );
       }
-      return null;
+      return 'unconfigured';
     }
     if (verifierCache?.audience !== chatAudience) {
       // chatAudience may hold several space/comma-separated values (project
@@ -87,6 +88,13 @@ export function createServer(deps: ServerDeps): Express {
     const eventType = req.body?.type ?? 'unknown';
     console.log(`[chat] POST /chat/events type=${logSafe(eventType)}`);
     const verifier = await getVerifier();
+    if (verifier === 'unconfigured') {
+      // Fail closed: without an audience, any request could impersonate Chat.
+      res.json({
+        text: '⚠️ AsyncUp is not connected to Google Chat yet — an admin must set the GCP project number in the dashboard settings first.',
+      });
+      return;
+    }
     if (verifier) {
       const result = await verifier.verify(req.header('authorization'));
       if (!result.ok) {
@@ -99,7 +107,7 @@ export function createServer(deps: ServerDeps): Express {
       res.json(await router.handle(req.body));
     } catch (err) {
       console.error('[server] event handling failed:', err);
-      res.json({ text: '⚠️ Something went wrong handling that — please try again.' });
+      res.json(errorResponse(req.body));
     }
   });
 
@@ -107,7 +115,7 @@ export function createServer(deps: ServerDeps): Express {
   // the in-process interval doesn't run while the instance is suspended.
   app.post('/tick', async (req, res) => {
     const { tickToken } = await settings.get();
-    if (tickToken && bearerToken(req) !== tickToken) {
+    if (tickToken && !tokenEquals(bearerToken(req), tickToken)) {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
@@ -115,15 +123,16 @@ export function createServer(deps: ServerDeps): Express {
     res.json({ ok: true });
   });
 
-  // CSV export — disabled unless EXPORT_TOKEN is configured (the data is
-  // your team's standup answers; never expose it unauthenticated).
+  // CSV export — disabled until an export token is generated in dashboard
+  // settings (the data is your team's standup answers; never expose it
+  // unauthenticated).
   app.get('/export', async (req, res) => {
     const { exportToken } = await settings.get();
     if (!exportToken) {
       res.status(404).json({ error: 'export disabled — generate an export token in dashboard settings' });
       return;
     }
-    if (bearerToken(req) !== exportToken) {
+    if (!tokenEquals(bearerToken(req), exportToken)) {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
