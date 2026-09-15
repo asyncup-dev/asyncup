@@ -39,7 +39,10 @@ describe('dashboard', () => {
 
   it('rejects missing/wrong credentials and accepts the token via query or cookie', async () => {
     const { url, get } = await startServer();
-    expect((await get('/dashboard', false)).status).toBe(401);
+    const denied = await get('/dashboard', false);
+    expect(denied.status).toBe(401);
+    // operators get a token form, not just a hint
+    expect(await denied.text()).toContain('name="token"');
     expect(
       (await fetch(`${url}/dashboard`, { headers: { cookie: 'asyncup_dash=wrong' } })).status,
     ).toBe(401);

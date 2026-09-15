@@ -20,6 +20,8 @@ export function signInCard(opts: {
   heading: string;
   google: boolean;
   saml: boolean;
+  /** Render an operator-token entry form (the dashboard card only). */
+  tokenForm?: boolean;
   footnotes: string[];
 }): string {
   const { google, saml } = opts;
@@ -28,6 +30,14 @@ export function signInCard(opts: {
     <h2>${esc(opts.heading)}</h2>
     ${google ? '<a class="btn" href="/auth/google">Sign in with Google</a>' : ''}
     ${saml ? `<p${google ? ' style="margin-top:.6rem"' : ''}><a class="btn${google ? ' ghost' : ''}" href="/auth/saml">Sign in with SSO (SAML)</a></p>` : ''}
+    ${
+      opts.tokenForm
+        ? `<form method="get" action="/dashboard" style="margin-top:${google || saml ? '1rem' : '.4rem'}">
+            <input name="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off" style="max-width:260px">
+            <button class="btn ghost" type="submit">Enter with token</button>
+          </form>`
+        : ''
+    }
     ${opts.footnotes.map((n) => `<p><small class="muted">${n}</small></p>`).join('')}
   </section>`;
 }
