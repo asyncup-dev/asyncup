@@ -57,6 +57,32 @@ describe('Calendar OOO sync', () => {
     expect(summary.missingMandatory).not.toContain('Bob');
   });
 
+  it('backfills unknown emails from the Directory and caches them', async () => {
+    const checker = makeChecker(['carol@org.com']);
+    const lookups: string[] = [];
+    // No one has interacted — no stored emails; the Directory knows everyone.
+    const stack = await makeStack({
+      ooo: checker,
+      directory: {
+        async lookup(userKey: string) {
+          lookups.push(userKey);
+          return { email: `${userKey}@org.com`, isAdmin: false, suspended: false };
+        },
+      },
+    });
+    const standup = await seedStandup(stack.repo);
+
+    stack.clock.set('2026-06-10T09:30');
+    await stack.scheduler.tick();
+
+    // Chat resource names are "users/<id>" — the directory is queried by bare id.
+    expect(lookups.sort()).toEqual(['alice', 'bob', 'carol']);
+    expect(await stack.repo.getUserEmail('users/carol')).toBe('carol@org.com');
+    const run = (await stack.repo.getRun(standup.id, '2026-06-10'))!;
+    const carol = (await stack.repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/carol')!;
+    expect(carol.onVacation).toBe(true);
+  });
+
   it('treats checker failures as not-OOO', async () => {
     const failing: OooChecker = {
       async isOoo() {

@@ -15,6 +15,8 @@ export interface AppSettings {
   serviceAccountJson: string;
   defaultTimezone: string;
   calendarOoo: boolean;
+  /** Workspace admin impersonated for Directory API lookups. Empty = off. */
+  workspaceAdminEmail: string;
   llmProvider: '' | 'anthropic' | 'openai';
   llmApiKey: string;
   llmModel: string;
@@ -27,6 +29,7 @@ export const SETTING_DEFAULTS: AppSettings = {
   serviceAccountJson: '',
   defaultTimezone: 'UTC',
   calendarOoo: false,
+  workspaceAdminEmail: '',
   llmProvider: '',
   llmApiKey: '',
   llmModel: '',

@@ -4,6 +4,7 @@ import { AiSummarizer } from '../src/ai/summarizer.js';
 import { BlockerService } from '../src/core/blocker-service.js';
 import { CommandHandler } from '../src/core/commands.js';
 import { PollService } from '../src/core/poll-service.js';
+import type { UserDirectory } from '../src/core/directory.js';
 import type { OooChecker } from '../src/core/ooo.js';
 import { Scheduler } from '../src/core/scheduler.js';
 import { SettingsService } from '../src/core/settings.js';
@@ -18,7 +19,12 @@ export const TENANT = 'default';
 let schemaCounter = 0;
 
 export async function makeStack(
-  opts: { summarizer?: AiSummarizer | null; ooo?: OooChecker | null; webhookFetch?: typeof fetch } = {},
+  opts: {
+    summarizer?: AiSummarizer | null;
+    ooo?: OooChecker | null;
+    directory?: UserDirectory | null;
+    webhookFetch?: typeof fetch;
+  } = {},
 ) {
   let repo: Repo;
   if (process.env.TEST_DATABASE_URL) {
@@ -52,6 +58,7 @@ export async function makeStack(
     {
       summarizer: async () => opts.summarizer ?? null,
       ooo: async () => opts.ooo ?? null,
+      directory: async () => opts.directory ?? null,
     },
     webhooks,
   );

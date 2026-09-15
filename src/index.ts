@@ -8,6 +8,7 @@ import { EventRouter } from './adapters/gchat/events.js';
 import { createLlm } from './ai/llm.js';
 import { AiSummarizer } from './ai/summarizer.js';
 import { GoogleCalendarOoo } from './integrations/google-calendar.js';
+import { GoogleDirectory } from './integrations/google-directory.js';
 import { BlockerService } from './core/blocker-service.js';
 import { CommandHandler } from './core/commands.js';
 import { PollService } from './core/poll-service.js';
@@ -57,6 +58,11 @@ const providers: SchedulerProviders = {
     const s = await settings.get();
     if (!s.calendarOoo || !s.serviceAccountJson) return null;
     return new GoogleCalendarOoo(s.serviceAccountJson);
+  },
+  directory: async () => {
+    const s = await settings.get();
+    if (!s.workspaceAdminEmail || !s.serviceAccountJson) return null;
+    return new GoogleDirectory(s.serviceAccountJson, s.workspaceAdminEmail);
   },
 };
 

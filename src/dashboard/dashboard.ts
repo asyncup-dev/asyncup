@@ -380,7 +380,15 @@ async function applySettings(settings: SettingsService, body: any): Promise<stri
   if (section === 'workspace') {
     const tz = String(body.defaultTimezone ?? '').trim();
     if (!IANAZone.isValidZone(tz)) return `Invalid IANA timezone: ${tz || '(empty)'} — e.g. Asia/Kolkata.`;
-    await settings.update({ defaultTimezone: tz, calendarOoo: body.calendarOoo === 'on' });
+    const adminEmail = String(body.workspaceAdminEmail ?? '').trim();
+    if (adminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+      return `"${adminEmail}" doesn't look like an email address.`;
+    }
+    await settings.update({
+      defaultTimezone: tz,
+      calendarOoo: body.calendarOoo === 'on',
+      workspaceAdminEmail: adminEmail,
+    });
     return null;
   }
 
@@ -478,6 +486,12 @@ async function settingsPage(
     </label>
     <label class="inline big"><input type="checkbox" name="calendarOoo" ${s.calendarOoo ? 'checked' : ''}>
       Google Calendar OOO sync <small class="muted">auto-mark people away on out-of-office days (needs the service-account key + domain-wide delegation)</small>
+    </label>
+    <label>Workspace admin email
+      <input name="workspaceAdminEmail" value="${esc(s.workspaceAdminEmail)}" placeholder="admin@yourdomain.com (optional)">
+      <small class="muted">Enables Directory API lookups (impersonated for reads; needs the
+      <code>admin.directory.user.readonly</code> scope in domain-wide delegation). With it, Calendar OOO works
+      for people who never interacted with the bot.</small>
     </label>
     <button class="btn" type="submit">Save workspace</button>
   </form>

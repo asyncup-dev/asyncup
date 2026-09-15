@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { OooChecker } from './ooo.js';
+import { directoryKey, type UserDirectory } from './directory.js';
 import type { Repo } from '../db/repo.js';
 import type { StandupService } from './standup-service.js';
 import type { WebhookNotifier } from './webhooks.js';
@@ -30,6 +31,7 @@ function timeOn(date: string, time: string, zone: string): DateTime {
 export interface SchedulerProviders {
   summarizer?: () => Promise<AiSummarizer | null>;
   ooo?: () => Promise<OooChecker | null>;
+  directory?: () => Promise<UserDirectory | null>;
 }
 
 /**
@@ -181,9 +183,22 @@ export class Scheduler {
   private async applyCalendarOoo(standup: Standup, run: Run): Promise<void> {
     const ooo = await this.providers.ooo?.();
     if (!ooo) return;
+    const directory = (await this.providers.directory?.()) ?? null;
     for (const rp of await this.repo.listRunParticipants(run.id)) {
       if (rp.onVacation) continue;
-      const email = await this.repo.getUserEmail(rp.userName);
+      let email = await this.repo.getUserEmail(rp.userName);
+      if (!email && directory) {
+        // Directory backfill: works before the person has ever used the bot.
+        try {
+          const found = await directory.lookup(directoryKey(rp.userName));
+          if (found?.email) {
+            email = found.email;
+            await this.repo.setUserEmail(rp.userName, email);
+          }
+        } catch (err) {
+          this.log(`directory lookup failed for ${rp.userName}: ${err}`);
+        }
+      }
       if (!email) continue;
       try {
         if (await ooo.isOoo(email, run.date, standup.timezone)) {
