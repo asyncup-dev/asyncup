@@ -64,6 +64,41 @@ describe('Blocker collaboration', () => {
     expect(open.map((b) => b.text)).toEqual(['Waiting on API keys']); // tagged one survives
   });
 
+  it('editing a submission keeps tagged blockers (no FK violation) without duplicating them', async () => {
+    const stack = await makeStack();
+    const { standup, run, blocker } = await seedWithBlocker(stack);
+    await stack.commands.handle(ctx(`blocker ${blocker.id} tag @Bob`, [BOB]));
+
+    // Edit keeping the same blocker text: the tagged blocker must survive, once.
+    const edited = await stack.service.submit(
+      run.id,
+      ALICE.userName,
+      ALICE.displayName,
+      withBlocker('Waiting on API keys'),
+    );
+    expect(edited).toEqual({ ok: true, late: false, edited: true });
+    let open = await stack.repo.listOpenBlockers(standup.id);
+    expect(open.map((b) => b.text)).toEqual(['Waiting on API keys']);
+    expect(await stack.repo.listBlockerTags(blocker.id)).toHaveLength(1);
+
+    // Edit dropping the blocker: the tagged blocker still needs an explicit resolve.
+    await stack.service.submit(run.id, ALICE.userName, ALICE.displayName, ANSWERS);
+    open = await stack.repo.listOpenBlockers(standup.id);
+    expect(open.map((b) => b.id)).toEqual([blocker.id]);
+  });
+
+  it('editing a submission re-derives untouched blockers', async () => {
+    const stack = await makeStack();
+    const { standup, run } = await seedWithBlocker(stack);
+
+    await stack.service.submit(run.id, ALICE.userName, ALICE.displayName, withBlocker('New blocker text'));
+    const open = await stack.repo.listOpenBlockers(standup.id);
+    expect(open.map((b) => b.text)).toEqual(['New blocker text']);
+
+    await stack.service.submit(run.id, ALICE.userName, ALICE.displayName, ANSWERS);
+    expect(await stack.repo.listOpenBlockers(standup.id)).toHaveLength(0);
+  });
+
   it('acknowledge: records, notifies the owner, stops there for non-tagged users', async () => {
     const stack = await makeStack();
     const { blocker } = await seedWithBlocker(stack);
