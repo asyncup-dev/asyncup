@@ -10,6 +10,7 @@ import { clampExportDays } from '../core/validation.js';
 import type { Repo } from '../db/repo.js';
 import { esc, layout, notFound, signInCard } from './chrome.js';
 import { applySettings, settingsPage } from './settings-page.js';
+import { registerSetup } from './setup.js';
 import { applyConfig, standupPage } from './standup-page.js';
 import type { SettingsService } from '../core/settings.js';
 
@@ -54,7 +55,10 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       else res.status(403).send('Admins only.');
       return false;
     }
-    if (token && tokenEquals(req.query.token, token)) {
+    // The operator token only counts while token sign-in is enabled; once
+    // switched off in settings, recovery is a DB edit (documented there).
+    const tokenOn = (await settings.get()).tokenSignIn;
+    if (token && tokenOn && tokenEquals(req.query.token, token)) {
       res.setHeader(
         'Set-Cookie',
         `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/dashboard`,
@@ -69,9 +73,10 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       return true;
     }
     const cookie = readCookie(req, COOKIE);
-    if (token && cookie && tokenEquals(decodeURIComponent(cookie), token)) return true;
+    if (token && tokenOn && cookie && tokenEquals(decodeURIComponent(cookie), token)) return true;
     const google = !!(deps.secretKey && (await deps.signInEnabled?.()));
     const saml = !!(deps.secretKey && (await deps.samlEnabled?.()));
+    const tokenForm = !!(token && tokenOn);
     res.status(401).send(
       layout(
         'Sign in — AsyncUp',
@@ -81,15 +86,20 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
           heading: 'Sign in',
           google,
           saml,
-          tokenForm: !!token,
-          footnotes: google || saml
-            ? ['Workspace admins only — everyone else lands on their own <code>/me</code> page.']
-            : ['The token is the DASHBOARD_TOKEN from the server environment.'],
+          tokenForm,
+          footnotes:
+            google || saml
+              ? ['Workspace admins only — everyone else lands on their own <code>/me</code> page.']
+              : tokenForm
+                ? ['The token is the DASHBOARD_TOKEN from the server environment.']
+                : ["Token sign-in is switched off and no other method is configured. Re-enable it in the database: <code>DELETE FROM settings WHERE key='tokenSignIn'</code>, then restart the app."],
         }),
       ),
     );
     return false;
   };
+
+  registerSetup(app, { settings, authed, hasToken: !!token });
 
   // ---------- home: checklist + standups ----------
 
@@ -97,6 +107,13 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
     if (!(await authed(req, res))) return;
     const standups = await repo.listActiveStandups();
     const s = await settings.get();
+
+    // Fresh install: hand over to the walkthrough until it finishes (or the
+    // Chat connection exists — existing installs never see the wizard).
+    if (!s.setupComplete && !(s.chatAudience && s.serviceAccountJson)) {
+      res.redirect(303, '/dashboard/setup');
+      return;
+    }
 
     const unverifiedWarning = s.chatAudience
       ? ''
