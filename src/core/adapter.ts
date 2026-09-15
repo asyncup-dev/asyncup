@@ -37,4 +37,11 @@ export interface ChatAdapter {
    * DMed when someone is tagged on a blocker or nudged about one.
    */
   sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void>;
+
+  /**
+   * Whether the platform can DM this user right now (e.g. the Chat app is
+   * installed for them). Lets `add` warn immediately instead of failing
+   * silently at prompt time.
+   */
+  canDm(userName: string): Promise<boolean>;
 }

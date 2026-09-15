@@ -138,6 +138,43 @@ export class Scheduler {
     if (now >= deadlineAt) await this.closeRun(standup, run);
   }
 
+  /**
+   * Opens today's run immediately, bypassing the weekday and prompt-time
+   * gates, and prompts everyone eligible right away. Backs `run now` and the
+   * dashboard button so a fresh install can see the flow without waiting.
+   */
+  async runNow(standup: Standup): Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'> {
+    const now = this.now();
+    const today = now.setZone(standup.timezone).toISODate()!;
+    let run = await this.repo.getRun(standup.id, today);
+    if (run?.status === 'closed') return 'already_closed';
+    const existed = !!run;
+    if (!run) {
+      const roster = await this.repo.listParticipants(standup.id);
+      if (roster.filter((p) => !p.onVacation).length === 0) return 'no_participants';
+      run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
+      this.log(`opened run ${run.id} for "${standup.name}" ${today} (run now)`);
+      await this.applyCalendarOoo(standup, run);
+      try {
+        await this.adapter.postThreadParent(standup, run);
+      } catch (err) {
+        this.log(`postThreadParent failed for run ${run.id}: ${err}`);
+      }
+    }
+
+    const submitted = new Set((await this.repo.listSubmissions(run.id)).map((s) => s.userName));
+    for (const rp of await this.repo.listRunParticipants(run.id)) {
+      if (rp.promptedAt || rp.onVacation || rp.skippedAt !== null || submitted.has(rp.userName)) continue;
+      try {
+        await this.adapter.sendStandupPrompt(rp.userName, standup, run);
+        await this.repo.markPrompted(run.id, rp.userName, now.toISO()!);
+      } catch (err) {
+        this.log(`prompt to ${rp.userName} failed: ${err}`);
+      }
+    }
+    return existed ? 'already_open' : 'started';
+  }
+
   /** Marks participants with a calendar OOO event today as away for this run only. */
   private async applyCalendarOoo(standup: Standup, run: Run): Promise<void> {
     const ooo = await this.providers.ooo?.();

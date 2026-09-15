@@ -36,7 +36,7 @@ const adapter =
 
 const service = new StandupService(repo, adapter);
 const blockerService = new BlockerService(repo, adapter);
-const commands = new CommandHandler(repo, settings, undefined, blockerService);
+const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter);
 const router = new EventRouter(commands, service, blockerService, repo, config.tenantId);
 
 // Integrations are resolved from settings per use, so dashboard changes
@@ -57,6 +57,7 @@ const providers: SchedulerProviders = {
 };
 
 const scheduler = new Scheduler(repo, adapter, service, undefined, undefined, providers);
+commands.attachRunner(scheduler);
 const timer = scheduler.start();
 scheduler.tick().catch((err) => console.error('[scheduler] initial tick failed:', err));
 

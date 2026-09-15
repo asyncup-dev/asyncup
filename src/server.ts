@@ -67,7 +67,13 @@ export function createServer(deps: ServerDeps): Express {
   const authLimiter = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
   app.use(['/dashboard', '/export', '/tick'], authLimiter);
 
-  registerDashboard(app, { repo, settings, token: deps.dashboardToken, now: deps.now });
+  registerDashboard(app, {
+    repo,
+    settings,
+    token: deps.dashboardToken,
+    now: deps.now,
+    runNow: (standup) => scheduler.runNow(standup),
+  });
 
   app.get('/healthz', async (_req, res) => {
     try {
