@@ -76,91 +76,102 @@ export async function applySettings(settings: SettingsService, body: any): Promi
   return null;
 }
 
-/** Validate the submitted form and stage its change — no writes here. */
-function stageChange(s: AppSettings, body: any): Partial<AppSettings> | string {
+/** Validate one submitted form and stage its change — no writes here. */
+type Staged = Partial<AppSettings> | string;
+
+function stageChat(_s: AppSettings, body: any): Staged {
+  const chatAudience = String(body.chatAudience ?? '').trim();
+  const audErr = badAudience(chatAudience);
+  if (audErr) return audErr;
+  const json = String(body.serviceAccountJson ?? '').trim();
+  if (json) {
+    const keyErr = badSaKey(json);
+    if (keyErr) return keyErr;
+  }
+  return {
+    chatAudience,
+    ...(json ? { serviceAccountJson: json } : {}),
+    ...(body.clear_serviceAccountJson === 'on' ? { serviceAccountJson: '' } : {}),
+  };
+}
+
+function stageAi(_s: AppSettings, body: any): Staged {
+  const clearKey = body.clear_llmApiKey === 'on' ? { llmApiKey: '' } : {};
+  const llmProvider = String(body.llmProvider ?? 'anthropic');
+  const llmModel = String(body.llmModel ?? '').trim();
+  const key = String(body.llmApiKey ?? '').trim();
+  // Master toggle: unchecked turns the feature off regardless of the
+  // (CSS-hidden but still submitted) fields below it.
+  if (body.aiOn !== 'on') return { llmProvider: '', llmModel: '', ...clearKey };
+  if (!['anthropic', 'openai'].includes(llmProvider)) return 'Unknown AI provider.';
+  if (llmProvider === 'openai' && !llmModel) return 'OpenAI needs an explicit model name.';
+  return {
+    llmProvider: llmProvider as AppSettings['llmProvider'],
+    llmModel,
+    ...(key ? { llmApiKey: key } : {}),
+    ...clearKey,
+  };
+}
+
+function stageOauth(_s: AppSettings, body: any): Staged {
+  const clientId = String(body.oauthClientId ?? '').trim();
+  const idErr = badOauthId(clientId);
+  if (idErr) return idErr;
+  const secret = String(body.oauthClientSecret ?? '').trim();
+  return {
+    oauthClientId: clientId,
+    ...(secret ? { oauthClientSecret: secret } : {}),
+    ...(body.clear_oauthClientSecret === 'on' ? { oauthClientSecret: '' } : {}),
+  };
+}
+
+function stageSaml(_s: AppSettings, body: any): Staged {
+  const ssoUrl = String(body.samlIdpSsoUrl ?? '').trim();
+  const cert = String(body.samlIdpCert ?? '').trim();
+  const err = badSamlSsoUrl(ssoUrl) ?? badSamlCert(cert);
+  if (err) return err;
+  // Empty attribute/group values delete the row, falling back to the
+  // SETTING_DEFAULTS — no fallback literals here.
+  return {
+    samlIdpEntityId: String(body.samlIdpEntityId ?? '').trim(),
+    samlIdpSsoUrl: ssoUrl,
+    samlIdpCert: cert,
+    samlAdminAttribute: String(body.samlAdminAttribute ?? '').trim(),
+    samlAdminGroup: String(body.samlAdminGroup ?? '').trim(),
+  };
+}
+
+function stageWorkspace(_s: AppSettings, body: any): Staged {
+  const tz = String(body.defaultTimezone ?? '').trim();
+  const tzErr = badTimezone(tz);
+  if (tzErr) return tzErr;
+  const adminEmail = String(body.workspaceAdminEmail ?? '').trim();
+  const emailErr = badAdminEmail(adminEmail);
+  if (emailErr) return emailErr;
+  return {
+    defaultTimezone: tz,
+    calendarOoo: body.calendarOoo === 'on',
+    workspaceAdminEmail: adminEmail,
+  };
+}
+
+/**
+ * 'field' is the settings page (one box, one value); the rest are the
+ * setup walkthrough's grouped step forms.
+ */
+const SECTION_STAGERS: Record<string, (s: AppSettings, body: any) => Staged> = {
+  field: stageField,
+  chat: stageChat,
+  ai: stageAi,
+  oauth: stageOauth,
+  saml: stageSaml,
+  workspace: stageWorkspace,
+};
+
+function stageChange(s: AppSettings, body: any): Staged {
   const section = String(body.section ?? '');
-
-  // One box, one value — the settings page saves each field on its own.
-  if (section === 'field') return stageField(s, body);
-
-  // Grouped forms — the setup walkthrough saves a step at a time.
-  if (section === 'chat') {
-    const chatAudience = String(body.chatAudience ?? '').trim();
-    const audErr = badAudience(chatAudience);
-    if (audErr) return audErr;
-    const json = String(body.serviceAccountJson ?? '').trim();
-    if (json) {
-      const keyErr = badSaKey(json);
-      if (keyErr) return keyErr;
-    }
-    return {
-      chatAudience,
-      ...(json ? { serviceAccountJson: json } : {}),
-      ...(body.clear_serviceAccountJson === 'on' ? { serviceAccountJson: '' } : {}),
-    };
-  }
-
-  if (section === 'ai') {
-    // Master toggle: unchecked turns the feature off regardless of the
-    // (CSS-hidden but still submitted) fields below it.
-    const clearKey = body.clear_llmApiKey === 'on' ? { llmApiKey: '' } : {};
-    if (body.aiOn !== 'on') return { llmProvider: '', llmModel: '', ...clearKey };
-    const llmProvider = String(body.llmProvider ?? 'anthropic');
-    if (!['anthropic', 'openai'].includes(llmProvider)) return 'Unknown AI provider.';
-    const llmModel = String(body.llmModel ?? '').trim();
-    const key = String(body.llmApiKey ?? '').trim();
-    if (llmProvider === 'openai' && !llmModel) return 'OpenAI needs an explicit model name.';
-    return {
-      llmProvider: llmProvider as AppSettings['llmProvider'],
-      llmModel,
-      ...(key ? { llmApiKey: key } : {}),
-      ...clearKey,
-    };
-  }
-
-  if (section === 'oauth') {
-    const clientId = String(body.oauthClientId ?? '').trim();
-    const idErr = badOauthId(clientId);
-    if (idErr) return idErr;
-    const secret = String(body.oauthClientSecret ?? '').trim();
-    return {
-      oauthClientId: clientId,
-      ...(secret ? { oauthClientSecret: secret } : {}),
-      ...(body.clear_oauthClientSecret === 'on' ? { oauthClientSecret: '' } : {}),
-    };
-  }
-
-  if (section === 'saml') {
-    const ssoUrl = String(body.samlIdpSsoUrl ?? '').trim();
-    const cert = String(body.samlIdpCert ?? '').trim();
-    const err = badSamlSsoUrl(ssoUrl) ?? badSamlCert(cert);
-    if (err) return err;
-    // Empty attribute/group values delete the row, falling back to the
-    // SETTING_DEFAULTS — no fallback literals here.
-    return {
-      samlIdpEntityId: String(body.samlIdpEntityId ?? '').trim(),
-      samlIdpSsoUrl: ssoUrl,
-      samlIdpCert: cert,
-      samlAdminAttribute: String(body.samlAdminAttribute ?? '').trim(),
-      samlAdminGroup: String(body.samlAdminGroup ?? '').trim(),
-    };
-  }
-
-  if (section === 'workspace') {
-    const tz = String(body.defaultTimezone ?? '').trim();
-    const tzErr = badTimezone(tz);
-    if (tzErr) return tzErr;
-    const adminEmail = String(body.workspaceAdminEmail ?? '').trim();
-    const emailErr = badAdminEmail(adminEmail);
-    if (emailErr) return emailErr;
-    return {
-      defaultTimezone: tz,
-      calendarOoo: body.calendarOoo === 'on',
-      workspaceAdminEmail: adminEmail,
-    };
-  }
-
-  return 'Unknown settings section.';
+  if (!Object.hasOwn(SECTION_STAGERS, section)) return 'Unknown settings section.';
+  return SECTION_STAGERS[section]!(s, body);
 }
 
 /** Secrets keep their stored value on an empty save; "clear" wipes them. */
