@@ -156,6 +156,27 @@ describe('Scheduler', () => {
     expect(prompted).toEqual(['users/alice', 'users/bob', 'users/carol']);
   });
 
+  it('opens the run early for participants east of the standup timezone', async () => {
+    const { repo, adapter, scheduler, clock } = await makeStack();
+    const standup = await seedStandup(repo, { deadlineTime: '18:00' });
+    // Tokyo is 3.5h ahead of the standup zone (Asia/Kolkata).
+    await repo.setParticipantTimezone(standup.id, 'users/alice', 'Asia/Tokyo');
+
+    clock.set('2026-06-10T09:29', 'Asia/Tokyo');
+    await scheduler.tick();
+    expect(await repo.getRun(standup.id, '2026-06-10')).toBeNull();
+
+    clock.set('2026-06-10T09:30', 'Asia/Tokyo'); // 06:00 standup time
+    await scheduler.tick();
+    expect(await repo.getRun(standup.id, '2026-06-10')).not.toBeNull();
+    const prompted = adapter.dms.filter((d) => d.kind === 'prompt').map((d) => d.userName);
+    expect(prompted).toEqual(['users/alice']); // the others wait for 09:30 their time
+
+    clock.set('2026-06-10T09:30');
+    await scheduler.tick();
+    expect(adapter.dms.filter((d) => d.kind === 'prompt')).toHaveLength(3);
+  });
+
   it('closes runs left open from previous days (e.g. after downtime)', async () => {
     const { repo, adapter, scheduler, clock } = await makeStack();
     const standup = await seedStandup(repo);

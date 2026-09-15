@@ -457,7 +457,7 @@ async function standupPage(repo: Repo, s: Standup, now: DateTime, saved: boolean
   const participants = (await repo.listParticipants(s.id))
     .map(
       (p) =>
-        `<li>${esc(p.displayName)}${p.mandatory ? '' : ' <span class="tag">optional</span>'}${p.onVacation ? ' 🏖️' : ''}</li>`,
+        `<li>${esc(p.displayName)}${p.mandatory ? '' : ' <span class="tag">optional</span>'}${p.timezone ? ` <span class="tag">${esc(p.timezone)}</span>` : ''}${p.onVacation ? ' 🏖️' : ''}</li>`,
     )
     .join('');
   const admins = (await repo.listAdmins(s.id)).map((a) => esc(a.displayName)).join(', ') || '<i>none (open config)</i>';
