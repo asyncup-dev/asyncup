@@ -27,7 +27,7 @@ describe('SettingsService', () => {
     const { settings } = await makeStack();
     const s = await settings.get();
     expect(s.chatAudience).toBe('');
-    expect(s.calendarOoo).toBe(false);
+    expect(s.calendarOoo).toBe(true); // on by default — activates once DWD exists
     expect(s.defaultTimezone).toBe('Asia/Kolkata'); // set by the test harness
   });
 

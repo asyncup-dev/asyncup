@@ -119,8 +119,13 @@ describe('dashboard', () => {
     expect(after).not.toContain('private_key');
 
     // saving AI section with empty key keeps configured values intact
-    expect((await post({ section: 'ai', llmProvider: 'anthropic', llmModel: '' })).status).toBe(302);
+    expect((await post({ section: 'ai', aiOn: 'on', llmProvider: 'anthropic', llmModel: '' })).status).toBe(302);
     expect((await settings.get()).llmProvider).toBe('anthropic');
+
+    // unchecking the master toggle turns the feature off even though the
+    // (CSS-hidden) provider fields still submit
+    expect((await post({ section: 'ai', llmProvider: 'anthropic' })).status).toBe(302);
+    expect((await settings.get()).llmProvider).toBe('');
   });
 
   it('generates tokens shown once and enforces them on /tick', async () => {
