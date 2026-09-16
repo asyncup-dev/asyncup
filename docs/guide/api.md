@@ -2,8 +2,7 @@
 
 AsyncUp exposes a JSON API under `/api/v1`. It is the front door the web
 app uses; everything it does calls the same core functions as the chat
-commands. This page tracks the surface as it grows — for now it is
-read-only.
+commands. This page tracks the surface as it grows.
 
 ## Authentication
 
@@ -29,7 +28,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes so far: `unauthenticated`, `bad_token`, `csrf`, `not_found`.
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
 
 ## Endpoints
 
@@ -74,3 +73,49 @@ is true for admins and for managers of that standup.
 The same object plus `participants` (`userName`, `displayName`,
 `mandatory`, `timezone`, `onVacation`) and `admins`. Returns `404` for a
 standup the caller may not see — including one in another tenant.
+
+### Managing a standup
+
+Admins and that standup's managers only (`403 forbidden` otherwise).
+
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| `PATCH` | `/standups/:id` | Any subset of `name`, `promptTime`, `deadlineTime`, `timezone`, `reminderMinutesBefore`, `escalateAfterDays`, `days` (list or `"mon,tue"`), `webhookUrl` (`null` disables), `questions` (list), `moodEnabled`, `moodAnonymous`, `digestEnabled`, `escalateUserName` (`null` disables). Same rules as the chat commands; `400 invalid` names the `field`. |
+| `POST` | `/standups/:id/run-now` | `{ "result": "started" \| "already_open" \| "already_closed" \| "no_participants" }` |
+| `POST` | `/standups/:id/nudge` | Reminds everyone still expected today; `409 no_open_run` otherwise |
+| `POST` | `/standups/:id/archive`, `/unarchive` | Stops or resumes prompts; history stays |
+| `POST` | `/standups/:id/participants` | `{ userName: "users/…", displayName, mandatory? }` → `201` with `reachable` (can the bot DM them) |
+| `PATCH` | `/standups/:id/participants/:userName` | `{ mandatory?, onVacation?, admin? }`; `409 last_admin` guards the last admin. `:userName` is the Chat resource name URL-encoded (`users%2F123`) |
+| `DELETE` | `/standups/:id/participants/:userName` | `204` |
+| `GET` | `/standups/:id/export.csv?days=90` | CSV download |
+
+### Runs
+
+Anyone who can see the standup.
+
+| Path | Returns |
+| --- | --- |
+| `GET /standups/:id/runs?limit=14` | Recent runs with `submitted`, `expected`, `missing` |
+| `GET /standups/:id/runs/today` | Shaped for polling: `status`, `submitted[]` (with `submittedAt`, `late`, `mood`), `waiting[]`, `away[]` (`skipped` or `vacation`), `teamMood` when moods are anonymous |
+| `GET /standups/:id/runs/:date` | One run with full submissions and answers |
+| `GET /standups/:id/insights?weeks=8` | Weekly participation, mood and blocker series |
+
+Moods are withheld per person when the standup keeps them anonymous; only the team average is returned.
+
+### Blockers
+
+`GET /blockers?status=open|acknowledged|resolved|all&standupId=&owner=` — across every standup the caller can see. Each blocker carries its `status`, `tags` (with `acknowledgedAt`) and `updates`.
+
+`POST /blockers/:id/acknowledge`, `/update` (`{ text }`), `/resolve` — the same rules as in Chat: only tagged people acknowledge; the owner, tagged people and standup admins resolve. These need a signed-in person; the operator token gets `403 needs_user`.
+
+### Team
+
+`GET /people` — admins and managers. Everyone on a roster the caller can see, with `email` (when known), `timezone`, `onVacation` and their `standups` (`mandatory`, `admin`).
+
+### Me
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/me/standups` | `linked: false` until the account has a Chat identity; otherwise each standup with `today` = `submitted`, `waiting`, `closed` or `null` |
+| `GET` | `/me/submissions?limit=10` | My recent answers |
+| `PATCH` | `/me` | `{ timezone?: string \| null, onVacation?: boolean }`; `409 not_linked` without a Chat identity |

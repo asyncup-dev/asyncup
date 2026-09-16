@@ -17,6 +17,8 @@ async function startServer(opts: { directory?: () => Promise<UserDirectory | nul
     router,
     scheduler: stack.scheduler,
     repo: stack.repo,
+    adapter: stack.adapter,
+    blockers: stack.blockers,
     settings: stack.settings,
     dashboardToken: '',
     skipVerification: true,

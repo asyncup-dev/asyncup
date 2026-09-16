@@ -68,6 +68,8 @@ scheduler.tick().catch((err) => console.error('[scheduler] initial tick failed:'
 const app = createServer({
   router,
   scheduler,
+  adapter,
+  blockers: blockerService,
   repo,
   settings,
   dashboardToken: config.dashboardToken,

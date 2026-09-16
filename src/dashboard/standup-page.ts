@@ -2,7 +2,7 @@ import type { DateTime } from 'luxon';
 import { moodEmoji } from '../core/insights.js';
 import { runProgress } from '../core/progress.js';
 import { standupQuestions, type Standup } from '../core/types.js';
-import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, HTTPS_URL_RE, LIMITS, parseDays } from '../core/validation.js';
+import { validateStandupConfig } from '../core/standup-config.js';
 import type { Repo } from '../db/repo.js';
 import { blockersChart, moodChart, participationChart, weeklySeries } from './charts.js';
 import { esc } from './chrome.js';
@@ -10,64 +10,23 @@ import { esc } from './chrome.js';
 /** The per-standup config form handler + the rendered detail page. */
 
 export async function applyConfig(repo: Repo, standup: Standup, body: any): Promise<string | null> {
-  const name = String(body.name ?? '').trim();
-  if (!name) return 'Name is required.';
-  const promptTime = String(body.promptTime ?? '');
-  const deadlineTime = String(body.deadlineTime ?? '');
-  if (!isValidTime(promptTime) || !isValidTime(deadlineTime)) return 'Times must be HH:MM (24h).';
-  if (promptTime >= deadlineTime) return 'Prompt time must be before the deadline.';
-  const timezone = String(body.timezone ?? '');
-  if (!isValidZone(timezone)) return `Invalid IANA timezone: ${timezone}`;
-  const reminder = Number(body.reminderMinutesBefore);
-  if (!isReminderMinutes(reminder)) return `Reminder must be 0–${LIMITS.reminderMinutesMax} minutes.`;
-  const escalateDays = Number(body.escalateAfterDays);
-  if (!isEscalateDays(escalateDays)) {
-    return `Escalation days must be ${LIMITS.escalateDaysMin}–${LIMITS.escalateDaysMax}.`;
-  }
-
-  const days = parseDays(String(body.days ?? ''));
-  if (!days) return 'Days must be a comma list of mon,tue,wed,thu,fri,sat,sun.';
-
-  const webhookUrl = String(body.webhookUrl ?? '').trim();
-  if (webhookUrl && !HTTPS_URL_RE.test(webhookUrl)) return 'Webhook URL must be https:// (or empty to disable).';
-
-  const questionLines = String(body.questions ?? '')
-    .split('\n')
-    .map((q: string) => q.trim())
-    .filter(Boolean);
-  if (questionLines.length === 0 || questionLines.length > LIMITS.questionsMax) {
-    return `Provide 1–${LIMITS.questionsMax} questions (one per line).`;
-  }
-  if (questionLines.some((q: string) => q.length > LIMITS.textMax)) {
-    return `Questions must be ≤${LIMITS.textMax} characters.`;
-  }
-
-  // Escalation contact: picked from the roster (they have Chat identities).
-  const escalateUserName = String(body.escalateUserName ?? '');
-  let escalate: { escalateUserName: string | null; escalateDisplayName: string | null } | null = null;
-  if (escalateUserName === '') {
-    escalate = { escalateUserName: null, escalateDisplayName: null };
-  } else {
-    const contact = (await repo.listParticipants(standup.id)).find((p) => p.userName === escalateUserName);
-    if (!contact) return 'Escalation contact must be a current participant.';
-    escalate = { escalateUserName: contact.userName, escalateDisplayName: contact.displayName };
-  }
-
-  await repo.updateStandup(standup.id, {
-    name,
-    promptTime,
-    deadlineTime,
-    timezone,
-    reminderMinutesBefore: reminder,
-    days: days.join(','),
-    questions: questionLines,
+  const result = await validateStandupConfig(repo, standup, {
+    name: String(body.name ?? ''),
+    promptTime: String(body.promptTime ?? ''),
+    deadlineTime: String(body.deadlineTime ?? ''),
+    timezone: String(body.timezone ?? ''),
+    reminderMinutesBefore: body.reminderMinutesBefore,
+    escalateAfterDays: body.escalateAfterDays,
+    days: String(body.days ?? ''),
+    webhookUrl: String(body.webhookUrl ?? ''),
+    questions: String(body.questions ?? '').split('\n'),
     moodEnabled: body.moodEnabled === 'on',
     moodAnonymous: body.moodAnonymous === 'on',
     digestEnabled: body.digestEnabled === 'on',
-    escalateAfterDays: escalateDays,
-    webhookUrl: webhookUrl || null,
-    ...escalate,
+    escalateUserName: String(body.escalateUserName ?? ''),
   });
+  if (!result.ok) return result.message;
+  await repo.updateStandup(standup.id, result.fields);
   return null;
 }
 

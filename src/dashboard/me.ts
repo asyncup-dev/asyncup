@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import { DateTime } from 'luxon';
 import { chatUserName as toChatUserName } from '../core/directory.js';
-import { isValidZone } from '../core/validation.js';
+import { setMemberTimezone, setMemberVacation } from '../core/member.js';
 import { sessionFrom, type Session } from '../auth/session.js';
 import { MOOD_EMOJI } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
@@ -145,13 +145,12 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
       res.redirect(`/me?notice=${encodeURIComponent('Account not linked to Chat yet.')}`);
       return;
     }
-    const tz = String(req.body?.timezone ?? '').trim();
-    if (tz && !isValidZone(tz)) {
-      res.redirect(`/me?notice=${encodeURIComponent(`Invalid IANA timezone: ${tz}`)}`);
+    const result = await setMemberTimezone(repo, userName, String(req.body?.timezone ?? ''));
+    if (!result.ok) {
+      res.redirect(`/me?notice=${encodeURIComponent(result.message)}`);
       return;
     }
-    await repo.setTimezoneForUser(userName, tz || null);
-    res.redirect(`/me?notice=${encodeURIComponent(tz ? `Prompts now follow ${tz}.` : "Following each standup's timezone.")}`);
+    res.redirect(`/me?notice=${encodeURIComponent(result.timezone ? `Prompts now follow ${result.timezone}.` : "Following each standup's timezone.")}`);
   });
 
   app.post('/me/vacation', async (req, res) => {
@@ -163,7 +162,7 @@ export function registerUserConsole(app: Express, deps: MeDeps): void {
       return;
     }
     const on = String(req.body?.state) === 'on';
-    await repo.setVacationForUser(userName, on);
+    await setMemberVacation(repo, userName, on);
     res.redirect(`/me?notice=${encodeURIComponent(on ? 'Vacation mode on — prompts paused.' : 'Welcome back — prompts resume.')}`);
   });
 }

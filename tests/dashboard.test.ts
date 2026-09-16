@@ -13,6 +13,8 @@ async function startServer(dashboardToken = 'dash-secret') {
     router,
     scheduler: stack.scheduler,
     repo: stack.repo,
+    adapter: stack.adapter,
+    blockers: stack.blockers,
     settings: stack.settings,
     dashboardToken,
     skipVerification: true,

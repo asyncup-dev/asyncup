@@ -16,11 +16,16 @@ import { registerAuth, type IdentityBroker } from './auth/google.js';
 import { registerSaml, type SamlBroker, type SamlConfig } from './auth/saml.js';
 import { registerScim } from './scim/server.js';
 import { registerApi } from './api/api.js';
+import type { ChatAdapter } from './core/adapter.js';
+import type { BlockerService } from './core/blocker-service.js';
 import type { UserDirectory } from './core/directory.js';
 
 export interface ServerDeps {
   router: EventRouter;
   scheduler: Scheduler;
+  /** The platform adapter and blocker workflow the JSON API drives directly. */
+  adapter: ChatAdapter;
+  blockers: BlockerService;
   repo: Repo;
   settings: SettingsService;
   /** Empty string disables the /dashboard pages. */
@@ -133,6 +138,9 @@ export function createServer(deps: ServerDeps): Express {
   registerApi(app, {
     repo,
     settings,
+    scheduler,
+    adapter: deps.adapter,
+    blockers: deps.blockers,
     secretKey: deps.secretKey ?? '',
     operatorToken: deps.dashboardToken,
     tenantId: deps.tenantId ?? 'default',

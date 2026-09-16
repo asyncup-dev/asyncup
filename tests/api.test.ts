@@ -17,6 +17,8 @@ async function startServer(opts: { secretKey?: string; tenantId?: string; realCl
     router,
     scheduler: stack.scheduler,
     repo: stack.repo,
+    adapter: stack.adapter,
+    blockers: stack.blockers,
     settings: stack.settings,
     dashboardToken: OPERATOR,
     skipVerification: true,

@@ -30,6 +30,8 @@ async function startServer(opts: { saml?: SamlProfile | null; directoryUser?: Di
     router,
     scheduler: stack.scheduler,
     repo: stack.repo,
+    adapter: stack.adapter,
+    blockers: stack.blockers,
     settings: stack.settings,
     dashboardToken: 'dash-secret',
     skipVerification: true,
