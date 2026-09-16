@@ -86,12 +86,12 @@ describe('auth routes with the real Google broker', () => {
     expect(res.headers.get('set-cookie')).toContain(`asyncup_oauth_state=${consent.searchParams.get('state')};`);
   });
 
-  it('logout clears the session cookie and sends the user back to /me', async () => {
+  it('logout clears the session cookie and sends the user back to sign-in', async () => {
     const url = listen({});
     const sealed = sealSession(SECRET, newSession({ sub: '42', email: 'a@example.com', name: 'A', admin: false }));
     const res = await fetch(`${url}/auth/logout`, { method: 'POST', headers: { cookie: `${SESSION_COOKIE}=${sealed}` }, redirect: 'manual' });
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/me');
+    expect(res.headers.get('location')).toBe('/app/sign-in');
     const cookie = res.headers.get('set-cookie') ?? '';
     expect(cookie).toContain(`${SESSION_COOKIE}=;`);
     expect(cookie).toContain('Max-Age=0');

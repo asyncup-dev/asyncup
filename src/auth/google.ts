@@ -66,7 +66,7 @@ export function registerAuth(app: Express, deps: AuthDeps): void {
   app.get('/auth/google', async (req, res) => {
     const { oauthClientId, oauthClientSecret } = await deps.settings.get();
     if (!oauthClientId || !oauthClientSecret) {
-      res.status(404).send('Google sign-in is not configured — set the OAuth client in dashboard settings.');
+      res.status(404).send('Google sign-in is not configured — set the OAuth client in Settings › Sign-in & SSO.');
       return;
     }
     const state = randomBytes(16).toString('base64url');
@@ -102,7 +102,7 @@ export function registerAuth(app: Express, deps: AuthDeps): void {
       }
 
       setSessionCookie(res, sealSession(deps.secretKey, newSession({ ...identity, admin })));
-      res.redirect(admin ? '/dashboard' : '/me');
+      res.redirect('/app');
     } catch (err) {
       console.error('[auth] Google sign-in failed:', err);
       res.status(500).send('Sign-in failed — check the OAuth client configuration and try again.');
@@ -111,6 +111,6 @@ export function registerAuth(app: Express, deps: AuthDeps): void {
 
   app.post('/auth/logout', (_req, res) => {
     clearSessionCookie(res);
-    res.redirect('/me');
+    res.redirect('/app/sign-in');
   });
 }

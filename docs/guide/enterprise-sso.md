@@ -39,14 +39,14 @@ SAML deliberately doesn't — the IdP itself asserted org membership, and the
 account may live outside Google (e.g. Okta-only contractors). Suspended
 accounts are rejected on both paths.
 
-Everyone else lands on their personal [`/me` console](./dashboard).
+Everyone else lands on their personal [page](./dashboard) at `/app/me`.
 
 ### How SAML users map to Chat
 
 Standup rosters are keyed by Google Chat user ids. A SAML assertion carries
 an email, which AsyncUp links to the Chat id via the Directory integration
 (instant) or the cached email from the person's first bot interaction. Until
-one of those happens, `/me` shows a "not linked yet" note.
+one of those happens, `/app/me` shows a "not linked yet" note.
 
 ## SCIM provisioning
 

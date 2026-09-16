@@ -12,8 +12,6 @@ import type { SettingsService } from './core/settings.js';
 import type { Scheduler } from './core/scheduler.js';
 import type { Repo } from './db/repo.js';
 import { buildCsv } from './core/export.js';
-import { registerDashboard } from './dashboard/dashboard.js';
-import { registerUserConsole } from './dashboard/me.js';
 import { registerAuth, type IdentityBroker } from './auth/google.js';
 import { registerSaml, type SamlBroker, type SamlConfig } from './auth/saml.js';
 import { registerScim } from './scim/server.js';
@@ -37,11 +35,11 @@ export interface ServerDeps {
   blockers: BlockerService;
   repo: Repo;
   settings: SettingsService;
-  /** Empty string disables the /dashboard pages. */
+  /** Operator bearer for the JSON API (DASHBOARD_TOKEN). Empty string disables it. */
   dashboardToken: string;
   /** Skip Chat webhook verification (fake adapter / local development). */
   skipVerification?: boolean;
-  /** Per-standup webhook signing secret (shown to admins on the dashboard). */
+  /** Per-standup webhook signing secret (shown to admins in the standup's settings). */
   webhookSecret?: (standupId: number) => string;
   /** Signs sessions; empty disables Google sign-in. */
   secretKey?: string;
@@ -83,7 +81,7 @@ export function createServer(deps: ServerDeps): Express {
       if (!warnedUnverified) {
         warnedUnverified = true;
         console.warn(
-          '[server] Chat events cannot be verified until the GCP project number is set in dashboard settings — refusing to process them.',
+          '[server] Chat events cannot be verified until the GCP project number is set in Settings › Google Chat — refusing to process them.',
         );
       }
       return 'unconfigured';
@@ -104,17 +102,9 @@ export function createServer(deps: ServerDeps): Express {
   // Brute-force protection for every token-checking endpoint.
   const authLimiter = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
   // Every surface that checks a credential gets brute-force protection.
-  app.use(['/dashboard', '/export', '/tick', '/auth', '/me', '/scim', '/mcp'], authLimiter);
+  app.use(['/export', '/tick', '/auth', '/scim', '/mcp'], authLimiter);
 
-  const signInEnabled = async () => {
-    const { oauthClientId, oauthClientSecret } = await settings.get();
-    return !!(oauthClientId && oauthClientSecret);
-  };
-  const samlEnabled = async () => {
-    const { samlIdpEntityId, samlIdpSsoUrl, samlIdpCert } = await settings.get();
-    return !!(samlIdpEntityId && samlIdpSsoUrl && samlIdpCert);
-  };
-  app.use(['/me', '/auth'], express.urlencoded({ extended: false }));
+  app.use('/auth', express.urlencoded({ extended: false }));
   registerAuth(app, {
     settings,
     secretKey: deps.secretKey ?? '',
@@ -133,25 +123,6 @@ export function createServer(deps: ServerDeps): Express {
     directory: deps.directory ?? (async () => null),
     now: deps.now,
   });
-  registerUserConsole(app, {
-    repo,
-    secretKey: deps.secretKey ?? '',
-    now: deps.now,
-    signInEnabled,
-    samlEnabled,
-  });
-  registerDashboard(app, {
-    repo,
-    settings,
-    token: deps.dashboardToken,
-    now: deps.now,
-    runNow: (standup) => scheduler.runNow(standup),
-    webhookSecret: deps.webhookSecret,
-    secretKey: deps.secretKey,
-    signInEnabled,
-    samlEnabled,
-  });
-
   registerApi(app, {
     repo,
     settings,
@@ -168,9 +139,9 @@ export function createServer(deps: ServerDeps): Express {
     now: deps.now,
   });
 
-  // The root has no page of its own — land people on the user console,
-  // which explains itself in every configuration state.
-  app.get('/', (_req, res) => res.redirect('/me'));
+  // The root has no page of its own — the web app decides where each
+  // person lands (setup, the console or their own page).
+  app.get('/', (_req, res) => res.redirect('/app'));
 
   registerMcp(app, {
     repo,
@@ -217,7 +188,7 @@ export function createServer(deps: ServerDeps): Express {
     if (verifier === 'unconfigured') {
       // Fail closed: without an audience, any request could impersonate Chat.
       res.json({
-        text: '⚠️ AsyncUp is not connected to Google Chat yet — an admin must set the GCP project number in the dashboard settings first.',
+        text: '⚠️ AsyncUp is not connected to Google Chat yet — an admin must finish setup in the web app first.',
       });
       return;
     }
@@ -252,13 +223,13 @@ export function createServer(deps: ServerDeps): Express {
     res.json({ ok: true });
   });
 
-  // CSV export — disabled until an export token is generated in dashboard
+  // CSV export — disabled until an export token is generated in Settings › API & tokens
   // settings (the data is your team's standup answers; never expose it
   // unauthenticated).
   app.get('/export', async (req, res) => {
     const { exportToken } = await settings.get();
     if (!exportToken) {
-      res.status(404).json({ error: 'export disabled — generate an export token in dashboard settings' });
+      res.status(404).json({ error: 'export disabled — generate an export token in Settings › API & tokens' });
       return;
     }
     if (!tokenEquals(bearerToken(req), exportToken)) {

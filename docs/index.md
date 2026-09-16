@@ -37,7 +37,7 @@ features:
     details: Trend charts (participation, mood, blockers), weekly digests, anonymous team-mood mode, CSV export, polls, and signed outbound webhooks.
   - icon: 🖥️
     title: Consoles with SSO
-    details: Workspace admins sign into the admin dashboard; everyone else gets a personal /me console. Google sign-in or SAML, SCIM provisioning — all in the MIT core.
+    details: Workspace admins sign into the console; everyone else gets a personal page. Google sign-in or SAML, SCIM provisioning — all in the MIT core.
   - icon: 🪶
     title: Lightweight forever
     details: One ~300 MB container on 1 vCPU / 512 MB. Embedded SQLite by default — or bring your own PostgreSQL with one env var.

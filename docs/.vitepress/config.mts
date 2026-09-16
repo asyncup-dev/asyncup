@@ -36,7 +36,7 @@ export default defineConfig({
           { text: 'Installing for your team', link: '/guide/distribution' },
           { text: 'Commands', link: '/guide/commands' },
           { text: 'Configuration', link: '/guide/configuration' },
-          { text: 'Web dashboard', link: '/guide/dashboard' },
+          { text: 'Web app', link: '/guide/dashboard' },
           { text: 'Enterprise SSO (SAML + SCIM)', link: '/guide/enterprise-sso' },
           { text: 'JSON API (preview)', link: '/guide/api' },
           { text: 'Deployment', link: '/guide/deployment' },

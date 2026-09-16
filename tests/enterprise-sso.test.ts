@@ -63,18 +63,18 @@ const acs = (url: string) =>
   });
 
 describe('SAML sign-in', () => {
-  it('maps the configured admin group to the admin console', async () => {
+  it('maps the configured admin group to the admin role', async () => {
     const { url } = await startServer({
       saml: { nameId: 'asha@org.com', email: 'asha@org.com', displayName: 'Asha', attributes: { groups: ['eng', 'asyncup-admins'] } },
     });
     const res = await acs(url);
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/dashboard');
+    expect(res.headers.get('location')).toBe('/app');
     const cookie = res.headers.get('set-cookie')!.split(';')[0]!;
-    expect((await fetch(`${url}/dashboard`, { headers: { cookie } })).status).toBe(200);
+    expect(((await (await fetch(`${url}/api/v1/me`, { headers: { cookie } })).json()) as any).kind).toBe('admin');
   });
 
-  it('sends regular members to /me and links them by cached email', async () => {
+  it('sends regular members to the app and links them by cached email', async () => {
     const { url, repo } = await startServer({
       saml: { nameId: 'asha@org.com', email: 'asha@org.com', displayName: 'Asha', attributes: {} },
     });
@@ -83,10 +83,10 @@ describe('SAML sign-in', () => {
     await repo.setUserEmail('users/77', 'asha@org.com');
 
     const res = await acs(url);
-    expect(res.headers.get('location')).toBe('/me');
+    expect(res.headers.get('location')).toBe('/app');
     const cookie = res.headers.get('set-cookie')!.split(';')[0]!;
-    const page = await (await fetch(`${url}/me`, { headers: { cookie } })).text();
-    expect(page).toContain('Daily Standup');
+    const mine = (await (await fetch(`${url}/api/v1/me/standups`, { headers: { cookie } })).json()) as any;
+    expect(mine.standups.map((x: any) => x.name)).toEqual(['Daily Standup']);
   });
 
   it('takes the Chat id and admin role from the Directory when configured', async () => {
@@ -95,7 +95,9 @@ describe('SAML sign-in', () => {
       directoryUser: { id: '99', email: 'boss@org.com', isAdmin: true, suspended: false },
     });
     const res = await acs(url);
-    expect(res.headers.get('location')).toBe('/dashboard');
+    expect(res.headers.get('location')).toBe('/app');
+    const cookie = res.headers.get('set-cookie')!.split(';')[0]!;
+    expect(((await (await fetch(`${url}/api/v1/me`, { headers: { cookie } })).json()) as any).kind).toBe('admin');
   });
 
   it('serves SP metadata and rejects assertions without an email', async () => {

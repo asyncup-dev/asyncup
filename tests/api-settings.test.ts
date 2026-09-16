@@ -109,6 +109,12 @@ describe('api: settings', () => {
       [{ nonsense: 'x' }, 'nonsense'],
       [{ constructor: 'x' }, 'constructor'],
       [{ serviceAccountJson: '{}' }, 'serviceAccountJson'],
+      [{ serviceAccountJson: 'not json' }, 'serviceAccountJson'],
+      [{ oauthClientId: 'nope' }, 'oauthClientId'],
+      [{ samlIdpSsoUrl: 'http://idp/sso' }, 'samlIdpSsoUrl'],
+      [{ samlIdpCert: '@@@ not a cert @@@' }, 'samlIdpCert'],
+      [{ workspaceAdminEmail: 'not-an-email' }, 'workspaceAdminEmail'],
+      [{ defaultTimezone: 'Mars/Olympus' }, 'defaultTimezone'],
     ] as const) {
       const res = await patch(body);
       expect(res.status).toBe(400);
@@ -119,6 +125,13 @@ describe('api: settings', () => {
     const proto = await patch(undefined, { body: '{"__proto__":"x"}' });
     expect(proto.status).toBe(400);
     expect((await proto.json() as any).error.field).toBe('__proto__');
+
+    // The lenient shapes each validator accepts.
+    const lenient = await patch({ samlIdpCert: '-----BEGIN CERTIFICATE-----\nMIIC\n-----END CERTIFICATE-----', samlIdpSsoUrl: 'https://idp/sso', workspaceAdminEmail: 'admin@o.com', oauthClientId: '', samlIdpEntityId: 'https://idp', samlAdminAttribute: 'groups', samlAdminGroup: 'asyncup-admins', oauthClientSecret: 'GOCSPX-x' });
+    expect(lenient.status).toBe(200);
+    expect((await patch({ samlIdpCert: 'MIICbase64only==' })).status).toBe(200);
+    // Clear SAML again so the lockout rules below see only the token and Google.
+    expect((await patch({ samlIdpEntityId: '', samlIdpSsoUrl: '', samlIdpCert: '' })).status).toBe(200);
 
     // Secrets: empty keeps, null clears.
     await patch({ serviceAccountJson: '' });

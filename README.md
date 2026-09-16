@@ -41,7 +41,7 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **Per-participant timezones** — anyone can DM `timezone <IANA>` and prompts go out at 09:30 *their* time; reminder nudge before the deadline, late submissions flagged.
 - **Blocker tracking, collaboration & escalation** — blockers open automatically from answers and can be **worked as items**: tag teammates (interactive DM card with Acknowledge / Update / Resolve), updates broadcast to everyone involved + a per-blocker thread, daily nudges until acknowledged, and escalation DMs when they go stale. Untagged blockers auto-resolve on the next clean submission; tagged ones need an explicit resolve.
 - **Anonymous mood** (`mood anon`) — cards hide who felt what; the wrap-up shows the team average.
-- **Web dashboard with Google sign-in** — Workspace admins get the admin console automatically; everyone else gets a personal `/me` console (their standups, history, timezone, vacation). Token access (`DASHBOARD_TOKEN`) stays as break-glass.
+- **Web app with Google sign-in** — guided setup with live verification, then the console: standups, blockers, reports, team and settings. Workspace admins get the console automatically; everyone else gets a personal page (their standups, answers, timezone, vacation). Token access (`DASHBOARD_TOKEN`) stays as break-glass.
 - **Enterprise SSO without the SSO tax** — SAML 2.0 sign-in (Google Workspace, Okta, Entra, OneLogin) and a SCIM 2.0 provisioning endpoint (deactivate in the IdP → removed from every roster), all in the MIT core.
 - **Insights** — `trends` in chat, 8-week dashboard charts (participation, mood, blockers), weekly digest (`digest on`), CSV export.
 - **See it work immediately** — `run now` opens today's run and prompts everyone on the spot; `archive` retires a standup with history intact.
@@ -88,7 +88,7 @@ bun run docs:dev           # docs site locally
 
 Architecture: `src/core` (domain, scheduler, commands — no platform code),
 `src/adapters/gchat` (cards, event routing, API calls), `src/db` (repo over
-SQLite/PostgreSQL), `src/dashboard` (admin + `/me` consoles), `src/auth`
+SQLite/PostgreSQL), `web/` (the React app served under `/app`), `src/api` (the JSON API it uses), `src/auth`
 (sessions, Google OIDC, SAML), `src/scim` (provisioning), `src/integrations`
 (Calendar, Directory), `src/ai` (summaries).
 Adding a platform means implementing the `ChatAdapter` interface in

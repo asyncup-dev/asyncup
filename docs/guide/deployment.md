@@ -55,7 +55,7 @@ one-liner (`docker build -t asyncup .`) if you prefer auditing what you run.
 ```bash
 cp .env.example .env       # set DASHBOARD_TOKEN + SECRET_KEY
 docker compose up -d       # pulls the GHCR image by default
-# then finish setup in https://<host>/dashboard?token=<DASHBOARD_TOKEN>
+# then finish setup in https://<host>/app (sign in with DASHBOARD_TOKEN)
 ```
 
 Put it behind any HTTPS reverse proxy (Caddy, nginx, Traefik) and point the
