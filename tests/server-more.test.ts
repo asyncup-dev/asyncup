@@ -1,4 +1,7 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { ChatRequestVerifier } from '../src/adapters/gchat/auth.js';
 import { EventRouter } from '../src/adapters/gchat/events.js';
@@ -22,7 +25,7 @@ const samlBroker: SamlBroker = {
   spMetadata: () => '<EntityDescriptor>sp</EntityDescriptor>',
 };
 
-async function startServer(opts: { verify?: boolean; injectClock?: boolean } = {}) {
+async function startServer(opts: { verify?: boolean; injectClock?: boolean; webDist?: string } = {}) {
   const stack = await makeStack();
   const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT);
   const app = createServer({
@@ -34,6 +37,7 @@ async function startServer(opts: { verify?: boolean; injectClock?: boolean } = {
     settings: stack.settings,
     dashboardToken: 'dash-secret',
     skipVerification: !opts.verify,
+    webDist: opts.webDist,
     secretKey: SECRET,
     identityBroker: () => identityBroker,
     samlBroker: () => samlBroker,
@@ -166,5 +170,28 @@ describe('server edge cases', () => {
     });
     expect(acs.status).toBe(302);
     expect(acs.headers.get('location')).toBe('/me');
+  });
+});
+
+describe('web app under /app', () => {
+  it('serves the built bundle with an SPA fallback, and 404s when there is no build', async () => {
+    const dist = mkdtempSync(join(tmpdir(), 'asyncup-web-'));
+    writeFileSync(join(dist, 'index.html'), '<!doctype html><title>AsyncUp</title><div id="root"></div>');
+    mkdirSync(join(dist, 'assets'));
+    writeFileSync(join(dist, 'assets', 'app.js'), 'console.log(1)');
+    const { url } = await startServer({ webDist: dist });
+    for (const path of ['/app', '/app/', '/app/standups', '/app/settings/mcp']) {
+      const res = await fetch(`${url}${path}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/html');
+      expect(await res.text()).toContain('id="root"');
+    }
+    const asset = await fetch(`${url}/app/assets/app.js`);
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get('content-type')).toContain('javascript');
+    close?.();
+
+    const { url: bare } = await startServer({ webDist: join(dist, 'missing') });
+    expect((await fetch(`${bare}/app`)).status).toBe(404);
   });
 });

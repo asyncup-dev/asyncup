@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import express, { type Express, type Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { DateTime } from 'luxon';
@@ -57,6 +59,8 @@ export interface ServerDeps {
   externalFetch?: typeof fetch;
   /** Needed for the MCP submit_answers tool; without it the tool is not offered. */
   service?: StandupService;
+  /** Built web app (web/dist). Defaults to the checked-out path; missing = /app answers 404. */
+  webDist?: string;
   now?: () => DateTime;
 }
 
@@ -177,6 +181,14 @@ export function createServer(deps: ServerDeps): Express {
     version: APP_VERSION,
     now,
   });
+
+  // The React app. Assets are served as-is; every other /app path gets the
+  // SPA's index so client-side routes survive a refresh.
+  const webDist = deps.webDist ?? join(import.meta.dirname, '..', 'web', 'dist');
+  if (existsSync(join(webDist, 'index.html'))) {
+    app.use('/app', express.static(webDist, { index: false, fallthrough: true }));
+    app.get(['/app', '/app/{*path}'], (_req, res) => res.sendFile(join(webDist, 'index.html')));
+  }
 
   // Public, secret-free summary of the Chat connection — the docs' verify step.
   app.get('/health/chat', async (_req, res) => {

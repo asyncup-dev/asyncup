@@ -59,6 +59,16 @@ export function registerApi(app: Express, deps: ApiDeps): void {
   };
   const api = express.Router();
 
+  // Public: which sign-in buttons the web app should show. No secrets, no state.
+  api.get('/auth/methods', async (_req, res) => {
+    const s = await deps.settings.get();
+    res.json({
+      google: !!(s.oauthClientId && s.oauthClientSecret),
+      saml: !!(s.samlIdpEntityId && s.samlIdpSsoUrl && s.samlIdpCert),
+      token: s.tokenSignIn && !!deps.operatorToken,
+    });
+  });
+
   // Polled by the app every few seconds per open page, so roomier than the
   // credential endpoints' limiter — still a brake on token guessing.
   api.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false }));

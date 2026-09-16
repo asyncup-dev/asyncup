@@ -10,4 +10,6 @@ service-account.json
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 coverage/
+web/dist/
+web/coverage/
 .claude/

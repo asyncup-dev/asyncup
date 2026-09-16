@@ -1,0 +1,133 @@
+/*
+ * Design tokens, generated from the Figma file "AsyncUp v2 — Product Design"
+ * (Foundations page). Light is the default; dark applies through the
+ * viewer's preference or an explicit data-theme on <html>.
+ */
+:root {
+  color-scheme: light;
+
+  --bg-canvas: #f7f9fb;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #eef2f5;
+  --bg-inset: #ffffff;
+  --bg-hover: #f1f4f7;
+  --bg-sidebar: #ffffff;
+
+  --border-default: #e2e8ed;
+  --border-strong: #cbd5de;
+
+  --text-primary: #151e26;
+  --text-secondary: #4d5e6d;
+  --text-muted: #6b7d8d;
+  --text-inverse: #f7f9fb;
+  --text-link: #1f7fae;
+
+  --brand-ink: #17364d;
+  --brand-ink-deep: #0f2a3d;
+
+  --accent-primary: #f28c28;
+  --accent-hover: #e07020;
+  --accent-soft: #fdf0e4;
+  --accent-text: #b85a12;
+  --text-on-accent: #3b2204;
+
+  --success-fg: #1a7f4b;
+  --success-bg: #e6f4ec;
+  --danger-fg: #b42318;
+  --danger-bg: #fdecea;
+  --warning-fg: #b25e07;
+  --warning-bg: #fdf3e2;
+  --info-fg: #1f7fae;
+  --info-bg: #e6f1f7;
+
+  --chart-1: #e07020;
+  --chart-2: #1f7fae;
+  --focus-ring: #f28c28;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-9: 40px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-popover: 0 4px 12px rgba(16, 24, 40, 0.12);
+  --shadow-modal: 0 12px 32px rgba(16, 24, 40, 0.2);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --sidebar-width: 240px;
+  --topbar-height: 56px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg-canvas: #0e151c;
+    --bg-surface: #151e26;
+    --bg-surface-2: #22303b;
+    --bg-inset: #0e151c;
+    --bg-hover: #1c2731;
+    --bg-sidebar: #151e26;
+    --border-default: #364552;
+    --border-strong: #4a5a68;
+    --text-primary: #f7f9fb;
+    --text-secondary: #9aabb9;
+    --text-muted: #6b7d8d;
+    --text-inverse: #151e26;
+    --text-link: #7fb3d5;
+    --accent-soft: #2e1f10;
+    --accent-text: #ffc98a;
+    --success-fg: #7dd8a8;
+    --success-bg: #12271b;
+    --danger-fg: #f28b82;
+    --danger-bg: #2c1512;
+    --warning-fg: #f0b464;
+    --warning-bg: #2c2110;
+    --info-fg: #7fb3d5;
+    --info-bg: #12232e;
+    --chart-1: #f28c28;
+    --chart-2: #7fb3d5;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-canvas: #0e151c;
+  --bg-surface: #151e26;
+  --bg-surface-2: #22303b;
+  --bg-inset: #0e151c;
+  --bg-hover: #1c2731;
+  --bg-sidebar: #151e26;
+  --border-default: #364552;
+  --border-strong: #4a5a68;
+  --text-primary: #f7f9fb;
+  --text-secondary: #9aabb9;
+  --text-muted: #6b7d8d;
+  --text-inverse: #151e26;
+  --text-link: #7fb3d5;
+  --accent-soft: #2e1f10;
+  --accent-text: #ffc98a;
+  --success-fg: #7dd8a8;
+  --success-bg: #12271b;
+  --danger-fg: #f28b82;
+  --danger-bg: #2c1512;
+  --warning-fg: #f0b464;
+  --warning-bg: #2c2110;
+  --info-fg: #7fb3d5;
+  --info-bg: #12232e;
+  --chart-1: #f28c28;
+  --chart-2: #7fb3d5;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+}
