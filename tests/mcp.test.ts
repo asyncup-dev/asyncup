@@ -4,7 +4,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { newSession, sealSession } from '../src/auth/session.js';
 import { createServer } from '../src/server.js';
-import { ANSWERS, makeStack, seedStandup, TENANT, withBlocker } from './helpers.js';
+import { makeStack, seedStandup, TENANT, withBlocker } from './helpers.js';
 
 const SECRET = 'api-test-secret';
 const OPERATOR = 'dash-secret';
@@ -321,7 +321,7 @@ describe('mcp: tools', () => {
   });
 
   it('refuses write tools on a token with no person behind it, and drops submit without the service', async () => {
-    const { repo, connect, call, mint, cookieFor } = await startServer();
+    const { repo, connect, call } = await startServer();
     await seedStandup(repo);
     const { hashMcpToken } = await import('../src/mcp/tokens.js');
     await repo.createMcpToken({
@@ -340,8 +340,6 @@ describe('mcp: tools', () => {
     expect((await call(svc, 'acknowledge_blocker', { blockerId: 1 })).error).toContain('no person behind it');
     expect((await call(svc, 'submit_answers', { standupId: 1, answers: ['a', 'b', 'c'] })).error).toContain('no person behind it');
     expect((await call(svc, 'list_standups')).json.standups).toHaveLength(1);
-    void mint;
-    void cookieFor;
   });
 
   it('does not offer submit_answers when the server has no standup service', async () => {
