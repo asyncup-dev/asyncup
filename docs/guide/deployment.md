@@ -97,7 +97,8 @@ Run it under systemd or any process manager.
 
 ## Production checklist
 
-- [ ] GCP project number set in dashboard settings (request verification on)
-- [ ] HTTPS in front of `/chat/events`
+- [ ] Guided setup finished at `/app/setup`: project number and service-account key verified, first signed Chat event received
+- [ ] HTTPS in front of `/chat/events` (Google only delivers to https)
+- [ ] Google or SAML sign-in configured, then the setup token switched off under *Settings › Sign-in & SSO*
 - [ ] Tick token generated if `/tick` is internet-reachable; `SECRET_KEY` backed up
-- [ ] `DB_PATH` on persistent storage, backed up
+- [ ] `DB_PATH` on persistent storage, backed up (or `DATABASE_URL` pointing at managed Postgres)
