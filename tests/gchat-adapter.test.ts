@@ -260,6 +260,64 @@ describe('GoogleChatAdapter', () => {
 });
 
 describe('createChatClient', () => {
+  it('pages through spaces and human members, falling back to resource names', async () => {
+    const { gchat, calls } = await makeAdapter();
+    const pages: Record<string, any[]> = {
+      spaces: [
+        { data: { spaces: [{ name: 'spaces/a', displayName: 'Alpha' }, { name: 'spaces/b' }, { displayName: 'no name' }], nextPageToken: 'p2' } },
+        { data: { spaces: [{ name: 'spaces/c', displayName: 'Gamma' }] } },
+        { data: {} },
+      ],
+      members: [
+        {
+          data: {
+            memberships: [
+              { member: { name: 'users/1', displayName: 'One', type: 'HUMAN' } },
+              { member: { name: 'users/2', type: 'HUMAN' } },
+              { member: { type: 'HUMAN' } },
+              {},
+            ],
+            nextPageToken: 'm2',
+          },
+        },
+        { data: { memberships: [{ member: { name: 'users/3', displayName: 'Three' } }] } },
+        { data: {} },
+      ],
+    };
+    // Reach past the private client to stub the two list calls.
+    const chat = await (gchat as any).getClient();
+    chat.spaces.list = async (params: any) => {
+      calls.push({ method: 'create', params });
+      return pages.spaces!.shift();
+    };
+    chat.spaces.members = {
+      list: async (params: any) => {
+        calls.push({ method: 'create', params });
+        return pages.members!.shift();
+      },
+    };
+
+    expect(await gchat.listSpaces()).toEqual([
+      { name: 'spaces/a', displayName: 'Alpha' },
+      { name: 'spaces/b', displayName: 'spaces/b' },
+      { name: 'spaces/c', displayName: 'Gamma' },
+    ]);
+    expect(calls.map((c) => c.params)).toEqual([
+      { pageSize: 1000, filter: 'spaceType = "SPACE"', pageToken: undefined },
+      { pageSize: 1000, filter: 'spaceType = "SPACE"', pageToken: 'p2' },
+    ]);
+    calls.length = 0;
+    expect(await gchat.listSpaceMembers('spaces/a')).toEqual([
+      { userName: 'users/1', displayName: 'One' },
+      { userName: 'users/2', displayName: 'users/2' },
+      { userName: 'users/3', displayName: 'Three' },
+    ]);
+    expect(calls.map((c) => c.params.pageToken)).toEqual([undefined, 'm2']);
+    expect(calls[0]!.params).toMatchObject({ parent: 'spaces/a', filter: 'member.type = "HUMAN"' });
+    expect(await gchat.listSpaces()).toEqual([]);
+    expect(await gchat.listSpaceMembers('spaces/a')).toEqual([]);
+  });
+
   it('builds a Chat v1 client bound to the given auth', () => {
     const auth = new chatAuth.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/chat.bot'] });
     const client = createChatClient(auth);

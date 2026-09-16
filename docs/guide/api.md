@@ -28,7 +28,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `lockout`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `lockout`, `chat_unavailable`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
 
 ## Endpoints
 
@@ -73,6 +73,19 @@ is true for admins and for managers of that standup.
 The same object plus `participants` (`userName`, `displayName`,
 `mandatory`, `timezone`, `onVacation`) and `admins`. Returns `404` for a
 standup the caller may not see — including one in another tenant.
+
+### Creating a standup
+
+Admins only. The chat `setup` command and this endpoint share one core, so naming and duplicate rules match.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/templates` | The gallery: `daily-standup`, `weekly-retro`, `mood-check-in`, `sprint-planning`, `blocker-sweep`, `blank`, each with its questions, days, times and mood defaults |
+| `GET` | `/spaces` | Spaces the app has been added to, each with the `standups` already reporting there. Answered by the Chat API with the service account; `502 chat_unavailable` carries the reason |
+| `GET` | `/spaces/:name/members` | Human members of a space as roster suggestions. `:name` is the resource name URL-encoded (`spaces%2FAAAA`) |
+| `POST` | `/standups` | `{ name, spaceName, templateId?, participants?: [{ userName, displayName, mandatory? }], runNow?, …config }` → `201` with the same shape as `GET /standups/:id` plus `template` and `runNow` (the run-now result, or `null`) |
+
+A template seeds the configuration; any config key from `PATCH /standups/:id` (except `escalateUserName`) sent alongside wins over it. A signed-in admin becomes the standup's admin; the operator token leaves it open. `409 duplicate` when the space already has a standup with that name (case-insensitive).
 
 ### Managing a standup
 

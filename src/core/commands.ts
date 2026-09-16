@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import { createStandup } from './create-standup.js';
 import type { ChatAdapter } from './adapter.js';
 import { runProgress } from './progress.js';
 import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, LIMITS, parseDays } from './validation.js';
@@ -189,31 +190,29 @@ export class CommandHandler {
   }
 
   private async setup(ctx: CommandContext, name: string): Promise<string> {
-    const standupName = name || 'Daily Standup';
-    const existing = await this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
-    const duplicate = existing.find((s) => s.name.toLowerCase() === standupName.toLowerCase());
-    if (duplicate) {
+    const creator = ctx.sender.userName ? { userName: ctx.sender.userName, displayName: ctx.sender.displayName } : null;
+    const result = await createStandup(
+      this.repo,
+      this.settings,
+      ctx.tenantId,
+      { name: name || 'Daily Standup', spaceName: ctx.spaceName },
+      creator,
+    );
+    if (!result.ok) {
+      if (result.code !== 'duplicate') return `⚠️ ${result.message}`;
+      const { duplicate } = result;
       return (
         `⚠️ This space already has a standup named *${duplicate.name}* (#${duplicate.id}) — nothing was created.\n` +
         `Configure it with \`#${duplicate.id} <command>\`, pick a different name (\`setup <name>\`), or retire it first with \`#${duplicate.id} archive\`.`
       );
     }
-    const standup = await this.repo.createStandup({
-      tenantId: ctx.tenantId,
-      spaceName: ctx.spaceName,
-      name: standupName,
-      timezone: (await this.settings.get()).defaultTimezone,
-    });
-    if (ctx.sender.userName) {
-      await this.repo.addAdmin(standup.id, ctx.sender.userName, ctx.sender.displayName);
-    }
-    const siblings = await this.repo.listStandupsBySpace(ctx.tenantId, ctx.spaceName);
+    const { standup, siblings } = result;
     const tzTip =
       standup.timezone === 'UTC'
         ? `\n⚠️ Timezone is *UTC* — prompts land at ${standup.promptTime} UTC. Set yours with \`timezone Asia/Kolkata\`-style, or change the default in the dashboard.`
         : '';
     return (
-      `✅ Standup *${standup.name}* created (#${standup.id})${siblings.length > 1 ? ` — this space now has ${siblings.length} standups, prefix commands with \`#${standup.id}\`` : ''}. You are its admin.\n` +
+      `✅ Standup *${standup.name}* created (#${standup.id})${siblings > 1 ? ` — this space now has ${siblings} standups, prefix commands with \`#${standup.id}\`` : ''}. You are its admin.\n` +
       `Defaults: prompt ${standup.promptTime}, deadline ${standup.deadlineTime}, reminder ${standup.reminderMinutesBefore}m before, ${standup.timezone}, ${standup.days}.${tzTip}\n` +
       `Next: \`add @user…\` to add participants, then \`run now\` to see the whole flow immediately.`
     );

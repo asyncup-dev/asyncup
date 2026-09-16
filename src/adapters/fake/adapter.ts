@@ -1,4 +1,4 @@
-import type { ChatAdapter } from '../../core/adapter.js';
+import type { ChatAdapter, SpaceInfo, SpaceMember } from '../../core/adapter.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 
 interface SentDm {
@@ -28,6 +28,9 @@ export class FakeAdapter implements ChatAdapter {
   posts: PostedMessage[] = [];
   /** Users canDm() should report as unreachable (no DM space). */
   unreachable = new Set<string>();
+  /** Fixtures for the space picker and roster suggestions. */
+  spaces: SpaceInfo[] = [];
+  members = new Map<string, SpaceMember[]>();
   private messageCounter = 0;
 
   constructor(private log: ((msg: string) => void) | null = null) {}
@@ -100,6 +103,14 @@ export class FakeAdapter implements ChatAdapter {
 
   async canDm(userName: string): Promise<boolean> {
     return !this.unreachable.has(userName);
+  }
+
+  async listSpaces(): Promise<SpaceInfo[]> {
+    return [...this.spaces];
+  }
+
+  async listSpaceMembers(spaceName: string): Promise<SpaceMember[]> {
+    return [...(this.members.get(spaceName) ?? [])];
   }
 
   async postPoll(standup: Standup, poll: Poll, _tallies: number[]): Promise<string | null> {

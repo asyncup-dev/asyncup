@@ -13,6 +13,7 @@ import { registerBlockerRoutes } from './blockers.js';
 import { registerMemberRoutes } from './member.js';
 import { registerPeopleRoutes } from './people.js';
 import { registerSettingsRoutes } from './settings.js';
+import { registerSpaceRoutes } from './spaces.js';
 import { resolvePrincipal } from './principal.js';
 import { apiError, CSRF_HEADER, CSRF_VALUE, principalOf, type ApiContext, type ApiRequest } from './shared.js';
 import { registerStandupRoutes } from './standups.js';
@@ -91,6 +92,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
   registerPeopleRoutes(api, ctx);
   registerMemberRoutes(api, ctx);
   registerSettingsRoutes(api, ctx);
+  registerSpaceRoutes(api, ctx);
 
   api.use((_req, res) => apiError(res, 404, 'not_found', 'No such API route.'));
   app.use('/api/v1', api);

@@ -107,10 +107,12 @@ describe('api: authentication', () => {
     const blocked = await asCookie(cookie, '/standups', { method: 'POST' });
     expect(blocked.status).toBe(403);
     expect((await blocked.json() as any).error.code).toBe('csrf');
-    // With the header the request reaches routing — and there is no POST route yet.
+    // With the header the request reaches routing: a member may not create standups (403 forbidden, not csrf).
     const routed = await asCookie(cookie, '/standups', { method: 'POST', headers: { 'x-requested-with': 'asyncup' } });
-    expect(routed.status).toBe(404);
-    expect((await asBearer(OPERATOR, '/standups', { method: 'POST' })).status).toBe(404);
+    expect(routed.status).toBe(403);
+    expect((await routed.json() as any).error.code).toBe('forbidden');
+    // Tokens skip the CSRF check entirely; the operator reaches validation.
+    expect((await asBearer(OPERATOR, '/standups', { method: 'POST' })).status).toBe(400);
   });
 
   it('answers unknown routes with JSON, not HTML', async () => {

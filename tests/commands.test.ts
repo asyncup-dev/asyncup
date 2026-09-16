@@ -46,6 +46,11 @@ describe('CommandHandler', () => {
     expect(await repo.listStandupsBySpace(TENANT, SPACE)).toHaveLength(1);
   });
 
+  it('reports a setup that the core refuses', async () => {
+    const { commands } = await makeStack();
+    expect(await commands.handle({ ...ctx('setup Eng'), spaceName: 'dm' })).toContain('⚠️ spaceName');
+  });
+
   it('nudges about the UTC default timezone at setup', async () => {
     const { commands, settings } = await makeStack();
     await settings.update({ defaultTimezone: 'UTC' });
