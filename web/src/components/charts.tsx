@@ -1,7 +1,8 @@
 import type { WeekPoint } from '../lib/api';
 
 /**
- * Ported from src/dashboard/charts.ts — same 480×168 viewBox, insets and
+ * Ported from the retired server-rendered dashboard (charts.ts, removed in
+ * the v2 cut-over) — same 480×168 viewBox, insets and
  * validated marks (amber / blue steps of the brand hues, checked for
  * lightness, chroma, CVD separation and 3:1 surface contrast).
  */

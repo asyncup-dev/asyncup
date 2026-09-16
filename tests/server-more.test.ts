@@ -136,14 +136,14 @@ describe('server edge cases', () => {
     expect(csv.status).toBe(200);
     expect(csv.headers.get('content-disposition')).toContain(`standup-${standup.id}-last-30d.csv`);
 
-    const home = await fetch(`${url}/dashboard`, { headers: { cookie: 'asyncup_dash=dash-secret' } });
+    const home = await fetch(`${url}/api/v1/standups`, { headers: { authorization: 'Bearer dash-secret' } });
     expect(home.status).toBe(200);
-    expect(await home.text()).toContain('Daily Standup');
+    expect(((await home.json()) as any).standups.map((x: any) => x.name)).toEqual(['Daily Standup']);
 
     const session = `asyncup_sess=${sealSession(SECRET, newSession({ sub: '42', email: 'asha@org.com', name: 'Asha', admin: false }))}`;
-    const me = await fetch(`${url}/me`, { headers: { cookie: session } });
+    const me = await fetch(`${url}/api/v1/me/standups`, { headers: { cookie: session } });
     expect(me.status).toBe(200);
-    expect(await me.text()).toContain('Daily Standup');
+    expect(((await me.json()) as any).standups.map((x: any) => x.name)).toEqual(['Daily Standup']);
 
     const scim = await fetch(`${url}/scim/v2/Users`, {
       method: 'POST',
@@ -160,7 +160,7 @@ describe('server edge cases', () => {
       headers: { cookie: start.headers.get('set-cookie')!.split(';')[0]! },
     });
     expect(callback.status).toBe(302);
-    expect(callback.headers.get('location')).toBe('/me');
+    expect(callback.headers.get('location')).toBe('/app');
 
     const acs = await fetch(`${url}/auth/saml/acs`, {
       method: 'POST',
@@ -169,7 +169,7 @@ describe('server edge cases', () => {
       redirect: 'manual',
     });
     expect(acs.status).toBe(302);
-    expect(acs.headers.get('location')).toBe('/me');
+    expect(acs.headers.get('location')).toBe('/app');
   });
 });
 

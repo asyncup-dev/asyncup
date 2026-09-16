@@ -40,7 +40,7 @@ Embedded SQLite is the default; set `DATABASE_URL` for your own PostgreSQL.
 Expose the port over HTTPS (Caddy, a tunnel, Cloud Run — see the
 [server setup guide](./server-setup) for four complete paths). All
 [bootstrap environment variables](#env-vars) are in the reference below;
-everything else is configured in the dashboard and stored encrypted in the
+everything else is configured in the web app and stored encrypted in the
 database.
 
 ### 1.2 Connect Google Chat
@@ -48,14 +48,12 @@ database.
 Follow the [Google Chat setup guide](./google-chat-setup): create a GCP
 project, enable the Chat API, create a service account, and point the Chat
 app at `https://<your-host>/chat/events`. Then open
-`https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` — on a fresh
-install the dashboard opens the **setup walkthrough**: pick a sign-in
-method (Google, SAML, or stay token-only), paste the project **number**
-and service-account key, set workspace defaults, optionally enable AI
-summaries, and finish onto the home page. Every step can be skipped and
-everything can be changed later in Settings (the walkthrough itself is
-re-runnable from `/dashboard/setup`). Until the audience is set, AsyncUp
-**refuses to process events** (fail closed) and the dashboard shows an
+`https://<your-host>/app` and sign in with `DASHBOARD_TOKEN` — on a fresh
+install the app opens the **guided setup**: Cloud project, service account,
+the Chat app configuration with a live check for the first signed event,
+optional sign-in, then the first standup from a template (progress is saved;
+re-runnable from `/app/setup`). Until the audience is set, AsyncUp
+**refuses to process events** (fail closed) and the app shows an
 action-needed banner.
 
 Then make the app installable for your people — the
@@ -105,18 +103,18 @@ In the team space:
 ```
 
 `run now` is the fastest way to demo the whole loop instead of waiting for
-tomorrow; the dashboard's standup page has a matching **▶ Run now** button.
+tomorrow; the standup's Overview in the web app has a matching **Run now** button.
 `setup` refuses duplicate names; a mis-created standup is retired with
 `archive` (history stays). Multiple standups can share a space — prefix
 commands with `#<id>` (ids shown by `status`).
 
 ### 2.2 Day-to-day configuration
 
-Chat commands and the dashboard's standup page edit the same settings —
+Chat commands and the standup's Settings tab edit the same settings —
 use whichever is at hand. The important semantics:
 
 - **Prompt time is participant-local** — each person is prompted at
-  `time` in *their* timezone (set by them via DM `timezone` or `/me`);
+  `time` in *their* timezone (set by them via DM `timezone` or their page at `/app/me`);
   the **deadline is in the standup's timezone** and closes the run for
   everyone.
 - **Mandatory vs optional** (`optional @user`) controls who the wrap-up
@@ -153,7 +151,7 @@ lists everything open with age and tags.
 
 ### 2.5 The admin web console
 
-Workspace admins sign straight into `/dashboard` (Google or SAML); operators
+Workspace admins sign straight into `/app` (Google or SAML); operators
 can use `?token=` while token sign-in is enabled. Once Google or SAML works
 you can switch the token off (Settings → Sign-in & consoles → Token
 sign-in). If you later lose the other method, re-enable it directly in the
@@ -196,9 +194,9 @@ At the standup's prompt time (in **your** timezone) AsyncUp DMs you a card:
 | `timezone Asia/Kolkata` | Get prompts at the standup's time in *your* zone |
 | `timezone` / `timezone reset` | Show / clear your personal timezone |
 
-### 3.3 Your web console — `/me`
+### 3.3 Your own page — `/app/me`
 
-Sign in with Google (or your company's SSO) at `https://<host>/me`:
+Sign in with Google (or your company's SSO) at `https://<host>/app`:
 your standups and today's status, your recent submissions, and the same
 vacation/timezone controls as the DMs. If your account isn't linked to Chat
 yet, it links automatically the first time you use the bot (or instantly
@@ -260,11 +258,9 @@ All token comparisons are constant-time; ✱ = covered by the rate limiter
 | `POST /chat/events` | Google-signed JWT (verified against your audience) | Chat webhook — refuses events until the audience is configured |
 | `POST /tick` ✱ | Bearer tick token (open until one exists) | External cron for scale-to-zero |
 | `GET /export?standupId=N&days=D` ✱ | Bearer export token (404 until one exists) | CSV, D clamped 1–365 |
-| `GET /app[/…]` | Session cookie, or an operator token entered on the sign-in page | The new web app (preview): sign-in, console shell, the standups home (stats strip + table), each standup's Overview, History, Insights and Settings, the cross-standup Blockers, Reports and Team views, workspace Settings (General, Google Chat, Sign-in & SSO, MCP server, API & tokens, Danger zone) the member console at `/app/me` (today's standup with a Chat deep link, my standups, recent answers, timezone and vacation), a phone layout with a bottom tab bar, and the guided setup at `/app/setup` (Cloud project → service account → Chat app with live verification → sign-in → first standup from a template, run immediately); the remaining screens land release by release while `/dashboard` stays |
+| `GET /app[/…]` | Session cookie, or an operator token entered on the sign-in page | The web app: sign-in, console shell, the standups home (stats strip + table), each standup's Overview, History, Insights and Settings, the cross-standup Blockers, Reports and Team views, workspace Settings (General, Google Chat, Sign-in & SSO, MCP server, API & tokens, Danger zone), the member console at `/app/me` (today's standup with a Chat deep link, my standups, recent answers, timezone and vacation), a phone layout with a bottom tab bar, and the guided setup at `/app/setup` (Cloud project → service account → Chat app with live verification → sign-in → first standup from a template, run immediately); the server-rendered dashboard is gone |
 | `POST /mcp` ✱ | Bearer MCP token (503 while switched off) | Model Context Protocol endpoint for the team's own assistants; tokens and scopes under Settings › MCP server — [details](./api#mcp-server) |
 | `/api/v1/…` | Session cookie, or Bearer operator token | JSON API for the web app: standups (incl. create from a template), spaces, runs, roster, blockers, team, me, settings, verification — [details](./api) |
-| `GET /dashboard`, `/dashboard/setup`, `/dashboard/settings`, `/dashboard/standup/:id[...]` ✱ | Admin session or `?token=`/cookie (token only while token sign-in is enabled) | Admin console (home, setup walkthrough, settings, standup page, run-now, roster actions, per-standup CSV, run pages) |
-| `GET /me`, `POST /me/timezone`, `POST /me/vacation` ✱ | Session | User console |
 | `GET /auth/google`, `GET /auth/callback`, `POST /auth/logout` ✱ | — (OAuth state nonce) | Google sign-in |
 | `GET /auth/saml`, `POST /auth/saml/acs`, `GET /auth/saml/metadata` ✱ | — (signed assertions) | SAML sign-in + SP metadata |
 | `/scim/v2/ServiceProviderConfig`, `/scim/v2/Users[…]` ✱ | Bearer SCIM token (404 until one exists) | SCIM 2.0: GET (list `startIndex`/`count` ≤200, `userName eq` filter, by id), POST, PUT, PATCH, DELETE; unsupported filters → 501 |
@@ -279,7 +275,7 @@ All token comparisons are constant-time; ✱ = covered by the rate limiter
 | `DB_PATH` | `./data/standup.db` | SQLite file |
 | `DATABASE_URL` | – | PostgreSQL instead of SQLite |
 | `DB_SSL` / `DB_SSL_CA` | from URL | Postgres TLS mode / CA bundle |
-| `DASHBOARD_TOKEN` | – | Operator break-glass for `/dashboard` (with sign-in configured the console also works without it) |
+| `DASHBOARD_TOKEN` | – | Operator token for the web app and the JSON API — break-glass once Google or SAML sign-in works |
 | `SECRET_KEY` | required | Encrypts stored secrets; signs sessions and webhooks |
 | `ADAPTER` | `google` | `fake` for a credential-free local demo |
 | `TENANT_ID` | `default` | Tenant scoping (multi-tenant installs) |
@@ -297,11 +293,11 @@ would remove the last working sign-in method.
 
 ### 4.4 Webhooks {#webhooks-ref}
 
-Per-standup URL (dashboard). JSON POST, 5 s timeout, failures only logged.
+Per-standup URL (Standup › Settings › Integrations). JSON POST, 5 s timeout, failures only logged.
 Events: `{"event":"submission", standup, date, user, answers, mood, late,
 edited}` and `{"event":"wrap_up", standup, date, summary}`. Every delivery
 carries `X-AsyncUp-Signature: sha256=<hex>` — HMAC-SHA256 of the raw body
-with the standup's signing secret (shown on the dashboard; derived from
+with the standup's signing secret (shown in the standup's settings; derived from
 `SECRET_KEY`, so rotating that rotates it). Verify with a constant-time
 compare and reject mismatches.
 
@@ -312,5 +308,5 @@ compare and reject mismatches.
 | Operator | Runs the server (`DASHBOARD_TOKEN`, env) | Everything, including app settings |
 | Workspace admin | Google Workspace super/delegated admin (via Directory), or the SAML admin group | Full admin console for all standups |
 | Standup admin | Ran `setup`, or granted `admin @user` | Configure that standup from Chat |
-| Participant | `add @user` | Submit, edit, skip, DM self-service, `/me` console |
+| Participant | `add @user` | Submit, edit, skip, DM self-service, own page at `/app/me` |
 | Everyone in the space | — | `status`, `trends`, `blockers`, polls, `help` |

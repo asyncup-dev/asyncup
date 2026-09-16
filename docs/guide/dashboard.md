@@ -1,78 +1,56 @@
-# Web dashboard
+# Web app
 
-A lightweight, server-rendered dashboard for configuration and history —
-no frontend build, no extra dependencies, shipped inside the same container.
+AsyncUp's console lives at **`https://<your-host>/app`**. It is a single-page
+app served by the same process as the Chat bot and the JSON API, so there is
+nothing extra to deploy.
 
-## Enabling
+## Signing in
 
-```bash
-# .env
-DASHBOARD_TOKEN=some-long-random-string
-```
+The sign-in page offers whichever methods are configured:
 
-The dashboard is **disabled until the token is set**. Open:
+| Method | Who lands where |
+| --- | --- |
+| **Sign in with Google** | Workspace admins get the console; everyone else gets their own page |
+| **Continue with SSO** (SAML) | Same split, with the admin role taken from the IdP group attribute |
+| **Operator token** (`DASHBOARD_TOKEN`) | The console, acting as the workspace operator. Kept in the browser tab only; switch it off under *Settings › Sign-in & SSO* once a real method works |
 
-```
-https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>
-```
-
-The token is then remembered in an HttpOnly cookie and the browser is
-immediately redirected to a clean URL, so the token doesn't linger in the
-address bar, browser history, or proxy access logs.
-
-## Sign in with Google — admin and user consoles
-
-With an OAuth client configured (Settings → *Sign in with Google*), the
-consoles map straight onto Google Workspace roles:
-
-- **Workspace admins** (super or delegated, per the Directory API) sign in
-  and get this full admin dashboard — no token needed.
-- **Everyone else** gets a personal console at **`/me`**: their standups and
-  today's status, their recent submissions, and self-service controls for
-  timezone and vacation mode — the same things the DM commands do.
-
-Setup: create a **Web application** OAuth client (GCP → APIs & Services →
-Credentials) with redirect URI `https://<your-host>/auth/callback`, paste
-its ID and secret into Settings, and set the **Workspace admin email** so
-admin status can be looked up in the Directory. Sign-ins are rejected for
-accounts the Directory doesn't know (or that are suspended); without the
-Directory configured, everyone signs in as a regular user and the admin
-console stays token-only.
-
-`DASHBOARD_TOKEN` remains as break-glass operator access — and with sign-in
-configured the admin console works even with no token set at all.
+On a fresh install an admin lands in the **guided setup** (`/app/setup`):
+Cloud project → service account → Chat app configuration with a live check
+for the first signed event → optional sign-in → the first standup from a
+template, run immediately. Progress is saved as you go; the welcome page
+detects a working Chat connection and skips straight to the standup step.
 
 ## What's there
 
-- **First-run checklist** — a setup meter (connect Google Chat, create a
-  standup, add your team, optional AI) that disappears once you're rolling.
-- **Settings** — *all app configuration lives here*: Google Chat connection
-  (audience + paste-in service-account key), AI provider and key, default
-  timezone, Calendar OOO sync, the Workspace admin email (Directory),
-  the Google OAuth client, the SAML IdP, and the machine tokens for
-  `/tick`, `/export` and `/scim/v2` (generate/clear; shown exactly once).
-  Secrets are stored encrypted and never echoed back.
-- **Standup list** — every standup with schedule and today's progress.
-- **Standup detail** — edit name, times, timezone, days, reminder, questions,
-  toggles (mood / anonymous mood / digest / AI / escalation threshold) and the
-  escalation contact and the webhook URL (with its signing secret revealed
-  for receiver setup); manage the roster (mandatory/optional, away/back,
-  make/remove admin, remove); **8-week trend charts** for participation,
-  mood and blockers with a data-table fallback; a ▶ *Run now* button that
-  opens today's run and prompts everyone immediately; and a CSV download of
-  the last 90 days.
-- **Run history** — the last 14 runs with submission counts and missing names;
-  click into any day to read everyone's full answers.
+- **Standups** — stats strip (submitted today, participation, open blockers,
+  missing), the table, and per standup: **Overview** (today's run polled live,
+  recent runs, open blockers, schedule), **History** (every run with full
+  answers, CSV export), **Insights** (participation by person, mood and blocker
+  charts) and **Settings** (schedule, questions, mood, roster, escalation,
+  webhook with a signed test, digest, archive).
+- **Blockers** — every open, acknowledged or resolved blocker across the
+  standups you can see, with filters and the same actions as in Chat.
+- **Reports** — participation, team mood and blockers over 4, 8 or 12 weeks,
+  for all standups or one.
+- **Team** — everyone on a roster with role, standups, timezone and status;
+  roster changes with confirmation.
+- **Settings** — General, Google Chat (with live verification), Sign-in & SSO,
+  MCP server, API & tokens, Danger zone.
+- **My standups** (`/app/me`) — for everyone else: today's standup with an
+  *Answer in Chat* link, recent answers, timezone and vacation mode.
 
-Adding *new* participants happens in Google Chat (`add @user`) because it
-requires a Chat identity the dashboard doesn't know yet; everything about
-people already on the roster is manageable here.
+Admins see the whole workspace. **Managers** — people who administer at least
+one standup — see and manage their own standups, blockers, reports and team
+without Workspace-admin rights. Everyone else gets the personal page.
 
 ## Security notes
 
-- Share the token only with people who should read your team's standups.
-- Always serve it behind HTTPS (same reverse proxy as the webhook).
-- The token cookie is `HttpOnly` + `SameSite=Strict` (scoped to
-  `/dashboard`); the sign-in session cookie is `HttpOnly` + `SameSite=Lax`
-  (it must survive the IdP redirect) and is HMAC-signed with `SECRET_KEY`,
-  expiring after 7 days.
+- Browser sessions are signed cookies (`SECRET_KEY`); state-changing API calls
+  from the app carry an `X-Requested-With` header as CSRF proof.
+- The operator token is only ever sent as a bearer header and is never stored
+  server-side beyond the environment variable.
+- Secrets (service-account key, OAuth secret, SAML certificate) are encrypted
+  at rest and never echoed back by the API — the app only ever learns that
+  they are set.
+- The API and the app share one authorisation model; see the
+  [API guide](./api) for the exact rules per endpoint.

@@ -30,7 +30,7 @@ Expose it over **public HTTPS** behind your reverse proxy
 `cloudflared tunnel --url http://localhost:8080`.
 Your event URL is `https://<your-host>/chat/events`.
 
-Then open `https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` →
+Then open `https://<your-host>/app`, sign in with `DASHBOARD_TOKEN` →
 **Settings → Google Chat** and paste:
 
 - the **project number** from step 1

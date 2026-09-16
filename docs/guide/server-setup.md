@@ -151,7 +151,7 @@ The first HTTPS request can take ~30s while the certificate issues. If it
 doesn't: `docker compose logs caddy` — usual culprits are DNS not pointing
 here yet, or a *provider-level* firewall blocking 80/443 in addition to ufw.
 
-Open **`https://standup.example.com/dashboard?token=<DASHBOARD_TOKEN>`**,
+Open **`https://standup.example.com/app`** and sign in with `DASHBOARD_TOKEN`,
 follow the first-run checklist, then [Google Chat setup](./google-chat-setup).
 
 ### A5. Updates & backups

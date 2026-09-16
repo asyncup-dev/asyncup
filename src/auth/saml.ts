@@ -116,7 +116,7 @@ export function registerSaml(app: Express, deps: SamlDeps): void {
   app.get('/auth/saml', async (req, res) => {
     const broker = await configured(req);
     if (!broker) {
-      res.status(404).send('SAML is not configured — set the IdP details in dashboard settings.');
+      res.status(404).send('SAML is not configured — set the IdP details in Settings › Sign-in & SSO.');
       return;
     }
     res.redirect(await broker.loginUrl('/'));
@@ -172,7 +172,7 @@ export function registerSaml(app: Express, deps: SamlDeps): void {
       }
 
       setSessionCookie(res, sealSession(deps.secretKey, newSession({ sub, email: profile.email, name: profile.displayName, admin })));
-      res.redirect(admin ? '/dashboard' : '/me');
+      res.redirect('/app');
     } catch (err) {
       console.error('[auth] SAML sign-in failed:', err);
       res.status(403).send('SAML sign-in failed — assertion rejected. Check the IdP certificate and URLs.');

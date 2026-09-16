@@ -45,7 +45,7 @@ const pollService = new PollService(repo, adapter);
 const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter, pollService);
 const router = new EventRouter(commands, service, blockerService, repo, config.tenantId, pollService);
 
-// Integrations are resolved from settings per use, so dashboard changes
+// Integrations are resolved from settings per use, so settings changes
 // apply immediately — no restart.
 const providers: SchedulerProviders = {
   ooo: async () => {
@@ -80,10 +80,10 @@ const app = createServer({
   tenantId: config.tenantId,
   directory: providers.directory,
 });
-if (config.dashboardToken) console.log('[dashboard] enabled at /dashboard');
+if (config.dashboardToken) console.log('[app] operator token accepted at /app and /api/v1');
 else
   console.warn(
-    '[dashboard] DASHBOARD_TOKEN is not set — the dashboard is reachable only via admin sign-in (Google/SAML).',
+    '[app] DASHBOARD_TOKEN is not set — the web app is reachable only via admin sign-in (Google/SAML).',
   );
 
 const server = app.listen(config.port, () => {
