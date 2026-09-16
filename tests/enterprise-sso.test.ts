@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { samlAdmin, type SamlBroker, type SamlProfile } from '../src/auth/saml.js';
 import type { DirectoryUser } from '../src/core/directory.js';

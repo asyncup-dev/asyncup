@@ -78,11 +78,13 @@ Full command and configuration reference in the [docs](docs/guide/commands.md).
 
 ## Development
 
+Requires [Bun](https://bun.com) 1.3+.
+
 ```bash
-npm install
-npm test                   # vitest unit suite (<1s)
-ADAPTER=fake npm run dev   # run without Google credentials
-npm run docs:dev           # docs site locally
+bun install
+bun test                   # unit suite (<1s)
+ADAPTER=fake bun run dev   # run without Google credentials
+bun run docs:dev           # docs site locally
 ```
 
 Architecture: `src/core` (domain, scheduler, commands — no platform code),

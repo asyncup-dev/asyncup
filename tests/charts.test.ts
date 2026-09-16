@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { blockersChart, moodChart, participationChart, weeklySeries, type WeekPoint } from '../src/dashboard/charts.js';
 import { ANSWERS, makeStack, seedStandup } from './helpers.js';
 

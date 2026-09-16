@@ -18,6 +18,14 @@ export const TZ = 'Asia/Kolkata';
 export const TENANT = 'default';
 
 let schemaCounter = 0;
+const openRepos = new Set<Repo>();
+
+/** Called from tests/setup.ts after every test so Postgres connections don't pile up. */
+export async function closeOpenRepos(): Promise<void> {
+  const repos = [...openRepos];
+  openRepos.clear();
+  await Promise.all(repos.map((r) => r.close().catch(() => {})));
+}
 
 export async function makeStack(
   opts: {
@@ -34,6 +42,7 @@ export async function makeStack(
   } else {
     repo = await Repo.sqlite(':memory:');
   }
+  openRepos.add(repo);
   const adapter = new FakeAdapter();
 
   let current = DateTime.fromISO('2026-06-10T00:00:00', { zone: TZ });

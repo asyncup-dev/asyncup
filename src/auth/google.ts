@@ -15,14 +15,18 @@ export interface IdentityBroker {
   exchange(code: string, redirectUri: string): Promise<{ sub: string; email: string; name: string }>;
 }
 
+type ClientFactory = (opts: { clientId: string; clientSecret?: string }) => OAuth2Client;
+
 export class GoogleIdentityBroker implements IdentityBroker {
   constructor(
     private clientId: string,
     private clientSecret: string,
+    /** Overridable for tests. */
+    private makeClient: ClientFactory = (opts) => new OAuth2Client(opts),
   ) {}
 
   authUrl(redirectUri: string, state: string): string {
-    return new OAuth2Client({ clientId: this.clientId }).generateAuthUrl({
+    return this.makeClient({ clientId: this.clientId }).generateAuthUrl({
       redirect_uri: redirectUri,
       scope: ['openid', 'email', 'profile'],
       state,
@@ -30,7 +34,7 @@ export class GoogleIdentityBroker implements IdentityBroker {
   }
 
   async exchange(code: string, redirectUri: string): Promise<{ sub: string; email: string; name: string }> {
-    const client = new OAuth2Client({ clientId: this.clientId, clientSecret: this.clientSecret });
+    const client = this.makeClient({ clientId: this.clientId, clientSecret: this.clientSecret });
     const { tokens } = await client.getToken({ code, redirect_uri: redirectUri });
     const ticket = await client.verifyIdToken({ idToken: tokens.id_token!, audience: this.clientId });
     const payload = ticket.getPayload()!;

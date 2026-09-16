@@ -1,8 +1,8 @@
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { Repo } from '../src/db/repo.js';
 import { makeStack, seedStandup, ANSWERS, TENANT } from './helpers.js';
 

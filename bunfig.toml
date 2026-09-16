@@ -1,0 +1,9 @@
+[test]
+root = "tests"
+preload = ["./tests/setup.ts"]
+coverageSkipTestFiles = true
+coverageReporter = ["text", "lcov"]
+coverageDir = "coverage"
+# index.ts is entrypoint wiring only; everything it composes is covered directly.
+coveragePathIgnorePatterns = ["src/index.ts", "tests/**"]
+coverageThreshold = { lines = 1.0, functions = 1.0 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { submissionMessage, summaryText } from '../src/adapters/gchat/cards.js';
 import type { Mention } from '../src/core/commands.js';
@@ -66,7 +66,7 @@ describe('Calendar OOO sync', () => {
       directory: {
         async lookup(userKey: string) {
           lookups.push(userKey);
-          return { email: `${userKey}@org.com`, isAdmin: false, suspended: false };
+          return { id: null, email: `${userKey}@org.com`, isAdmin: false, suspended: false };
         },
       },
     });

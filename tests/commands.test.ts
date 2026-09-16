@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import type { Mention } from '../src/core/commands.js';
 import { ANSWERS, makeStack, TENANT, withBlocker } from './helpers.js';
 

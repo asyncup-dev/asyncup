@@ -8,10 +8,13 @@ bot — contributions of all sizes are welcome.
 ```bash
 git clone https://github.com/asyncup-dev/asyncup
 cd asyncup
-npm install
-npm test               # unit tests (vitest)
-ADAPTER=fake npm run dev   # run locally without Google credentials
+bun install
+bun test               # unit tests
+ADAPTER=fake bun run dev   # run locally without Google credentials
 ```
+
+AsyncUp runs on [Bun](https://bun.com) 1.3+ — it executes TypeScript directly,
+so there is no build step.
 
 The `fake` adapter logs every DM/post to the console, so you can exercise the
 full lifecycle (commands, scheduler, dialogs) with `curl` against
@@ -22,7 +25,7 @@ full lifecycle (commands, scheduler, dialogs) with `curl` against
 ```
 src/core       domain types, scheduler, commands, StandupService — platform-agnostic
 src/adapters   ChatAdapter implementations (gchat today; slack/teams welcome!)
-src/db         SQLite repository (better-sqlite3)
+src/db         repository over embedded SQLite (bun:sqlite) or PostgreSQL
 src/server.ts  Express webhook + /tick + /healthz
 ```
 
@@ -45,12 +48,12 @@ var. Open an issue first so we can agree on scope — happy to guide.
 
 **All changes land via pull request** — `main` is protected; nobody (including
 maintainers) pushes to it directly. CI (typecheck, tests with coverage
-thresholds, build, Docker, dependency audit) and CodeQL must be green to merge.
+thresholds, Docker, dependency audit) and CodeQL must be green to merge.
 
 - Keep PRs focused; small is beautiful.
-- `npm run typecheck && npm run test:coverage` must pass locally.
+- `bun run typecheck && bun run test:coverage` must pass locally.
 - Add tests for behavior changes (the suite runs in <1s, no excuses 🙂) —
-  coverage thresholds are enforced in CI.
+  coverage is enforced at 100% of lines and functions in CI.
 - For user-visible changes, update the docs in `docs/`.
 - Dependabot keeps dependencies current; prefer latest stable versions for
   anything you add.

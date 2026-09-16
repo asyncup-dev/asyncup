@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import type { Submission } from '../src/core/types.js';
 import { ANSWERS, makeStack, seedStandup, withBlocker } from './helpers.js';
 
@@ -14,7 +14,7 @@ describe('StandupService', () => {
     const posts = adapter.posts.filter((p) => p.kind === 'submission');
     expect(posts).toHaveLength(1);
     expect((posts[0]!.payload as Submission).mood).toBe('good');
-    expect((await repo.getSubmission(run.id, 'users/alice'))!.messageName).toBe(posts[0]!.messageName);
+    expect((await repo.getSubmission(run.id, 'users/alice'))!.messageName).toBe(posts[0]!.messageName ?? null);
   });
 
   it('edits an existing submission while the run is open and updates the card', async () => {

@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { createServer } from '../src/server.js';
 import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';

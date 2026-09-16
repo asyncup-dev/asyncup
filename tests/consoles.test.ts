@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import type { IdentityBroker } from '../src/auth/google.js';
 import { newSession, openSession, sealSession } from '../src/auth/session.js';
@@ -76,7 +76,7 @@ describe('Google sign-in', () => {
 
   it('signs a Workspace admin in and lands them on the admin dashboard', async () => {
     const { url } = await startServer({
-      directoryUser: { email: 'asha@org.com', isAdmin: true, suspended: false },
+      directoryUser: { id: null, email: 'asha@org.com', isAdmin: true, suspended: false },
     });
     const { location, cookie } = await completeSignIn(url);
     expect(location).toBe('/dashboard');
@@ -85,7 +85,7 @@ describe('Google sign-in', () => {
 
   it('signs a regular member in and keeps them out of the admin dashboard', async () => {
     const { url } = await startServer({
-      directoryUser: { email: 'asha@org.com', isAdmin: false, suspended: false },
+      directoryUser: { id: null, email: 'asha@org.com', isAdmin: false, suspended: false },
     });
     const { location, cookie } = await completeSignIn(url);
     expect(location).toBe('/me');

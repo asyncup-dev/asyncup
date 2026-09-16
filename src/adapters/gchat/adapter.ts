@@ -13,12 +13,20 @@ import {
   threadParentText,
 } from './cards.js';
 
+export type ChatAuth = InstanceType<typeof chatAuth.GoogleAuth>;
+export type ChatClientFactory = (auth: ChatAuth) => chat_v1.Chat;
+
+export function createChatClient(auth: ChatAuth): chat_v1.Chat {
+  return chat({ version: 'v1', auth });
+}
+
 export class GoogleChatAdapter implements ChatAdapter {
   private client: chat_v1.Chat | null = null;
 
   constructor(
     private repo: Repo,
     private settings: SettingsService,
+    private createClient: ChatClientFactory = createChatClient,
   ) {
     settings.onChange(() => {
       this.client = null;
@@ -33,7 +41,7 @@ export class GoogleChatAdapter implements ChatAdapter {
     const auth = serviceAccountJson
       ? new chatAuth.GoogleAuth({ credentials: JSON.parse(serviceAccountJson), scopes })
       : new chatAuth.GoogleAuth({ scopes });
-    this.client = chat({ version: 'v1', auth });
+    this.client = this.createClient(auth);
     return this.client;
   }
 

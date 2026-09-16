@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { ChatRequestVerifier, classifyFailure, decodeClaims } from '../src/adapters/gchat/auth.js';
 
 function jwt(payload: object): string {
@@ -22,7 +22,7 @@ describe('classifyFailure', () => {
   it('names an audience mismatch with the actual vs expected values', () => {
     const r = classifyFailure({ aud: 'https://standup.example.com/chat/events', iss: 'chat@system.gserviceaccount.com' }, ['742900314218'], 'Wrong recipient');
     expect(r.ok).toBe(false);
-    expect(r).toMatchObject({ reason: expect.stringContaining('aud mismatch') });
+    expect((r as { reason: string }).reason).toContain('aud mismatch');
     expect((r as { reason: string }).reason).toContain('742900314218');
     expect((r as { reason: string }).reason).toContain('standup.example.com');
   });

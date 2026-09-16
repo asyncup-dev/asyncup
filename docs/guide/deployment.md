@@ -86,11 +86,11 @@ on demand; `/tick` wakes it for prompts, reminders, and deadlines. Ticks are
 idempotent — overlapping or missed ticks are safe and caught up on the next
 one.
 
-## Bare Node
+## Bare Bun
 
 ```bash
-npm ci && npm run build
-PORT=8080 DB_PATH=/var/lib/asyncup/standup.db node dist/index.js
+bun install --frozen-lockfile --production
+PORT=8080 DB_PATH=/var/lib/asyncup/standup.db bun src/index.ts
 ```
 
 Run it under systemd or any process manager.
