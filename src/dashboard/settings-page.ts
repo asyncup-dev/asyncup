@@ -399,7 +399,8 @@ export async function settingsPage(
     control: `<textarea name="value" rows="4" placeholder="-----BEGIN CERTIFICATE-----">${esc(s.samlIdpCert)}</textarea>`,
   })}
   ${box({ key: 'samlAdminAttribute', label: 'Admin attribute', hint: 'Assertion attribute checked for the admin group.', control: textControl(s.samlAdminAttribute, 'groups') })}
-  ${box({ key: 'samlAdminGroup', label: 'Admin group value', hint: 'Members get the admin console; Google Directory admins always do.', control: textControl(s.samlAdminGroup, 'asyncup-admins') })}`;
+  ${box({ key: 'samlAdminGroup', label: 'Admin group value', hint: 'Members get the admin console; Google Directory admins always do.', control: textControl(s.samlAdminGroup, 'asyncup-admins') })}
+  ${tokenRow('scimToken', 'SCIM provisioning token', 'Lets the same IdP push users: point its provisioning at <code>/scim/v2</code> with this bearer token. Deactivating a user there removes them from every roster. (Google Workspace cannot push SCIM to custom apps — this pairs with Okta, Entra, OneLogin.)')}`;
 
   // --- AI summaries ---
   const aiOn = !!s.llmProvider;
@@ -432,10 +433,9 @@ export async function settingsPage(
   })}
   </div></div>`;
 
-  const tokensSet = [s.tickToken, s.exportToken, s.scimToken].filter(Boolean).length;
+  const tokensSet = [s.tickToken, s.exportToken].filter(Boolean).length;
   const tokensBody = `${tokenRow('tickToken', 'Scheduler tick token', 'Authorizes POST /tick for external cron (scale-to-zero deploys).')}
-    ${tokenRow('exportToken', 'CSV export token', 'Enables GET /export. Endpoint stays off until a token exists.')}
-    ${tokenRow('scimToken', 'SCIM provisioning token', 'Bearer token for /scim/v2 (Okta, Entra, OneLogin). Deactivating a user there removes them from every roster.')}`;
+    ${tokenRow('exportToken', 'CSV export token', 'Enables GET /export. Endpoint stays off until a token exists.')}`;
 
   return `
   <div class="kicker">Configuration</div>
@@ -457,8 +457,9 @@ export async function settingsPage(
     title: 'Sign-in & consoles',
     desc: 'web access for admins and the team',
     status: googleOn || samlOn ? chip(true, [googleOn && 'Google', samlOn && 'SAML'].filter(Boolean).join(' + ') + (s.tokenSignIn ? ' + token' : '')) : chip(s.tokenSignIn, 'Token only', 'Locked'),
+    open: revealed?.field === 'scimToken',
     body: signInBody,
   })}
   ${section({ title: 'AI summaries', desc: 'bring your own key', status: aiOn ? chip(true, `On · ${s.llmProvider}`) : chip(false, '', 'Off'), body: aiBody })}
-  ${section({ title: 'Access tokens', desc: 'machine endpoints: /tick, /export, /scim', status: chip(tokensSet > 0, `${tokensSet} set`, 'None set'), open: !!revealed, body: tokensBody })}`;
+  ${section({ title: 'Access tokens', desc: 'machine endpoints: /tick, /export', status: chip(tokensSet > 0, `${tokensSet} set`, 'None set'), open: !!revealed && revealed.field !== 'scimToken', body: tokensBody })}`;
 }

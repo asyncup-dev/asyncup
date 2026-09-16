@@ -152,6 +152,22 @@ describe('dashboard', () => {
     expect(
       (await fetch(`${url}/tick`, { method: 'POST', headers: { authorization: `Bearer ${token}` } })).status,
     ).toBe(200);
+
+    // The SCIM token lives with SAML in Sign-in & consoles; generating it
+    // still reveals the value once, inside that section.
+    const scimRes = await fetch(`${url}/dashboard/settings`, {
+      method: 'POST',
+      headers: {
+        cookie: 'asyncup_dash=dash-secret',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ action: 'generate-scim' }).toString(),
+    });
+    const scimHtml = await scimRes.text();
+    const scimToken = (await settings.get()).scimToken;
+    expect(scimHtml).toContain(scimToken);
+    const signInSection = scimHtml.slice(scimHtml.indexOf('Sign-in &amp; consoles'), scimHtml.indexOf('AI summaries'));
+    expect(signInSection).toContain('SCIM provisioning token');
   });
 
   it('runs today\'s standup from the ▶ Run now button', async () => {

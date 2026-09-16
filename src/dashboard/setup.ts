@@ -160,8 +160,9 @@ function extrasStep(s: AppSettings): string {
         <input name="llmModel" value="${esc(s.llmModel)}" placeholder="anthropic default: ${DEFAULT_ANTHROPIC_MODEL}">
       </label>
     </div>
-    <p class="f-hint">Access tokens for machine endpoints (<code>/tick</code>, <code>/export</code>, SCIM
-    provisioning) live in <a href="/dashboard/settings">Settings → Access tokens</a> when you need them.</p>
+    <p class="f-hint">Access tokens for machine endpoints (<code>/tick</code>, <code>/export</code>) live in
+    <a href="/dashboard/settings">Settings → Access tokens</a>; the SCIM provisioning token sits with SAML
+    under Sign-in &amp; consoles.</p>
     <div class="wiz-actions">
       <button class="btn" type="submit">Save & finish</button>
       <a class="btn ghost" href="/dashboard/setup?step=3">← Back</a>

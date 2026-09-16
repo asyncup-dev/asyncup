@@ -289,7 +289,8 @@ timezone · Calendar OOO · Workspace admin email · OAuth client ·
 SAML IdP (entity ID, SSO URL, certificate, admin attribute + group) ·
 token sign-in on/off (off only reachable once Google or SAML works;
 recover with `DELETE FROM settings WHERE key = 'tokenSignIn'` + restart) ·
-tick / export / SCIM tokens. Secrets are write-only — the UI shows *that*
+tick / export tokens · SCIM token (lives beside SAML under Sign-in &
+consoles, since it pairs with the same IdP). Secrets are write-only — the UI shows *that*
 they're set, never the value. The settings UI refuses any change that
 would remove the last working sign-in method.
 
