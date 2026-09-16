@@ -3,10 +3,10 @@ import { WEEKDAYS, type Weekday } from './types.js';
 
 /**
  * The single source for input rules enforced on more than one surface
- * (chat commands, dashboard forms, /me, SCIM). Surfaces keep their own
+ * (chat commands, the JSON API, SCIM). Surfaces keep their own
  * error wording; the rules themselves live here so they cannot drift.
  */
-export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const HTTPS_URL_RE = /^https:\/\/\S+$/i;
 
 export const LIMITS = {

@@ -1,4 +1,4 @@
-# JSON API (preview)
+# JSON API
 
 AsyncUp exposes a JSON API under `/api/v1`. It is the front door the web
 app uses; everything it does calls the same core functions as the chat

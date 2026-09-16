@@ -209,7 +209,7 @@ export class CommandHandler {
     const { standup, siblings } = result;
     const tzTip =
       standup.timezone === 'UTC'
-        ? `\n⚠️ Timezone is *UTC* — prompts land at ${standup.promptTime} UTC. Set yours with \`timezone Asia/Kolkata\`-style, or change the default in the dashboard.`
+        ? `\n⚠️ Timezone is *UTC* — prompts land at ${standup.promptTime} UTC. Set yours with \`timezone Asia/Kolkata\`-style, or change the default under Settings › General.`
         : '';
     return (
       `✅ Standup *${standup.name}* created (#${standup.id})${siblings > 1 ? ` — this space now has ${siblings} standups, prefix commands with \`#${standup.id}\`` : ''}. You are its admin.\n` +
@@ -563,7 +563,7 @@ export class CommandHandler {
       '`GET /export?standupId=' +
       String(standup.id) +
       '&days=30` with header `Authorization: Bearer <export token>`.\n' +
-      'The endpoint is disabled until an export token is generated in the dashboard settings.'
+      'The endpoint is disabled until an export token is generated under Settings › API & tokens.'
     );
   }
 

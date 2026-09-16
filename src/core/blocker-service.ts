@@ -8,7 +8,7 @@ export type AckResult = 'acked' | 'already_acked' | 'not_tagged' | 'not_found';
 export type UpdateResult = 'ok' | 'not_found' | 'resolved';
 export type ResolveResult = 'resolved' | 'already_resolved' | 'not_allowed' | 'not_found';
 
-export function blockerThreadKey(blocker: Blocker): string {
+function blockerThreadKey(blocker: Blocker): string {
   return `blocker-${blocker.id}`;
 }
 

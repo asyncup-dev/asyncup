@@ -95,10 +95,10 @@ has two modes
 
 - **Project Number** *(recommended)* — Google sends a JWT signed by
   `chat@system.gserviceaccount.com` whose `aud` is your project **number**. This
-  is exactly what AsyncUp verifies. Paste that number into the dashboard's
+  is exactly what AsyncUp verifies. Paste that number into the app's
   **Audience** field (Settings → Google Chat).
 - **HTTP endpoint URL** — Google instead sends an OIDC ID token whose `aud` is
-  your endpoint URL. AsyncUp's dashboard will accept a URL here, but the
+  your endpoint URL. AsyncUp will accept a URL here, but the
   recommended, fully-supported mode is **Project Number** — use it unless you
   have a specific reason not to.
 
@@ -141,5 +141,5 @@ your endpoint. Check, in order:
    rejecting an unsigned probe — a plain GET returns 404, the route is
    POST-only). The app logs every arrival and the concrete 401 reason,
    so check `docker compose logs` to see whether Google's request even arrived.
-5. **Audience matches** — dashboard Audience = your project **number**, with
+5. **Audience matches** — the project number in Settings › Google Chat = your project **number**, with
    Authentication Audience = **Project Number** on the Google side.

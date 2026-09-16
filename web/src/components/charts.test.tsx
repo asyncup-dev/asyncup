@@ -7,7 +7,7 @@ const pt = (label: string, participationPct: number | null, mood: number | null,
 const WEEKS = [pt('28 Jul', 80, 3.5, 2, 1), pt('4 Aug', null, null, 0, 0), pt('11 Aug', 100, 4.2, 3, 3), pt('18 Aug', 90, 3.9, 1, 2)];
 
 describe('charts', () => {
-  it('renders the three charts with the dashboard geometry', () => {
+  it('renders the three charts with the original geometry', () => {
     render(<><ParticipationChart points={WEEKS} /><MoodChart points={WEEKS} /><BlockersChart points={WEEKS} /></>);
     expect(screen.getByRole('img', { name: 'Weekly participation percentage' })).toHaveAttribute('viewBox', '0 0 480 168');
     expect(screen.getByText('90%')).toBeInTheDocument();

@@ -4,8 +4,8 @@ import type { Repo } from '../db/repo.js';
 
 /**
  * Runtime app configuration, stored in the database and edited from the
- * dashboard. Secrets are AES-256-GCM encrypted at rest via SECRET_KEY.
- * Only bootstrap values (port, database location, dashboard token, secret
+ * web app. Secrets are AES-256-GCM encrypted at rest via SECRET_KEY.
+ * Only bootstrap values (port, database location, operator token, secret
  * key) remain environment variables.
  */
 export interface AppSettings {
@@ -46,7 +46,7 @@ export interface AppSettings {
   mcpDefaultScopes: string;
 }
 
-export const SETTING_DEFAULTS: AppSettings = {
+const SETTING_DEFAULTS: AppSettings = {
   chatAudience: '',
   serviceAccountJson: '',
   defaultTimezone: 'UTC',
@@ -99,7 +99,7 @@ export class SettingsService {
           value = this.box.decrypt(row.value);
         } catch {
           // SECRET_KEY changed — treat the secret as unset rather than crash.
-          console.error(`[settings] cannot decrypt "${row.key}" — was SECRET_KEY rotated? Re-enter it in the dashboard.`);
+          console.error(`[settings] cannot decrypt "${row.key}" — was SECRET_KEY rotated? Re-enter it under Settings.`);
           continue;
         }
       }

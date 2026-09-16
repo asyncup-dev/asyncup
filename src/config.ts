@@ -1,7 +1,7 @@
 /**
  * Bootstrap-only configuration. Everything else (Google Chat credentials,
  * integrations, access tokens, default timezone) lives in the
- * database and is edited from the dashboard — see src/core/settings.ts.
+ * database and is edited in the web app's Settings — see src/core/settings.ts.
  */
 export interface Config {
   port: number;
@@ -10,7 +10,7 @@ export interface Config {
   databaseUrl: string;
   adapter: 'google' | 'fake';
   tenantId: string;
-  /** Shared secret for the web dashboard. Empty = dashboard disabled. */
+  /** Operator token for the web app and JSON API (OPERATOR_TOKEN, or the older DASHBOARD_TOKEN). Empty = disabled. */
   dashboardToken: string;
   /** Encrypts secrets at rest (AES-256-GCM). Required unless ADAPTER=fake. */
   secretKey: string;
@@ -35,7 +35,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl: env.DATABASE_URL ?? '',
     adapter,
     tenantId: env.TENANT_ID ?? 'default',
-    dashboardToken: env.DASHBOARD_TOKEN ?? '',
+    dashboardToken: env.OPERATOR_TOKEN ?? env.DASHBOARD_TOKEN ?? '',
     secretKey: secretKey || 'dev-only-ephemeral-secret',
     dbSsl: env.DB_SSL ?? '',
     dbSslCa: env.DB_SSL_CA ?? '',

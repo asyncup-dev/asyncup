@@ -6,7 +6,7 @@ const SCOPE = 'https://www.googleapis.com/auth/admin.directory.user.readonly';
 /**
  * Admin SDK Directory lookups. Requires the service-account key with
  * domain-wide delegation for admin.directory.user.readonly, impersonating a
- * Workspace admin (the "Workspace admin email" dashboard setting) — Directory
+ * Workspace admin (the "Workspace admin" setting under Google Chat) — Directory
  * reads are only permitted to admin subjects.
  */
 export class GoogleDirectory implements UserDirectory {

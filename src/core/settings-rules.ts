@@ -3,7 +3,7 @@ import { MCP_SCOPES, type McpScope } from './mcp-scopes.js';
 import { HTTPS_URL_RE, isValidZone, looksLikeEmail } from './validation.js';
 
 /**
- * Rules for editing app settings, shared by the dashboard forms and the
+ * Rules for editing app settings, used by the
  * JSON API: per-field checks, which fields are secrets or booleans, and the
  * lockout guard that refuses to remove the last working sign-in method.
  */
@@ -18,7 +18,7 @@ export function badAudience(v: string): string | null {
     : null;
 }
 
-export function badSaKey(v: string): string | null {
+function badSaKey(v: string): string | null {
   try {
     const parsed = JSON.parse(v);
     if (!parsed.client_email || !parsed.private_key) {
@@ -30,23 +30,23 @@ export function badSaKey(v: string): string | null {
   return null;
 }
 
-export const badOauthId = (v: string): string | null =>
+const badOauthId = (v: string): string | null =>
   v && !v.endsWith('.apps.googleusercontent.com')
     ? 'That does not look like an OAuth client ID (expected ….apps.googleusercontent.com).'
     : null;
 
-export const badSamlSsoUrl = (v: string): string | null =>
+const badSamlSsoUrl = (v: string): string | null =>
   v && !HTTPS_URL_RE.test(v) ? 'The IdP SSO URL must be https://.' : null;
 
-export const badSamlCert = (v: string): string | null =>
+const badSamlCert = (v: string): string | null =>
   v && !v.includes('CERTIFICATE') && !/^[A-Za-z0-9+/=\s]+$/.test(v)
     ? 'The IdP certificate should be the PEM (or base64) X.509 certificate from your IdP.'
     : null;
 
-export const badTimezone = (v: string): string | null =>
+const badTimezone = (v: string): string | null =>
   isValidZone(v) ? null : `Invalid IANA timezone: ${v || '(empty)'} — e.g. Asia/Kolkata.`;
 
-export const badAdminEmail = (v: string): string | null =>
+const badAdminEmail = (v: string): string | null =>
   v && !looksLikeEmail(v) ? `"${v}" doesn't look like an email address.` : null;
 
 const badMcpScopes = (v: string): string | null => {
@@ -57,7 +57,7 @@ const badMcpScopes = (v: string): string | null => {
 export const googleSignInOn = (s: AppSettings): boolean => !!(s.oauthClientId && s.oauthClientSecret);
 export const samlSignInOn = (s: AppSettings): boolean => !!(s.samlIdpEntityId && s.samlIdpSsoUrl && s.samlIdpCert);
 
-/** Would this change leave the dashboard with no working sign-in path? */
+/** Would this change leave the web app with no working sign-in path? */
 export function locksOut(s: AppSettings, change: Partial<AppSettings>): boolean {
   const after = { ...s, ...change };
   return !after.tokenSignIn && !googleSignInOn(after) && !samlSignInOn(after);
@@ -65,14 +65,14 @@ export function locksOut(s: AppSettings, change: Partial<AppSettings>): boolean 
 
 export const LOCKOUT_MSG =
   'That would remove the last working sign-in method. Re-enable token sign-in first, or configure the other method.';
-export const TOKEN_OFF_MSG =
+const TOKEN_OFF_MSG =
   'Configure Google or SAML sign-in before turning the token off — otherwise nobody can sign in.';
 
 /** Secrets keep their stored value on an empty save; an explicit clear wipes them. */
-export const SECRET_FIELDS = new Set<keyof AppSettings>(['serviceAccountJson', 'oauthClientSecret']);
-export const BOOL_FIELDS = new Set<keyof AppSettings>(['calendarOoo', 'tokenSignIn', 'setupComplete', 'mcpEnabled']);
+const SECRET_FIELDS = new Set<keyof AppSettings>(['serviceAccountJson', 'oauthClientSecret']);
+const BOOL_FIELDS = new Set<keyof AppSettings>(['calendarOoo', 'tokenSignIn', 'setupComplete', 'mcpEnabled']);
 
-export const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => string | null>> = {
+const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => string | null>> = {
   chatAudience: badAudience,
   serviceAccountJson: badSaKey,
   defaultTimezone: badTimezone,
@@ -87,13 +87,13 @@ export const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => stri
   mcpDefaultScopes: badMcpScopes,
 };
 
-export const EDITABLE_FIELDS: (keyof AppSettings)[] = [...BOOL_FIELDS, ...(Object.keys(FIELD_CHECKS) as (keyof AppSettings)[])];
+const EDITABLE_FIELDS: (keyof AppSettings)[] = [...BOOL_FIELDS, ...(Object.keys(FIELD_CHECKS) as (keyof AppSettings)[])];
 
 export type FieldChange = { ok: true; change: Partial<AppSettings> } | { ok: false; message: string };
 
 /**
  * Validate one field's new value. Strings are trimmed; `null` clears a
- * secret; an empty string keeps a secret (dashboard boxes submit empty).
+ * secret; an empty string keeps a secret (form boxes submit empty).
  */
 export function stageFieldValue(s: AppSettings, requested: string, raw: unknown): FieldChange {
   // Resolve the name from the allowlist so the written property is never the

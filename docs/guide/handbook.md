@@ -141,7 +141,7 @@ lists everything open with age and tags.
 ### 2.4 Insight and outputs
 
 - `status` — configuration + live progress; `trends` — 4 weeks in chat.
-- **Dashboard standup page** — 8-week charts (participation, mood,
+- **Standup › Insights** — 8-week charts (participation, mood,
   blockers), run history, per-day answers, CSV download.
 - `digest on` — weekly digest with week-over-week deltas.
 - **Webhooks** — per-standup URL receives signed JSON on every
@@ -280,7 +280,7 @@ All token comparisons are constant-time; ✱ = covered by the rate limiter
 | `ADAPTER` | `google` | `fake` for a credential-free local demo |
 | `TENANT_ID` | `default` | Tenant scoping (multi-tenant installs) |
 
-**Dashboard settings** (stored in the DB, secrets encrypted, applied live;
+**App settings** (stored in the DB, secrets encrypted, applied live;
 each value has its own box and saves on its own):
 Chat audience + service-account key · AI provider/key/model · default
 timezone · Calendar OOO · Workspace admin email · OAuth client ·

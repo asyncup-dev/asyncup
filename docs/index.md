@@ -119,7 +119,7 @@ import { withBase } from 'vitepress'
 | Your standup history | In **your** SQLite file or Postgres | On their servers |
 | AI features | Bring your own key, opt-in per standup | Their model, their terms |
 | Infrastructure | One small container, scale-to-zero friendly | — |
-| Customization | Questions, schedules, escalation, dashboard — and the source code | What the plan allows |
+| Customization | Questions, schedules, escalation, the web app — and the source code | What the plan allows |
 
 </div>
 

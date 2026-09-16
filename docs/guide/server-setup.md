@@ -225,7 +225,7 @@ zero between standups.
 3. The in-process scheduler only runs while an instance is alive, so drive
    it externally: a **Cloud Scheduler** job (free tier covers it) hitting
    `POST https://<your-run-url>/tick` every minute with header
-   `Authorization: Bearer <tick token>` (generate the token in dashboard →
+   `Authorization: Bearer <tick token>` (generate the token under Settings ›
    Settings → Access tokens).
 4. Cloud Run gives you HTTPS out of the box; map a custom domain in its
    settings if you want one.
@@ -268,7 +268,7 @@ volumes:
 ```
 
 No open ports, no port forwarding, no certificates to manage. Everything
-else (env, dashboard, backups) is identical to Path A.
+else (env, settings, backups) is identical to Path A.
 
 ---
 
@@ -281,7 +281,7 @@ Whatever path you chose:
       on Cloud Run: max instances 1. (HA isn't needed — a restart loses
       nothing, and ticks catch up.)
 - [ ] HTTPS in front of `/chat/events`; GCP **project number** set in
-      dashboard settings so webhooks are cryptographically verified
+      Settings › Google Chat so webhooks are cryptographically verified
 - [ ] `DASHBOARD_TOKEN` + `SECRET_KEY` set; `SECRET_KEY` backed up somewhere
       that is *not* the database backup
 - [ ] Tick token generated if `/tick` is internet-reachable

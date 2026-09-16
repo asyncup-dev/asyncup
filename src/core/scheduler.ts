@@ -24,7 +24,7 @@ function timeOn(date: string, time: string, zone: string): DateTime {
 
 /**
  * Lazily resolved integrations — settings can change at runtime via the
- * dashboard, so the scheduler asks for fresh instances instead of holding
+ * web app, so the scheduler asks for fresh instances instead of holding
  * boot-time ones.
  */
 export interface SchedulerProviders {
@@ -143,7 +143,7 @@ export class Scheduler {
   /**
    * Opens today's run immediately, bypassing the weekday and prompt-time
    * gates, and prompts everyone eligible right away. Backs `run now` and the
-   * dashboard button so a fresh install can see the flow without waiting.
+   * Run-now button so a fresh install can see the flow without waiting.
    */
   async runNow(standup: Standup): Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'> {
     const now = this.now();

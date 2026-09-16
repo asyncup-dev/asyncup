@@ -9,7 +9,7 @@ whichever fits your install.
 AsyncUp is a standard SAML 2.0 service provider. Any IdP works — Google
 Workspace, Okta, Microsoft Entra, OneLogin.
 
-**In AsyncUp** (dashboard → Settings → *Enterprise SSO*): paste your IdP's
+**In AsyncUp** (Settings › *Sign-in & SSO*): paste your IdP's
 entity ID, SSO URL, and X.509 certificate.
 
 **In your IdP**: create a custom SAML app with
@@ -39,7 +39,7 @@ SAML deliberately doesn't — the IdP itself asserted org membership, and the
 account may live outside Google (e.g. Okta-only contractors). Suspended
 accounts are rejected on both paths.
 
-Everyone else lands on their personal [page](./dashboard) at `/app/me`.
+Everyone else lands on their personal [page](./web-app) at `/app/me`.
 
 ### How SAML users map to Chat
 
@@ -75,5 +75,5 @@ What provisioning does:
   `add @user` when they return.
 
 Adding people to specific standups stays an admin action (`add @user` or the
-dashboard) — SCIM has no standup concept, and pushing every provisioned user
+the app) — SCIM has no standup concept, and pushing every provisioned user
 into every standup would be wrong more often than right.

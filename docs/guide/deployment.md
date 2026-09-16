@@ -79,7 +79,7 @@ scale on the free tier:
    it externally: create a **Cloud Scheduler** job (free tier covers it) that
    hits `POST /tick` every minute with header
    `Authorization: Bearer <tick token>`.
-3. Generate the tick token in dashboard → Settings → Access tokens.
+3. Generate the tick token under Settings › API & tokens.
 
 Webhook events (dialog opens, submissions, commands) spin the instance up
 on demand; `/tick` wakes it for prompts, reminders, and deadlines. Ticks are

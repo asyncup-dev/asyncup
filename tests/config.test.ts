@@ -76,3 +76,10 @@ describe('loadConfig', () => {
     }
   });
 });
+
+describe('operator token aliases', () => {
+  it('prefers OPERATOR_TOKEN and still honours DASHBOARD_TOKEN', () => {
+    expect(loadConfig({ SECRET_KEY: 'k', DASHBOARD_TOKEN: 'old' } as any).dashboardToken).toBe('old');
+    expect(loadConfig({ SECRET_KEY: 'k', DASHBOARD_TOKEN: 'old', OPERATOR_TOKEN: 'new' } as any).dashboardToken).toBe('new');
+  });
+});

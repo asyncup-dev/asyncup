@@ -4,7 +4,7 @@ import { HTTPS_URL_RE, LIMITS, isEscalateDays, isReminderMinutes, isValidTime, i
 
 /**
  * The one place a standup's configuration is validated for the web
- * surfaces (dashboard form and JSON API). Only keys present in `input` are
+ * surfaces (the JSON API and the standup's settings). Only keys present in `input` are
  * checked; cross-field rules use the standup's current values for the
  * rest, so partial updates behave like a full save would.
  */
