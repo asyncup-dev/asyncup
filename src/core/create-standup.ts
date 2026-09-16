@@ -10,12 +10,14 @@ import { LIMITS } from './validation.js';
  * the JSON API both land here, so naming, duplicate and template rules
  * cannot drift between surfaces.
  */
-export interface CreateStandupInput extends Omit<StandupConfigInput, 'escalateUserName' | 'name'> {
+export interface CreateStandupInput extends Omit<StandupConfigInput, 'name'> {
   name?: unknown;
   spaceName?: unknown;
   templateId?: unknown;
   /** [{ userName: "users/…", displayName, mandatory? }] */
   participants?: unknown;
+  /** [{ userName: "users/…", displayName }] — managers, on top of the creator. */
+  admins?: unknown;
 }
 
 export interface Creator {
@@ -59,17 +61,17 @@ const CONFIG_KEYS = [
   'digestEnabled',
 ] as const;
 
-type Participant = { userName: string; displayName: string; mandatory: boolean };
+type Person = { userName: string; displayName: string; mandatory: boolean };
 
-function parseParticipants(raw: unknown): Participant[] | string {
+function parsePeople(raw: unknown, what: string): Person[] | string {
   if (raw === undefined) return [];
-  if (!Array.isArray(raw)) return 'participants must be a list.';
-  const out: Participant[] = [];
+  if (!Array.isArray(raw)) return `${what} must be a list.`;
+  const out: Person[] = [];
   for (const item of raw) {
     const userName = String(item?.userName ?? '').trim();
     const displayName = String(item?.displayName ?? '').trim();
-    if (!userName.startsWith('users/')) return 'Each participant needs a Chat user resource name (users/…).';
-    if (!displayName || displayName.length > LIMITS.textMax) return 'Each participant needs a displayName.';
+    if (!userName.startsWith('users/')) return `Each of ${what} needs a Chat user resource name (users/…).`;
+    if (!displayName || displayName.length > LIMITS.textMax) return `Each of ${what} needs a displayName.`;
     if (!out.some((p) => p.userName === userName)) out.push({ userName, displayName, mandatory: item.mandatory !== false });
   }
   return out;
@@ -95,8 +97,18 @@ export async function createStandup(
     if (!template) return invalid('templateId', 'Unknown template.');
   }
 
-  const participants = parseParticipants(input.participants);
+  const participants = parsePeople(input.participants, 'participants');
   if (typeof participants === 'string') return invalid('participants', participants);
+  const admins = parsePeople(input.admins, 'admins');
+  if (typeof admins === 'string') return invalid('admins', admins);
+
+  // The roster is in the request, so the contact can be checked before the row exists.
+  let escalation: Pick<Standup, 'escalateUserName' | 'escalateDisplayName'> | null = null;
+  if (input.escalateUserName !== undefined && input.escalateUserName !== null && input.escalateUserName !== '') {
+    const contact = participants.find((p) => p.userName === String(input.escalateUserName));
+    if (!contact) return invalid('escalateUserName', 'Escalation contact must be one of the participants.');
+    escalation = { escalateUserName: contact.userName, escalateDisplayName: contact.displayName };
+  }
 
   const existing = await repo.listStandupsBySpace(tenantId, spaceName);
   const duplicate = existing.find((s) => s.name.toLowerCase() === name.toLowerCase());
@@ -122,11 +134,12 @@ export async function createStandup(
   const provisional: Standup = { ...ROW_DEFAULTS, id: 0, tenantId, spaceName, name, timezone };
   const checked = await validateStandupConfig(repo, provisional, config);
   if (!checked.ok) return invalid(checked.field, checked.message);
+  const fields = { ...checked.fields, ...escalation };
 
   const created = await repo.createStandup({ tenantId, spaceName, name, timezone });
-  if (Object.keys(checked.fields).length) await repo.updateStandup(created.id, checked.fields);
+  if (Object.keys(fields).length) await repo.updateStandup(created.id, fields);
   for (const p of participants) await repo.upsertParticipant({ standupId: created.id, ...p });
-  if (creator) await repo.addAdmin(created.id, creator.userName, creator.displayName);
+  for (const a of creator ? [creator, ...admins] : admins) await repo.addAdmin(created.id, a.userName, a.displayName);
 
   return { ok: true, standup: (await repo.getStandupById(created.id))!, template, siblings: existing.length + 1 };
 }

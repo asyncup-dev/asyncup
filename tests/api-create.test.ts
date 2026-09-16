@@ -126,6 +126,9 @@ describe('api: create standup', () => {
       [{ name: 'Eng', spaceName: 'spaces/team', participants: 'alice' }, 'participants'],
       [{ name: 'Eng', spaceName: 'spaces/team', participants: [{ userName: 'alice', displayName: 'A' }] }, 'participants'],
       [{ name: 'Eng', spaceName: 'spaces/team', participants: [{ userName: 'users/a' }] }, 'participants'],
+      [{ name: 'Eng', spaceName: 'spaces/team', admins: { userName: 'users/a' } }, 'admins'],
+      [{ name: 'Eng', spaceName: 'spaces/team', admins: [{ userName: 'users/a', displayName: '' }] }, 'admins'],
+      [{ name: 'Eng', spaceName: 'spaces/team', participants: ROSTER, escalateUserName: 'users/nobody' }, 'escalateUserName'],
       [{ name: 'Eng', spaceName: 'spaces/team', promptTime: '25:00' }, 'promptTime'],
       [{ name: 'Eng', spaceName: 'spaces/team', questions: [] }, 'questions'],
     ];
@@ -185,11 +188,27 @@ describe('api: create standup', () => {
     expect(none.people).toEqual({ total: 0, mandatory: 0 });
   });
 
-  it('makes a signed-in admin the standup admin; the operator token leaves it open', async () => {
+  it('sets the escalation contact from the request roster', async () => {
+    const { create } = await startServer();
+    const withContact = await (await create({ name: 'A', spaceName: 'spaces/a', participants: ROSTER, escalateUserName: 'users/rohit' })).json() as any;
+    expect(withContact.escalation.contact).toEqual({ userName: 'users/rohit', displayName: 'Rohit' });
+    for (const escalateUserName of [null, '']) {
+      const off = await (await create({ name: `Off ${escalateUserName}`, spaceName: 'spaces/a', participants: ROSTER, escalateUserName })).json() as any;
+      expect(off.escalation.contact).toBeNull();
+    }
+  });
+
+  it('makes a signed-in admin the standup admin and adds any named admins; the operator token alone leaves it open', async () => {
     const { create, cookieFor, repo } = await startServer();
-    const mine = await (await create({ name: 'Mine', spaceName: 'spaces/x' }, cookieFor('root', true))).json() as any;
-    expect(mine.admins).toEqual([{ userName: 'users/root', displayName: 'root' }]);
+    const lead = { userName: 'users/lead', displayName: 'Lead' };
+    const mine = await (await create({ name: 'Mine', spaceName: 'spaces/x', admins: [lead, lead] }, cookieFor('root', true))).json() as any;
+    expect(mine.admins).toEqual([lead, { userName: 'users/root', displayName: 'root' }]); // listed by display name
     expect(await repo.isAdmin(mine.id, 'users/root')).toBe(true);
+    expect(await repo.isAdmin(mine.id, 'users/lead')).toBe(true);
+
+    const delegated = await (await create({ name: 'Delegated', spaceName: 'spaces/x', admins: [lead] })).json() as any;
+    expect(delegated.admins).toEqual([lead]);
+
     const open = await (await create({ name: 'Open', spaceName: 'spaces/x', runNow: true })).json() as any;
     expect(open.admins).toEqual([]);
     expect(open.runNow).toBe('no_participants');
