@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import type { Mention } from '../src/core/commands.js';
 import { makeStack, seedStandup, TENANT } from './helpers.js';

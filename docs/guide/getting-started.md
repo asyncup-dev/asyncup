@@ -58,8 +58,8 @@ The `fake` adapter logs all messages to the console instead of calling
 Google Chat:
 
 ```bash
-npm install
-ADAPTER=fake npm run dev
+bun install
+ADAPTER=fake bun run dev
 curl -s -X POST localhost:8080/chat/events \
   -H 'Content-Type: application/json' \
   -d '{"type":"MESSAGE","space":{"name":"spaces/demo","type":"ROOM"},"message":{"argumentText":" setup Demo"}}'

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { resolvePostgresSsl } from '../src/db/driver.js';
 
 const URL = 'postgres://u:p@db.example.com:5432/asyncup';

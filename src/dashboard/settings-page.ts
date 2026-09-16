@@ -193,13 +193,11 @@ const FIELD_CHECKS: Record<string, (v: string) => string | null> = {
   llmApiKey: () => null,
   oauthClientSecret: () => null,
   llmProvider: (v) => (['', 'anthropic', 'openai'].includes(v) ? null : 'Unknown AI provider.'),
-  calendarOoo: () => null,
-  tokenSignIn: () => null,
 };
 
 function stageField(s: AppSettings, body: any): Partial<AppSettings> | string {
   const key = String(body.key ?? '');
-  if (!(key in FIELD_CHECKS)) return 'Unknown setting.';
+  if (!BOOL_FIELDS.has(key) && !(key in FIELD_CHECKS)) return 'Unknown setting.';
 
   if (BOOL_FIELDS.has(key)) {
     const on = body.value === 'on';

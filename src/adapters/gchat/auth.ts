@@ -51,12 +51,15 @@ export function classifyFailure(claims: TokenClaims, audiences: string[], errMes
  * audiences. https://developers.google.com/workspace/chat/verify-requests
  */
 export class ChatRequestVerifier {
-  private client = new OAuth2Client();
   private certs: Record<string, string> | null = null;
   private certsFetchedAt = 0;
   private audiences: string[];
 
-  constructor(audiences: string | string[]) {
+  constructor(
+    audiences: string | string[],
+    /** Overridable for tests. */
+    private client: OAuth2Client = new OAuth2Client(),
+  ) {
     this.audiences = (Array.isArray(audiences) ? audiences : [audiences]).map((a) => a.trim()).filter(Boolean);
   }
 

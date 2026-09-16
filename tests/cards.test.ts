@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import {
   promptMessage,
   standupDialog,
@@ -19,8 +19,13 @@ const standup: Standup = {
   days: 'mon,tue,wed,thu,fri',
   questions: null,
   moodEnabled: true,
+  moodAnonymous: false,
   digestEnabled: false,
   aiEnabled: false,
+  escalateUserName: null,
+  escalateDisplayName: null,
+  escalateAfterDays: 0,
+  webhookUrl: null,
   active: true,
 };
 
@@ -96,6 +101,7 @@ describe('cards', () => {
     const summary: RunSummary = {
       standupName: 'Daily Standup',
       date: '2026-06-10',
+      teamMood: null,
       mandatoryTotal: 7,
       mandatorySubmitted: 5,
       missingMandatory: ['Asha', 'Rohit'],

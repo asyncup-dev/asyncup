@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { AiSummarizer } from '../src/ai/summarizer.js';
 import type { RunSummary } from '../src/core/types.js';
 import { ANSWERS, makeStack, seedStandup } from './helpers.js';

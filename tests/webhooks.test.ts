@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { deriveWebhookSecret } from '../src/core/crypto.js';
 import { ANSWERS, makeStack, seedStandup } from './helpers.js';
 
@@ -12,7 +12,7 @@ function captureFetch(calls: { url: string; body: any; raw: string; headers: Rec
 
 describe('Webhooks', () => {
   it('POSTs submission and wrap_up events to the configured URL', async () => {
-    const calls: { url: string; body: any }[] = [];
+    const calls: Parameters<typeof captureFetch>[0] = [];
     const stack = await makeStack({ webhookFetch: captureFetch(calls) });
     const standup = await seedStandup(stack.repo);
     await stack.repo.updateStandup(standup.id, { webhookUrl: 'https://hooks.example/asyncup' });
@@ -60,7 +60,7 @@ describe('Webhooks', () => {
   });
 
   it('stays silent without a webhook URL and survives webhook failures', async () => {
-    const calls: { url: string; body: any }[] = [];
+    const calls: Parameters<typeof captureFetch>[0] = [];
     const stack = await makeStack({ webhookFetch: captureFetch(calls, 500) });
     const standup = await seedStandup(stack.repo);
 

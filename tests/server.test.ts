@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { createServer } from '../src/server.js';
 import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
@@ -137,8 +137,8 @@ describe('server', () => {
     const { url, settings } = await startServer({ verify: true });
     await settings.update({ chatAudience: '742900314218' }); // turns verification on
     const lines: string[] = [];
-    const warn = vi.spyOn(console, 'warn').mockImplementation((m?: unknown) => void lines.push(String(m)));
-    const log = vi.spyOn(console, 'log').mockImplementation((m?: unknown) => void lines.push(String(m)));
+    const warn = spyOn(console, 'warn').mockImplementation((m?: unknown) => void lines.push(String(m)));
+    const log = spyOn(console, 'log').mockImplementation((m?: unknown) => void lines.push(String(m)));
     try {
       const res = await fetch(`${url}/chat/events`, {
         method: 'POST',

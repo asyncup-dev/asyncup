@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import Database from 'better-sqlite3';
+import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import pg from 'pg';
 
 export type ResolvedSsl = false | { rejectUnauthorized: boolean; ca?: string } | undefined;
@@ -74,8 +74,14 @@ export interface Driver {
 }
 
 abstract class QueuedDriver {
-  private queue: Promise<unknown> = Promise.resolve();
-  private inTransaction = false;
+  private queue: Promise<unknown>;
+  private inTransaction: boolean;
+
+  // Explicit so the base constructor registers as run under Bun's function coverage.
+  constructor() {
+    this.queue = Promise.resolve();
+    this.inTransaction = false;
+  }
 
   protected dispatch<T>(op: () => Promise<T>): Promise<T> {
     if (this.inTransaction) return op();
@@ -106,13 +112,13 @@ abstract class QueuedDriver {
 
 export class SqliteDriver extends QueuedDriver implements Driver {
   readonly dialect = 'sqlite' as const;
-  private db: Database.Database;
+  private db: Database;
 
   constructor(dbPath: string) {
     super();
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('foreign_keys = ON');
+    this.db = new Database(dbPath, { create: true });
+    this.db.exec('PRAGMA journal_mode = WAL');
+    this.db.exec('PRAGMA foreign_keys = ON');
   }
 
   protected async execRaw(sql: string): Promise<void> {
@@ -120,19 +126,19 @@ export class SqliteDriver extends QueuedDriver implements Driver {
   }
 
   async all(sql: string, params: unknown[] = []): Promise<any[]> {
-    return this.dispatch(async () => this.db.prepare(sql).all(...params));
+    return this.dispatch(async () => this.db.prepare(sql).all(...(params as SQLQueryBindings[])));
   }
 
   async get(sql: string, params: unknown[] = []): Promise<any | undefined> {
-    return this.dispatch(async () => this.db.prepare(sql).get(...params));
+    return this.dispatch(async () => this.db.prepare(sql).get(...(params as SQLQueryBindings[])));
   }
 
   async run(sql: string, params: unknown[] = []): Promise<{ changes: number }> {
-    return this.dispatch(async () => ({ changes: this.db.prepare(sql).run(...params).changes }));
+    return this.dispatch(async () => ({ changes: this.db.prepare(sql).run(...(params as SQLQueryBindings[])).changes }));
   }
 
   async insert(sql: string, params: unknown[] = []): Promise<number> {
-    return this.dispatch(async () => Number(this.db.prepare(sql).run(...params).lastInsertRowid));
+    return this.dispatch(async () => Number(this.db.prepare(sql).run(...(params as SQLQueryBindings[])).lastInsertRowid));
   }
 
   async exec(sql: string): Promise<void> {
@@ -140,12 +146,12 @@ export class SqliteDriver extends QueuedDriver implements Driver {
   }
 
   async getVersion(): Promise<number> {
-    return this.dispatch(async () => this.db.pragma('user_version', { simple: true }) as number);
+    return this.dispatch(async () => (this.db.query('PRAGMA user_version').get() as { user_version: number }).user_version);
   }
 
   async setVersion(version: number): Promise<void> {
     await this.dispatch(async () => {
-      this.db.pragma(`user_version = ${version}`);
+      this.db.exec(`PRAGMA user_version = ${version}`);
     });
   }
 
@@ -154,6 +160,9 @@ export class SqliteDriver extends QueuedDriver implements Driver {
   }
 }
 
+/** The slice of `pg.Client` the driver uses. */
+export type PgClient = Pick<pg.Client, 'connect' | 'query' | 'end'>;
+
 function toPgPlaceholders(sql: string): string {
   let i = 0;
   return sql.replace(/\?/g, () => `$${++i}`);
@@ -161,17 +170,21 @@ function toPgPlaceholders(sql: string): string {
 
 export class PostgresDriver extends QueuedDriver implements Driver {
   readonly dialect = 'postgres' as const;
-  private client: pg.Client;
+  private client: PgClient;
 
-  private constructor(client: pg.Client) {
+  private constructor(client: PgClient) {
     super();
     this.client = client;
   }
 
-  /** `schema` isolates installs/tests sharing one database. */
-  static async connect(url: string, schema?: string): Promise<PostgresDriver> {
+  /** `schema` isolates installs/tests sharing one database; `createClient` lets tests supply a fake. */
+  static async connect(
+    url: string,
+    schema?: string,
+    createClient: (config: pg.ClientConfig) => PgClient = (config) => new pg.Client(config),
+  ): Promise<PostgresDriver> {
     const { connectionString, ssl, mode } = resolvePostgresSsl(url);
-    const client = new pg.Client({ connectionString, ssl });
+    const client = createClient({ connectionString, ssl });
     console.log(`[db] postgres TLS: ${mode}`);
     try {
       await client.connect();
