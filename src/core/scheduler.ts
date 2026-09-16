@@ -5,7 +5,6 @@ import { directoryKey, type UserDirectory } from './directory.js';
 import type { Repo } from '../db/repo.js';
 import type { StandupService } from './standup-service.js';
 import type { WebhookNotifier } from './webhooks.js';
-import type { AiSummarizer } from '../ai/summarizer.js';
 import { buildWeeklyDigest, digestText, lastConfiguredWeekday } from './insights.js';
 import { standupDays, type Run, type Standup, type Weekday } from './types.js';
 
@@ -29,7 +28,6 @@ function timeOn(date: string, time: string, zone: string): DateTime {
  * boot-time ones.
  */
 export interface SchedulerProviders {
-  summarizer?: () => Promise<AiSummarizer | null>;
   ooo?: () => Promise<OooChecker | null>;
   directory?: () => Promise<UserDirectory | null>;
 }
@@ -236,32 +234,12 @@ export class Scheduler {
       this.log(`blocker nudges failed for run ${run.id}: ${err}`);
     }
 
-    const ai = standup.aiEnabled ? ((await this.providers.summarizer?.()) ?? null) : null;
-    if (ai) {
-      try {
-        const submissions = await this.repo.listSubmissions(run.id);
-        if (submissions.length > 0) {
-          const text = await ai.dailySummary(standup, run, submissions);
-          await this.adapter.postText(standup.spaceName, `🤖 *AI summary*\n${text}`, run.threadKey);
-        }
-      } catch (err) {
-        this.log(`AI summary failed for run ${run.id}: ${err}`);
-      }
-    }
-
     if (standup.digestEnabled) {
       const weekday = DateTime.fromISO(run.date).weekday;
       if (weekday === lastConfiguredWeekday(standup)) {
         try {
           const digest = await buildWeeklyDigest(this.repo, standup, run.date);
-          let text = digestText(digest);
-          if (ai) {
-            const submissions = await this.repo.listSubmissionsBetween(standup.id, digest.weekStart, digest.weekEnd);
-            if (submissions.length > 0) {
-              text += `\n\n🤖 *AI week in review*\n${await ai.weeklySummary(standup, digest, submissions)}`;
-            }
-          }
-          await this.adapter.postText(standup.spaceName, text, `digest-${standup.id}-${digest.weekStart}`);
+          await this.adapter.postText(standup.spaceName, digestText(digest), `digest-${standup.id}-${digest.weekStart}`);
           this.log(`posted weekly digest for "${standup.name}" (${digest.weekStart})`);
         } catch (err) {
           this.log(`weekly digest failed for "${standup.name}": ${err}`);

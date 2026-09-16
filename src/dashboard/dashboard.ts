@@ -135,7 +135,6 @@ export function registerDashboard(app: Express, deps: DashboardDeps): void {
       { done: !!(s.chatAudience && s.serviceAccountJson), label: 'Connect Google Chat', hint: 'Project number + service-account key in Settings', href: '/dashboard/settings' },
       { done: standups.length > 0, label: 'Create a standup', hint: 'Mention the bot in a space: <code>@AsyncUp setup</code>', href: null },
       { done: [...rosterSizes.values()].some((n) => n > 0), label: 'Add your team', hint: '<code>@AsyncUp add @Alice @Bob</code> in the space', href: null },
-      { done: !!s.llmProvider, label: 'Optional: AI summaries', hint: 'Bring your own key in Settings', href: '/dashboard/settings' },
     ];
     const doneCount = steps.filter((x) => x.done).length;
     const checklist =

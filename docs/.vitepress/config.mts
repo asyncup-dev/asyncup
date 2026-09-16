@@ -12,7 +12,7 @@ export default defineConfig({
       'meta',
       {
         property: 'og:description',
-        content: 'Open source and self-hosted: standup prompts, date threads, blocker tracking, AI summaries with your own key.',
+        content: 'Open source and self-hosted: standup prompts, date threads, blocker tracking, insights, SSO.',
       },
     ],
   ],
@@ -36,7 +36,6 @@ export default defineConfig({
           { text: 'Installing for your team', link: '/guide/distribution' },
           { text: 'Commands', link: '/guide/commands' },
           { text: 'Configuration', link: '/guide/configuration' },
-          { text: 'AI summaries', link: '/guide/ai' },
           { text: 'Web dashboard', link: '/guide/dashboard' },
           { text: 'Enterprise SSO (SAML + SCIM)', link: '/guide/enterprise-sso' },
           { text: 'Deployment', link: '/guide/deployment' },

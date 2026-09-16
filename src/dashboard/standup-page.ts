@@ -64,7 +64,6 @@ export async function applyConfig(repo: Repo, standup: Standup, body: any): Prom
     moodEnabled: body.moodEnabled === 'on',
     moodAnonymous: body.moodAnonymous === 'on',
     digestEnabled: body.digestEnabled === 'on',
-    aiEnabled: body.aiEnabled === 'on',
     escalateAfterDays: escalateDays,
     webhookUrl: webhookUrl || null,
     ...escalate,
@@ -180,7 +179,6 @@ export async function standupPage(
     <label class="inline"><input type="checkbox" name="moodEnabled" ${check(s.moodEnabled)}> Mood question</label>
     <label class="inline"><input type="checkbox" name="moodAnonymous" ${check(s.moodAnonymous)}> Anonymous mood</label>
     <label class="inline"><input type="checkbox" name="digestEnabled" ${check(s.digestEnabled)}> Weekly digest</label>
-    <label class="inline"><input type="checkbox" name="aiEnabled" ${check(s.aiEnabled)}> AI summaries</label>
     <button class="btn" type="submit">Save</button>
     <p><small class="muted">Adding <em>new</em> people still happens in Google Chat (<code>add @user</code>) —
     the dashboard can only manage people whose Chat identity it already knows.</small></p>

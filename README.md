@@ -29,7 +29,7 @@ Each answer is posted as one card per person under a **per-date thread** in your
  └─ 📊 wrap-up: ✅ 7/9 mandatory submitted · ❌ Missing: Asha, Rohit
 ```
 
-**Docs: [The Handbook](docs/guide/handbook.md) · [Getting started](docs/guide/getting-started.md) · [Google Chat setup](docs/guide/google-chat-setup.md) · [Commands](docs/guide/commands.md) · [Configuration](docs/guide/configuration.md) · [AI summaries](docs/guide/ai.md) · [Deployment](docs/guide/deployment.md)**
+**Docs: [The Handbook](docs/guide/handbook.md) · [Getting started](docs/guide/getting-started.md) · [Google Chat setup](docs/guide/google-chat-setup.md) · [Commands](docs/guide/commands.md) · [Configuration](docs/guide/configuration.md) · [Deployment](docs/guide/deployment.md)**
 
 ## Features
 
@@ -47,7 +47,6 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **See it work immediately** — `run now` opens today's run and prompts everyone on the spot; `archive` retires a standup with history intact.
 - **Outbound webhooks** — per-standup JSON POSTs on every submission and wrap-up; pipe standups into Sheets, Zapier/n8n, or your own service.
 - **Polls** — `poll Ship Friday? | Yes | No` posts a live-updating card in the space; one tap to vote, change your vote anytime, close for final results.
-- **AI summaries, bring your own key** — opt-in daily TL;DR and week-in-review via your Anthropic/OpenAI key; nothing leaves your infra otherwise.
 - **Team admins & multiple standups per space** — config restricted to admins; address standups by `#id`.
 - **Lightweight forever** — one container, SQLite inside (auto-migrating schema), scale-to-zero friendly (`/tick` + free-tier cron ≈ $0/month). Runs happily on 1 vCPU / 512 MB.
 - **Bring your own database** — set `DATABASE_URL` and AsyncUp uses your PostgreSQL (managed or `docker compose --profile postgres`) instead of embedded SQLite; both engines tested in CI.

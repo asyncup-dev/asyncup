@@ -21,7 +21,7 @@ import type {
  * SQLite migrations tracked via PRAGMA user_version.
  * Never edit an existing entry — append a new one (and mirror it for Postgres).
  */
-const SQLITE_MIGRATIONS: string[] = [
+export const SQLITE_MIGRATIONS: string[] = [
   // 1 — initial schema (v0.1)
   `
 CREATE TABLE IF NOT EXISTS standups (
@@ -248,6 +248,12 @@ CREATE TABLE scim_users (
   `
 DROP INDEX IF EXISTS idx_blockers_open;
 `,
+  // 10 — in-app AI summaries removed (an MCP server replaces them): drop the
+  //      per-standup flag and forget any stored provider keys
+  `
+ALTER TABLE standups DROP COLUMN ai_enabled;
+DELETE FROM settings WHERE key IN ('llmProvider', 'llmApiKey', 'llmModel');
+`,
 ];
 
 /**
@@ -255,7 +261,7 @@ DROP INDEX IF EXISTS idx_blockers_open;
  * current schema. Future migrations append to BOTH dialect arrays and the
  * version numbers stay aligned via padding entries.
  */
-const POSTGRES_MIGRATIONS: string[] = [
+export const POSTGRES_MIGRATIONS: string[] = [
   `
 CREATE TABLE standups (
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -431,6 +437,12 @@ CREATE TABLE scim_users (
   `
 DROP INDEX IF EXISTS idx_blockers_open;
 `,
+  // 10 — in-app AI summaries removed (an MCP server replaces them): drop the
+  //      per-standup flag and forget any stored provider keys
+  `
+ALTER TABLE standups DROP COLUMN ai_enabled;
+DELETE FROM settings WHERE key IN ('llmProvider', 'llmApiKey', 'llmModel');
+`,
 ];
 
 function toStandup(row: any): Standup {
@@ -448,7 +460,6 @@ function toStandup(row: any): Standup {
     moodEnabled: !!row.mood_enabled,
     moodAnonymous: !!row.mood_anonymous,
     digestEnabled: !!row.digest_enabled,
-    aiEnabled: !!row.ai_enabled,
     escalateUserName: row.escalate_user_name ?? null,
     escalateDisplayName: row.escalate_display_name ?? null,
     escalateAfterDays: row.escalate_after_days,
@@ -664,7 +675,6 @@ export class Repo {
         | 'moodEnabled'
         | 'moodAnonymous'
         | 'digestEnabled'
-        | 'aiEnabled'
         | 'escalateUserName'
         | 'escalateDisplayName'
         | 'escalateAfterDays'
@@ -684,7 +694,6 @@ export class Repo {
       moodEnabled: 'mood_enabled',
       moodAnonymous: 'mood_anonymous',
       digestEnabled: 'digest_enabled',
-      aiEnabled: 'ai_enabled',
       escalateUserName: 'escalate_user_name',
       escalateDisplayName: 'escalate_display_name',
       escalateAfterDays: 'escalate_after_days',

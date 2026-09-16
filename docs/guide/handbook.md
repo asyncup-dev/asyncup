@@ -16,8 +16,8 @@ workday each participant gets a DM card; one tap opens a form (three
 questions plus an optional mood dropdown); answers post as cards under a
 per-date thread in the team space; at the deadline a wrap-up posts the count
 and exactly who's missing. Around that core: blocker tracking and
-collaboration, polls, trends and charts, weekly digests, webhooks, optional
-AI summaries, and web consoles with Google/SAML sign-in. It is MIT-licensed,
+collaboration, polls, trends and charts, weekly digests, webhooks, and web
+consoles with Google/SAML sign-in. It is MIT-licensed,
 self-hosted, one container — **everything documented here is in the free
 open-source core**.
 
@@ -72,7 +72,6 @@ domain).
 | Google sign-in | Sign in with Google → OAuth web client | Admin/user web consoles with zero per-user setup |
 | SAML SSO | Enterprise SSO → IdP entity/URL/cert | Sign-in via any IdP (Google, Okta, Entra, OneLogin) — [details](./enterprise-sso) |
 | SCIM provisioning | Access tokens → SCIM token | IdP-driven offboarding: deactivate there → removed from every roster here |
-| AI summaries | AI → provider + your key | Daily TL;DR + week-in-review per standup ([guide](./ai)) |
 | Outbound webhooks | per standup → Webhook URL | Signed JSON POSTs on submissions and wrap-ups |
 
 ### 1.4 Production checklist
@@ -146,8 +145,7 @@ lists everything open with age and tags.
 - `status` — configuration + live progress; `trends` — 4 weeks in chat.
 - **Dashboard standup page** — 8-week charts (participation, mood,
   blockers), run history, per-day answers, CSV download.
-- `digest on` — weekly digest with week-over-week deltas; `ai on` — AI
-  daily/weekly summaries (needs the server-level key).
+- `digest on` — weekly digest with week-over-week deltas.
 - **Webhooks** — per-standup URL receives signed JSON on every
   submission/edit and wrap-up ([payloads & verification](#webhooks-ref)).
 - `poll Question? | Option A | Option B` — live-updating vote card;
@@ -241,7 +239,7 @@ first standup exists). Everything else needs a standup admin.
 | `questions` / `questions set Q1 \| Q2 \| …` / `questions reset` | The form (1–10 questions, ≤200 chars) |
 | `mood on\|off\|anon` (also `anonymous`) | Mood dropdown; anon shows only the team average |
 | `escalate @user` / `escalate days N` / `escalate off` | Stale-blocker escalation |
-| `digest on\|off` / `ai on\|off` | Weekly digest / AI summaries |
+| `digest on\|off` | Weekly digest |
 | `status` | Config + today's progress (no `#id` → every standup in the space) |
 | `trends` | Last 4 weeks: participation and mood |
 | `blockers` / `blocker <id> tag\|update\|resolve` | Blocker list / collaboration |

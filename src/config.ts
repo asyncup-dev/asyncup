@@ -1,6 +1,6 @@
 /**
  * Bootstrap-only configuration. Everything else (Google Chat credentials,
- * AI keys, integrations, access tokens, default timezone) lives in the
+ * integrations, access tokens, default timezone) lives in the
  * database and is edited from the dashboard — see src/core/settings.ts.
  */
 export interface Config {

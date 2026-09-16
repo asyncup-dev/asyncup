@@ -35,9 +35,6 @@ features:
   - icon: 📊
     title: Insights built in
     details: Trend charts (participation, mood, blockers), weekly digests, anonymous team-mood mode, CSV export, polls, and signed outbound webhooks.
-  - icon: 🤖
-    title: AI summaries, your key
-    details: Opt-in daily TL;DR and week-in-review via your own Anthropic or OpenAI key. Nothing leaves your infra otherwise.
   - icon: 🖥️
     title: Consoles with SSO
     details: Workspace admins sign into the admin dashboard; everyone else gets a personal /me console. Google sign-in or SAML, SCIM provisioning — all in the MIT core.

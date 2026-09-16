@@ -54,7 +54,6 @@ export interface Standup {
   /** Hide per-person mood on cards; the wrap-up shows the team aggregate instead. */
   moodAnonymous: boolean;
   digestEnabled: boolean;
-  aiEnabled: boolean;
   /** Who gets DMed about stale blockers; null = escalation off. */
   escalateUserName: string | null;
   escalateDisplayName: string | null;

@@ -5,8 +5,6 @@ import { Repo } from './db/repo.js';
 import { FakeAdapter } from './adapters/fake/adapter.js';
 import { GoogleChatAdapter } from './adapters/gchat/adapter.js';
 import { EventRouter } from './adapters/gchat/events.js';
-import { createLlm, DEFAULT_ANTHROPIC_MODEL } from './ai/llm.js';
-import { AiSummarizer } from './ai/summarizer.js';
 import { GoogleCalendarOoo } from './integrations/google-calendar.js';
 import { GoogleDirectory } from './integrations/google-directory.js';
 import { BlockerService } from './core/blocker-service.js';
@@ -50,13 +48,6 @@ const router = new EventRouter(commands, service, blockerService, repo, config.t
 // Integrations are resolved from settings per use, so dashboard changes
 // apply immediately — no restart.
 const providers: SchedulerProviders = {
-  summarizer: async () => {
-    const s = await settings.get();
-    if (!s.llmProvider || !s.llmApiKey) return null;
-    const model = s.llmModel || (s.llmProvider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : '');
-    if (!model) return null;
-    return new AiSummarizer(createLlm({ provider: s.llmProvider, apiKey: s.llmApiKey, model }));
-  },
   ooo: async () => {
     const s = await settings.get();
     if (!s.calendarOoo || !s.serviceAccountJson) return null;

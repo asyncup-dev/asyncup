@@ -18,7 +18,6 @@ const standup: Standup = {
   moodEnabled: true,
   moodAnonymous: false,
   digestEnabled: false,
-  aiEnabled: false,
   escalateUserName: null,
   escalateDisplayName: null,
   escalateAfterDays: 0,

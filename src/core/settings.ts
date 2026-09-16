@@ -38,9 +38,6 @@ export interface AppSettings {
   tokenSignIn: boolean;
   /** Set when the first-run walkthrough finishes (or is skipped). */
   setupComplete: boolean;
-  llmProvider: '' | 'anthropic' | 'openai';
-  llmApiKey: string;
-  llmModel: string;
   tickToken: string;
   exportToken: string;
 }
@@ -61,14 +58,11 @@ export const SETTING_DEFAULTS: AppSettings = {
   scimToken: '',
   tokenSignIn: true,
   setupComplete: false,
-  llmProvider: '',
-  llmApiKey: '',
-  llmModel: '',
   tickToken: '',
   exportToken: '',
 };
 
-const SECRET_KEYS: (keyof AppSettings)[] = ['serviceAccountJson', 'llmApiKey', 'tickToken', 'exportToken', 'oauthClientSecret', 'scimToken'];
+const SECRET_KEYS: (keyof AppSettings)[] = ['serviceAccountJson', 'tickToken', 'exportToken', 'oauthClientSecret', 'scimToken'];
 
 export class SettingsService {
   private box: SecretBox;

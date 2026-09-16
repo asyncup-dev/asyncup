@@ -33,20 +33,20 @@ describe('SettingsService', () => {
 
   it('persists values, encrypting secrets at rest', async () => {
     const { settings, repo } = await makeStack();
-    await settings.update({ chatAudience: '12345', llmApiKey: 'sk-secret', calendarOoo: true });
+    await settings.update({ chatAudience: '12345', oauthClientSecret: 'GOCSPX-secret', calendarOoo: true });
 
     const s = await settings.get();
     expect(s.chatAudience).toBe('12345');
-    expect(s.llmApiKey).toBe('sk-secret');
+    expect(s.oauthClientSecret).toBe('GOCSPX-secret');
     expect(s.calendarOoo).toBe(true);
 
     const rows = await repo.getSettingRows();
     const audience = rows.find((r) => r.key === 'chatAudience')!;
     expect(audience.encrypted).toBe(false);
     expect(audience.value).toBe('12345');
-    const key = rows.find((r) => r.key === 'llmApiKey')!;
+    const key = rows.find((r) => r.key === 'oauthClientSecret')!;
     expect(key.encrypted).toBe(true);
-    expect(key.value).not.toContain('sk-secret');
+    expect(key.value).not.toContain('GOCSPX-secret');
   });
 
   it('clears values with empty string and notifies listeners', async () => {

@@ -123,8 +123,7 @@ and Calendar API usage is free within quota; an internal app skips paid
 verification. You already pay for Google Workspace (Chat is included). Your only
 real cost is the server that runs AsyncUp — see
 [Setup guide](./server-setup#system-requirements) (≈ $0 if you co-locate on
-existing infra, ≈ $5/mo otherwise) and the optional, pennies-per-month
-[AI summaries](./ai).
+existing infra, ≈ $5/mo otherwise).
 
 ## "AsyncUp not responding" — checklist
 

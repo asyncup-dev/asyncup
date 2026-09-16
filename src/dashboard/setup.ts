@@ -1,11 +1,10 @@
 import type { Express, Request, Response } from 'express';
 import type { AppSettings, SettingsService } from '../core/settings.js';
-import { DEFAULT_ANTHROPIC_MODEL } from '../ai/llm.js';
 import { esc, layout } from './chrome.js';
 import { applySettings, googleSignInOn, samlSignInOn } from './settings-page.js';
 
 /**
- * First-run walkthrough: sign-in → Google Chat → workspace → extras. Each
+ * First-run walkthrough: sign-in → Google Chat → workspace. Each
  * step is one grouped form (the same applySettings sections the settings
  * page uses per field); Finish marks setupComplete and lands on the home
  * page. Re-runnable any time from Settings.
@@ -18,14 +17,13 @@ export interface SetupDeps {
   hasToken: boolean;
 }
 
-const STEPS = ['Sign-in', 'Google Chat', 'Workspace', 'Extras'];
+const STEPS = ['Sign-in', 'Google Chat', 'Workspace'];
 
 function stepper(current: number, s: AppSettings): string {
   const done = [
     googleSignInOn(s) || samlSignInOn(s),
     !!(s.chatAudience && s.serviceAccountJson),
     s.defaultTimezone !== 'UTC' || !!s.workspaceAdminEmail,
-    !!s.llmProvider,
   ];
   return `<div class="stepper">${STEPS.map(
     (title, i) =>
@@ -122,6 +120,7 @@ function workspaceStep(s: AppSettings): string {
   return `<h2>Workspace defaults</h2>
   <form method="post" action="/dashboard/setup">
     <input type="hidden" name="section" value="workspace"><input type="hidden" name="step" value="3">
+    <input type="hidden" name="finish" value="1">
     <label>Default timezone for new standups
       <input name="defaultTimezone" value="${esc(s.defaultTimezone)}" placeholder="Asia/Kolkata">
     </label>
@@ -133,43 +132,16 @@ function workspaceStep(s: AppSettings): string {
       <small class="muted">Enables Directory lookups — emails resolve for everyone and Workspace admins are
       recognised by the consoles. Needs <code>admin.directory.user.readonly</code> in domain-wide delegation.</small>
     </label>
-    ${actions(3, 'Save & continue')}
-  </form>`;
-}
-
-function extrasStep(s: AppSettings): string {
-  const aiOn = !!s.llmProvider;
-  return `<h2>Optional extras</h2>
-  <form method="post" action="/dashboard/setup" class="ai-form">
-    <input type="hidden" name="section" value="ai"><input type="hidden" name="step" value="4">
-    <input type="hidden" name="finish" value="1">
-    <label class="inline big"><input type="checkbox" name="aiOn" ${aiOn ? 'checked' : ''}>
-      Enable AI summaries <small class="muted">daily TL;DR + week-in-review, via your own key — nothing leaves your infra otherwise</small>
-    </label>
-    <div class="gated">
-      <label>Provider
-        <select name="llmProvider">
-          <option value="anthropic" ${s.llmProvider !== 'openai' ? 'selected' : ''}>Anthropic</option>
-          <option value="openai" ${s.llmProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
-        </select>
-      </label>
-      <label>API key
-        <input name="llmApiKey" type="password" placeholder="${s.llmApiKey ? 'Enter a new key to replace the stored one' : 'sk-…'}" autocomplete="off">
-      </label>
-      <label>Model
-        <input name="llmModel" value="${esc(s.llmModel)}" placeholder="anthropic default: ${DEFAULT_ANTHROPIC_MODEL}">
-      </label>
-    </div>
     <p class="f-hint">Access tokens for machine endpoints (<code>/tick</code>, <code>/export</code>, SCIM
     provisioning) live in <a href="/dashboard/settings">Settings → Access tokens</a> when you need them.</p>
     <div class="wiz-actions">
       <button class="btn" type="submit">Save & finish</button>
-      <a class="btn ghost" href="/dashboard/setup?step=3">← Back</a>
+      <a class="btn ghost" href="/dashboard/setup?step=2">← Back</a>
     </div>
   </form>
   <form method="post" action="/dashboard/setup" style="margin-top:.4rem">
     <input type="hidden" name="action" value="finish">
-    <button class="skip" type="submit" style="background:none;border:0;cursor:pointer;font:inherit;color:var(--muted)">Finish without extras</button>
+    <button class="skip" type="submit" style="background:none;border:0;cursor:pointer;font:inherit;color:var(--muted)">Finish without changes</button>
   </form>`;
 }
 
@@ -178,7 +150,7 @@ export function registerSetup(app: Express, deps: SetupDeps): void {
 
   const render = async (res: Response, step: number, error: string | null) => {
     const s = await settings.get();
-    const bodies = [signinStep(s, deps.hasToken), chatStep(s), workspaceStep(s), extrasStep(s)];
+    const bodies = [signinStep(s, deps.hasToken), chatStep(s), workspaceStep(s)];
     res.status(error ? 400 : 200).send(
       layout(
         'Setup — AsyncUp',

@@ -37,7 +37,6 @@ in the space.
 | `escalate @user` | DM this person when blockers stay open too long |
 | `escalate days N` / `escalate off` | Escalation threshold (default 2 days) / disable |
 | `digest on\|off` | Weekly digest posted after the last run of the week |
-| `ai on\|off` | AI daily/weekly summaries (needs an [LLM key](./ai) on the server) |
 
 ## Insights (everyone)
 
