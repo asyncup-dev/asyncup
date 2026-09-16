@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { Icons } from '../components/icons';
-import { LogoLockup } from '../components/logo';
+import { LogoLockup, LogoMark } from '../components/logo';
 import { initials, useSignOut } from '../lib/auth';
 import type { Me } from '../lib/api';
 import { ThemeToggle } from './theme-toggle';
@@ -55,6 +55,7 @@ export function Shell({ me }: { me: Me }) {
       </aside>
       <div className="main">
         <header className="topbar">
+          <span className="topbar-mark" aria-hidden="true"><LogoMark size={28} /></span>
           <div className="title">{current?.label ?? 'AsyncUp'}</div>
           <div className="search" aria-hidden="true">
             <Icons.search />
@@ -66,6 +67,14 @@ export function Shell({ me }: { me: Me }) {
         <main className="content">
           <Outlet />
         </main>
+        <nav className="tabbar" aria-label="Primary (mobile)">
+          {nav.map((n) => (
+            <Link key={n.to} to={n.to} className="tab-item" aria-current={current?.to === n.to ? 'page' : undefined}>
+              <n.icon />
+              <span>{n.label}</span>
+            </Link>
+          ))}
+        </nav>
       </div>
     </div>
   );

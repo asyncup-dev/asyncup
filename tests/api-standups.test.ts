@@ -343,10 +343,14 @@ describe('api: member', () => {
     const alice = cookieFor('alice', 'Alice');
     let mine = await (await as(alice, '/me/standups')).json() as any;
     expect(mine.linked).toBe(true);
-    expect(mine.standups[0]).toMatchObject({ id: s.id, today: null, mandatory: true, onVacation: false });
+    expect(mine.standups[0]).toMatchObject({ id: s.id, today: null, progress: null, mandatory: true, onVacation: false });
+    expect(mine).toMatchObject({ timezone: null, chat: { dmUrl: null } });
+    await repo.setDmSpace('users/alice', 'spaces/dm-alice');
+    expect((await (await as(alice, '/me/standups')).json() as any).chat.dmUrl).toBe('https://chat.google.com/dm/dm-alice');
 
     const run = await openRun(s.id);
-    expect((await (await as(alice, '/me/standups')).json() as any).standups[0].today).toBe('waiting');
+    mine = await (await as(alice, '/me/standups')).json() as any;
+    expect(mine.standups[0]).toMatchObject({ today: 'waiting', progress: { submitted: 0, expected: 3 } });
     await service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
     expect((await (await as(alice, '/me/standups')).json() as any).standups[0].today).toBe('submitted');
     const bob = cookieFor('bob', 'Bob');

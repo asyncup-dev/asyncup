@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, type Settings } from './lib/api';
 import { useMe } from './lib/auth';
 import { BlockersPage } from './pages/blockers';
+import { MePage } from './pages/me';
 import { Placeholder } from './pages/placeholder';
 import { ReportsPage } from './pages/reports';
 import { ChatSettings } from './pages/settings/chat';
@@ -106,7 +107,7 @@ export function buildRouter(): AnyRouter {
     createRoute({ getParentRoute: () => settings, path: '/tokens', component: TokenSettings }),
     createRoute({ getParentRoute: () => settings, path: '/danger', component: DangerSettings }),
   ];
-  const mine = createRoute({ getParentRoute: () => shell, path: '/me', component: () => <Placeholder title="My standups" /> });
+  const mine = createRoute({ getParentRoute: () => shell, path: '/me', component: MePage });
   const routeTree = root.addChildren([signIn, setup.addChildren(setupRoutes), shell.addChildren([home, standups, standup.addChildren(standupTabs), mine, blockers, reports, team, settings.addChildren(settingsPages)])]);
   return createRouter({ routeTree, basepath: '/app', defaultNotFoundComponent: () => <Placeholder title="Not found" /> });
 }

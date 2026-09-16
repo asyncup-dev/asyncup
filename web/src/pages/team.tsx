@@ -56,7 +56,7 @@ export function TeamPage() {
             {people.data && rows.length === 0 ? <tr><td colSpan={6} className="t-small muted">Nobody matches this filter.</td></tr> : null}
             {rows.map((p) => (
               <tr key={p.userName}>
-                <td>
+                <td data-label="Person">
                   <span className="person-row">
                     <span className="avatar" aria-hidden="true">{p.displayName[0]}</span>
                     <span>
@@ -65,10 +65,10 @@ export function TeamPage() {
                     </span>
                   </span>
                 </td>
-                <td><span className={`badge ${roleOf(p) === 'Manager' ? 'badge-info' : ''}`}>{roleOf(p)}</span></td>
-                <td className="t-small">{p.standups.map((s) => `${s.name}${s.mandatory ? '' : ' (optional)'}`).join(' · ') || '—'}</td>
-                <td className="t-small secondary">{p.timezone ?? '—'}</td>
-                <td><span className={`badge ${p.onVacation ? 'badge-warning' : 'badge-success'}`}>{p.onVacation ? 'Away' : 'Active'}</span></td>
+                <td data-label="Role"><span className={`badge ${roleOf(p) === 'Manager' ? 'badge-info' : ''}`}>{roleOf(p)}</span></td>
+                <td data-label="Standups" className="t-small">{p.standups.map((s) => `${s.name}${s.mandatory ? '' : ' (optional)'}`).join(' · ') || '—'}</td>
+                <td data-label="Timezone" className="t-small secondary">{p.timezone ?? '—'}</td>
+                <td data-label="Status"><span className={`badge ${p.onVacation ? 'badge-warning' : 'badge-success'}`}>{p.onVacation ? 'Away' : 'Active'}</span></td>
                 <td>
                   <div className="menu" style={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <button type="button" className="icon-btn" aria-label={`Actions for ${p.displayName}`} aria-expanded={menuFor === p.userName} onClick={() => setMenuFor(menuFor === p.userName ? null : p.userName)}>⋯</button>

@@ -1,4 +1,4 @@
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADMIN, MEMBER, OPERATOR, renderApp, stubApi } from './test/harness';
@@ -66,9 +66,9 @@ describe('sign-in', () => {
   });
 
   it('sends a signed-in person past the sign-in page', async () => {
-    stubApi({ 'GET /api/v1/me': { body: MEMBER } });
+    stubApi({ 'GET /api/v1/me': { body: MEMBER }, 'GET /api/v1/me/standups': { body: { linked: false, standups: [] } }, 'GET /api/v1/me/submissions?limit=5': { body: { submissions: [] } } });
     renderApp('/sign-in');
-    expect(await screen.findByRole('heading', { name: 'My standups' })).toBeInTheDocument();
+    expect(await screen.findByText('Your account is not linked to Google Chat yet')).toBeInTheDocument();
   });
 
   it('reports a token the server no longer accepts', async () => {
@@ -91,17 +91,21 @@ describe('shell', () => {
     expect(screen.getByText('Wed 16 Sept · 1 standup · 1 open today')).toBeInTheDocument();
     expect(screen.getByText('Engineering')).toBeInTheDocument();
     expect(screen.getByText('7 / 9 in')).toHaveClass('badge-warning');
-    expect(screen.getByRole('link', { name: 'Standups' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Standups' })[0]).toHaveAttribute('aria-current', 'page');
+    expect(screen.getAllByRole('link', { name: 'Settings' })).toHaveLength(2);
     expect(screen.getByText('Asha Rao')).toBeInTheDocument();
     expect(screen.getAllByText('AR').length).toBeGreaterThan(0);
+    // The phone tab bar carries the same navigation; CSS decides which one shows.
+    const tabbar = screen.getByRole('navigation', { name: 'Primary (mobile)' });
+    expect(within(tabbar).getAllByRole('link')).toHaveLength(5);
+    expect(screen.getAllByRole('cell')[0]).toHaveAttribute('data-label', 'Standup');
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('link', { name: 'Blockers' }));
+    await user.click(screen.getAllByRole('link', { name: 'Blockers' })[0]!);
     expect(await screen.findByRole('heading', { name: 'Blockers' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
@@ -117,11 +121,11 @@ describe('shell', () => {
     expect(screen.getByText('Nothing running yet')).toBeInTheDocument();
 
     cleanup();
-    stubApi({ 'GET /api/v1/me': { body: MEMBER } });
+    stubApi({ 'GET /api/v1/me': { body: MEMBER }, 'GET /api/v1/me/standups': { body: { linked: false, standups: [] } }, 'GET /api/v1/me/submissions?limit=5': { body: { submissions: [] } } });
     renderApp('/me');
-    expect(await screen.findByRole('heading', { name: 'My standups' })).toBeInTheDocument();
+    expect(await screen.findByText('Your account is not linked to Google Chat yet')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'My standups' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getAllByRole('link', { name: 'My standups' })[0]).toHaveAttribute('aria-current', 'page');
   });
 
   it('redirects a signed-out visitor to sign-in and reports API failures', async () => {

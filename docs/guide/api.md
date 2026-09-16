@@ -129,7 +129,7 @@ Moods are withheld per person when the standup keeps them anonymous; only the te
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/me/standups` | `linked: false` until the account has a Chat identity; otherwise each standup with `today` = `submitted`, `waiting`, `closed` or `null` |
+| `GET` | `/me/standups` | `linked: false` until the account has a Chat identity; otherwise `timezone` (own override or `null`), `chat.dmUrl` (deep link to the bot's DM once one exists) and each standup with `today` = `submitted`, `waiting`, `closed` or `null` plus `progress` (`{ submitted, expected }` while a run exists) |
 | `GET` | `/me/submissions?limit=10` | My recent answers |
 | `PATCH` | `/me` | `{ timezone?: string \| null, onVacation?: boolean }`; `409 not_linked` without a Chat identity |
 

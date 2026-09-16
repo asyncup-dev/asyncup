@@ -245,15 +245,46 @@ a:hover {
 .divider { display: flex; align-items: center; gap: var(--space-3); color: var(--text-muted); }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border-default); }
 
-@media (max-width: 800px) {
+.topbar-mark { display: none; }
+.tabbar { display: none; }
+
+@media (max-width: 720px) {
   .shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; flex-direction: row; align-items: center; gap: var(--space-2); overflow-x: auto; }
-  .sidebar .brand { padding: 0 var(--space-2) 0 0; }
-  .nav { grid-auto-flow: column; }
-  .sidebar .spacer, .workspace { display: none; }
+  .sidebar { display: none; }
   .topbar { padding: 0 var(--space-4); }
+  .topbar-mark { display: inline-flex; }
   .topbar .search { display: none; }
-  .content { padding: var(--space-4); }
+  .content { padding: var(--space-4); padding-bottom: calc(65px + var(--space-6)); }
+  .tabbar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 5;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    height: 65px;
+    padding: var(--space-2) var(--space-2) env(safe-area-inset-bottom);
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-default);
+  }
+  .tab-item { display: grid; justify-items: center; gap: 4px; padding-top: 4px; color: var(--text-secondary); font-size: 11px; font-weight: 500; }
+  .tab-item:hover { text-decoration: none; }
+  .tab-item[aria-current='page'] { color: var(--accent-text); }
+  .tab-item svg { width: 16px; height: 16px; }
+  .page-header { flex-direction: column; align-items: stretch; }
+  .stats { grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+  .stat { padding: var(--space-3); }
+  .stat .value { font-size: 20px; line-height: 24px; }
+  .stats .stat:nth-child(n + 4) { display: none; }
+  /* Tables collapse to cards; each cell is labelled by its column. */
+  .table thead { display: none; }
+  .table, .table tbody, .table tr, .table td { display: block; }
+  .table tr { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); }
+  .table td { padding: 2px 0; border: 0; }
+  .table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 88px; color: var(--text-muted); font-size: 12px; }
+  .table td:empty { display: none; }
+  .standup-header .btn { flex: 1; }
+  .tabs { overflow-x: auto; }
 }
 
 /* Setup walkthrough */
