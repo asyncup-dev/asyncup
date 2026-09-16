@@ -40,6 +40,10 @@ export interface AppSettings {
   setupComplete: boolean;
   tickToken: string;
   exportToken: string;
+  /** MCP server at /mcp. Off = 503 for every request, tokens stay stored. */
+  mcpEnabled: boolean;
+  /** Comma list of MCP scopes a new token gets when none are chosen. */
+  mcpDefaultScopes: string;
 }
 
 export const SETTING_DEFAULTS: AppSettings = {
@@ -60,6 +64,8 @@ export const SETTING_DEFAULTS: AppSettings = {
   setupComplete: false,
   tickToken: '',
   exportToken: '',
+  mcpEnabled: false,
+  mcpDefaultScopes: 'read',
 };
 
 const SECRET_KEYS: (keyof AppSettings)[] = ['serviceAccountJson', 'tickToken', 'exportToken', 'oauthClientSecret', 'scimToken'];

@@ -70,32 +70,37 @@ export async function visibleStandups(repo: Repo, p: Principal): Promise<Standup
  * 404 when it does not exist, belongs to another tenant or is invisible;
  * 403 when `manage` is required and the caller only belongs to it.
  */
+/** A standup the caller may see (tenant + admin, manager or member), and whether they may manage it. */
+export async function findVisibleStandup(
+  repo: Repo,
+  p: Principal,
+  id: number,
+): Promise<{ standup: Standup; manage: boolean } | null> {
+  const standup = await repo.getStandupById(id);
+  if (!standup || standup.tenantId !== p.tenantId) return null;
+  const manage = canManage(p, standup.id);
+  if (manage) return { standup, manage };
+  const userName = p.user?.userName;
+  const member = !!userName && (await repo.listParticipants(standup.id)).some((x) => x.userName === userName);
+  return member ? { standup, manage: false } : null;
+}
+
 export async function loadStandup(
   ctx: ApiContext,
   req: Request<any>,
   res: Response,
   opts: { manage?: boolean } = {},
 ): Promise<Standup | null> {
-  const p = principalOf(req);
-  const standup = await ctx.repo.getStandupById(Number(req.params.id));
-  if (!standup || standup.tenantId !== p.tenantId) {
+  const found = await findVisibleStandup(ctx.repo, principalOf(req), Number(req.params.id));
+  if (!found) {
     apiError(res, 404, 'not_found', 'No such standup.');
     return null;
   }
-  const manage = canManage(p, standup.id);
-  if (!manage) {
-    const userName = p.user?.userName;
-    const member = !!userName && (await ctx.repo.listParticipants(standup.id)).some((x) => x.userName === userName);
-    if (!member) {
-      apiError(res, 404, 'not_found', 'No such standup.');
-      return null;
-    }
-    if (opts.manage) {
-      apiError(res, 403, 'forbidden', 'Only admins and this standup’s managers can do that.');
-      return null;
-    }
+  if (opts.manage && !found.manage) {
+    apiError(res, 403, 'forbidden', 'Only admins and this standup’s managers can do that.');
+    return null;
   }
-  return standup;
+  return found.standup;
 }
 
 export async function summarise(repo: Repo, s: Standup, now: DateTime, manage: boolean) {

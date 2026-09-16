@@ -260,6 +260,7 @@ All token comparisons are constant-time; ✱ = covered by the rate limiter
 | `POST /chat/events` | Google-signed JWT (verified against your audience) | Chat webhook — refuses events until the audience is configured |
 | `POST /tick` ✱ | Bearer tick token (open until one exists) | External cron for scale-to-zero |
 | `GET /export?standupId=N&days=D` ✱ | Bearer export token (404 until one exists) | CSV, D clamped 1–365 |
+| `POST /mcp` ✱ | Bearer MCP token (503 while switched off) | Model Context Protocol endpoint for the team's own assistants; tokens and scopes under Settings › MCP server — [details](./api#mcp-server) |
 | `/api/v1/…` | Session cookie, or Bearer operator token | JSON API for the web app: standups (incl. create from a template), spaces, runs, roster, blockers, team, me, settings, verification — [details](./api) |
 | `GET /dashboard`, `/dashboard/setup`, `/dashboard/settings`, `/dashboard/standup/:id[...]` ✱ | Admin session or `?token=`/cookie (token only while token sign-in is enabled) | Admin console (home, setup walkthrough, settings, standup page, run-now, roster actions, per-standup CSV, run pages) |
 | `GET /me`, `POST /me/timezone`, `POST /me/vacation` ✱ | Session | User console |

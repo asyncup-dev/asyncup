@@ -22,6 +22,9 @@ import { createChatClient, type ChatClientFactory } from './adapters/gchat/adapt
 import { NodeSamlBroker } from './auth/saml.js';
 import { LAST_EVENT_KEYS, recordChatEvent } from './core/verify.js';
 import { WebhookNotifier } from './core/webhooks.js';
+import type { StandupService } from './core/standup-service.js';
+import { registerMcp } from './mcp/server.js';
+import { APP_VERSION } from './version.js';
 import type { UserDirectory } from './core/directory.js';
 
 export interface ServerDeps {
@@ -52,6 +55,8 @@ export interface ServerDeps {
   chatClientFactory?: ChatClientFactory;
   /** Test override for outbound HTTP (webhook tests, IdP reachability). */
   externalFetch?: typeof fetch;
+  /** Needed for the MCP submit_answers tool; without it the tool is not offered. */
+  service?: StandupService;
   now?: () => DateTime;
 }
 
@@ -95,7 +100,7 @@ export function createServer(deps: ServerDeps): Express {
   // Brute-force protection for every token-checking endpoint.
   const authLimiter = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
   // Every surface that checks a credential gets brute-force protection.
-  app.use(['/dashboard', '/export', '/tick', '/auth', '/me', '/scim'], authLimiter);
+  app.use(['/dashboard', '/export', '/tick', '/auth', '/me', '/scim', '/mcp'], authLimiter);
 
   const signInEnabled = async () => {
     const { oauthClientId, oauthClientSecret } = await settings.get();
@@ -162,6 +167,16 @@ export function createServer(deps: ServerDeps): Express {
   // The root has no page of its own — land people on the user console,
   // which explains itself in every configuration state.
   app.get('/', (_req, res) => res.redirect('/me'));
+
+  registerMcp(app, {
+    repo,
+    settings,
+    blockers: deps.blockers,
+    service: deps.service ?? null,
+    tenantId: deps.tenantId ?? 'default',
+    version: APP_VERSION,
+    now,
+  });
 
   // Public, secret-free summary of the Chat connection — the docs' verify step.
   app.get('/health/chat', async (_req, res) => {

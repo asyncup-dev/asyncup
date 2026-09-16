@@ -254,3 +254,32 @@ export function blockerAnswers(submission: SubmissionInput): string[] {
     .filter((a) => isBlockerQuestion(a.question) && isRealBlocker(a.answer))
     .map((a) => a.answer);
 }
+
+export interface McpToken {
+  id: number;
+  tenantId: string;
+  name: string;
+  kind: 'personal' | 'service';
+  /** null for service tokens — they act as the tenant, read-only. */
+  ownerUserName: string | null;
+  ownerDisplayName: string | null;
+  /** Whether the owner was a Workspace admin when the token was minted. */
+  ownerAdmin: boolean;
+  /** Comma list of MCP scopes. */
+  scopes: string;
+  tokenHash: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  /** Rolling: pushed forward on every use. */
+  expiresAt: string;
+  revokedAt: string | null;
+}
+
+export interface McpActivity {
+  id: number;
+  token: { id: number; name: string };
+  tool: string;
+  argsSummary: string;
+  ok: boolean;
+  at: string;
+}

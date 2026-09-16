@@ -2,55 +2,22 @@ import type { Request, Response, Router } from 'express';
 import type { Mention } from '../core/commands.js';
 import type { Blocker } from '../core/types.js';
 import { LIMITS } from '../core/validation.js';
-import { apiError, canManage, principalOf, visibleStandups, type ApiContext } from './shared.js';
-
-const STATUSES = new Set(['open', 'acknowledged', 'resolved', 'all']);
+import { apiError, principalOf, type ApiContext } from './shared.js';
+import { BLOCKER_STATUSES, blockersView, visibleBlocker, type BlockerStatusFilter } from './views.js';
 
 export function registerBlockerRoutes(api: Router, ctx: ApiContext): void {
   const { repo } = ctx;
 
-  const view = async (b: Blocker, standupName: string) => {
-    const tags = await repo.listBlockerTags(b.id);
-    const updates = await repo.listBlockerUpdates(b.id);
-    return {
-      id: b.id,
-      standup: { id: b.standupId, name: standupName },
-      owner: { userName: b.userName, displayName: b.displayName },
-      text: b.text,
-      openedDate: b.openedDate,
-      resolvedDate: b.resolvedDate,
-      resolvedBy: b.resolvedBy,
-      escalatedAt: b.escalatedAt,
-      status: b.resolvedDate ? 'resolved' : tags.some((t) => t.acknowledgedAt) ? 'acknowledged' : 'open',
-      tags: tags.map((t) => ({ userName: t.userName, displayName: t.displayName, acknowledgedAt: t.acknowledgedAt })),
-      updates: updates.map((u) => ({ userName: u.userName, displayName: u.displayName, text: u.text, at: u.createdAt })),
-    };
-  };
-
   api.get('/blockers', async (req, res) => {
-    const p = principalOf(req);
-    const status = String(req.query.status ?? 'open');
-    if (!STATUSES.has(status)) {
+    const status = String(req.query.status ?? 'open') as BlockerStatusFilter;
+    if (!BLOCKER_STATUSES.includes(status)) {
       apiError(res, 400, 'invalid', 'status must be open, acknowledged, resolved or all.', 'status');
       return;
     }
-    const visible = await visibleStandups(repo, p);
-    const requested = req.query.standupId === undefined ? null : Number(req.query.standupId);
-    const standupIds = visible.map((s) => s.id).filter((id) => requested === null || id === requested);
-    const names = new Map(visible.map((s) => [s.id, s.name]));
-    const rows = await repo.listBlockers({
-      tenantId: p.tenantId,
-      status: status === 'acknowledged' ? 'open' : (status as 'open' | 'resolved' | 'all'),
-      standupIds,
-      ...(req.query.owner ? { userName: String(req.query.owner) } : {}),
+    const standupId = req.query.standupId === undefined ? null : Number(req.query.standupId);
+    res.json({
+      blockers: await blockersView(repo, principalOf(req), { status, standupId, ...(req.query.owner ? { owner: String(req.query.owner) } : {}) }),
     });
-    const blockers = [];
-    for (const b of rows) {
-      const v = await view(b, names.get(b.standupId)!);
-      if (status === 'acknowledged' && v.status !== 'acknowledged') continue;
-      blockers.push(v);
-    }
-    res.json({ blockers });
   });
 
   /** Blocker actions need a person: the operator token has no identity to act as. */
@@ -60,13 +27,8 @@ export function registerBlockerRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 403, 'needs_user', 'Blocker actions need a signed-in person, not the operator token.');
       return null;
     }
-    const blocker = await repo.getBlockerById(Number(req.params.id));
-    const standup = blocker ? await repo.getStandupById(blocker.standupId) : null;
-    const member =
-      !!standup &&
-      standup.tenantId === p.tenantId &&
-      (canManage(p, standup.id) || (await repo.listParticipants(standup.id)).some((x) => x.userName === p.user!.userName));
-    if (!blocker || !member) {
+    const blocker = await visibleBlocker(repo, p, Number(req.params.id));
+    if (!blocker) {
       apiError(res, 404, 'not_found', 'No such blocker.');
       return null;
     }
