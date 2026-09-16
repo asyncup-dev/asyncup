@@ -807,6 +807,21 @@ export class Repo {
   }
 
   /** Standups (across tenants) in which the user is an active participant. */
+  /** Every active roster row in a tenant, with the standup's name — the Team directory. */
+  async listTenantParticipants(tenantId: string): Promise<(Participant & { standupName: string })[]> {
+    const rows = await this.db.all(
+      `SELECT p.*, s.name AS standup_name FROM participants p JOIN standups s ON s.id = p.standup_id
+       WHERE s.tenant_id = ? AND p.active = 1 AND s.active = 1 ORDER BY p.display_name, p.standup_id`,
+      [tenantId],
+    );
+    return rows.map((row: any) => ({ ...toParticipant(row), standupName: row.standup_name }));
+  }
+
+  async listUserEmails(): Promise<{ userName: string; email: string }[]> {
+    const rows = await this.db.all('SELECT user_name, email FROM user_emails ORDER BY user_name');
+    return rows.map((row: any) => ({ userName: row.user_name, email: row.email }));
+  }
+
   async listStandupsForUser(userName: string): Promise<Standup[]> {
     const rows = await this.db.all(
       `SELECT s.* FROM standups s
@@ -1136,6 +1151,34 @@ export class Repo {
   async getBlockerById(id: number): Promise<Blocker | null> {
     const row = await this.db.get('SELECT * FROM blockers WHERE id = ?', [id]);
     return row ? toBlocker(row) : null;
+  }
+
+  /** Blockers across a tenant's standups, optionally narrowed — the Blockers workspace. */
+  async listBlockers(filter: {
+    tenantId: string;
+    status: 'open' | 'resolved' | 'all';
+    standupIds?: number[];
+    userName?: string;
+  }): Promise<Blocker[]> {
+    const where = ['s.tenant_id = ?'];
+    const params: unknown[] = [filter.tenantId];
+    if (filter.status === 'open') where.push('b.resolved_date IS NULL');
+    if (filter.status === 'resolved') where.push('b.resolved_date IS NOT NULL');
+    if (filter.standupIds) {
+      if (filter.standupIds.length === 0) return [];
+      where.push(`b.standup_id IN (${filter.standupIds.map(() => '?').join(', ')})`);
+      params.push(...filter.standupIds);
+    }
+    if (filter.userName) {
+      where.push('b.user_name = ?');
+      params.push(filter.userName);
+    }
+    const rows = await this.db.all(
+      `SELECT b.* FROM blockers b JOIN standups s ON s.id = b.standup_id
+       WHERE ${where.join(' AND ')} ORDER BY b.resolved_date IS NOT NULL, b.opened_date, b.id`,
+      params,
+    );
+    return rows.map(toBlocker);
   }
 
   async listOpenBlockers(standupId: number): Promise<Blocker[]> {

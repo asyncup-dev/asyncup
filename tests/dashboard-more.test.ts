@@ -19,6 +19,8 @@ async function startServer() {
     router,
     scheduler: stack.scheduler,
     repo: stack.repo,
+    adapter: stack.adapter,
+    blockers: stack.blockers,
     settings: stack.settings,
     dashboardToken: TOKEN,
     skipVerification: true,

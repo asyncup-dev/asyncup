@@ -29,6 +29,8 @@ async function startServer(opts: { verify?: boolean; injectClock?: boolean } = {
     router,
     scheduler: stack.scheduler,
     repo: stack.repo,
+    adapter: stack.adapter,
+    blockers: stack.blockers,
     settings: stack.settings,
     dashboardToken: 'dash-secret',
     skipVerification: !opts.verify,

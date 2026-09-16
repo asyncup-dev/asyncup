@@ -25,6 +25,8 @@ async function startServer(opts: { directoryUser?: DirectoryUser | null; broker?
     router,
     scheduler: stack.scheduler,
     repo: stack.repo,
+    adapter: stack.adapter,
+    blockers: stack.blockers,
     settings: stack.settings,
     dashboardToken: 'dash-secret',
     skipVerification: true,
@@ -120,6 +122,8 @@ describe('Dashboard without an operator token', () => {
       router,
       scheduler: stack.scheduler,
       repo: stack.repo,
+    adapter: stack.adapter,
+    blockers: stack.blockers,
       settings: stack.settings,
       dashboardToken: '', // no break-glass token — sessions must still work
       skipVerification: true,
