@@ -1,6 +1,5 @@
 import { describe, expect, it, spyOn } from 'bun:test';
 import { DateTime } from 'luxon';
-import { FakeAdapter } from '../src/adapters/fake/adapter.js';
 import { BlockerService } from '../src/core/blocker-service.js';
 import { CommandHandler } from '../src/core/commands.js';
 import { PollService } from '../src/core/poll-service.js';
