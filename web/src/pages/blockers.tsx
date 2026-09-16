@@ -82,7 +82,7 @@ export function BlockersPage() {
             ) : null}
             {rows.map((b) => (
               <tr key={b.id}>
-                <td>
+                <td data-label="Blocker">
                   <div className="t-medium">{b.text}</div>
                   {b.updates.length ? <div className="t-caption">Last update: {b.updates[b.updates.length - 1]!.text}</div> : null}
                   {noteFor === b.id ? (
@@ -93,17 +93,17 @@ export function BlockersPage() {
                     </div>
                   ) : null}
                 </td>
-                <td className="t-small">{b.standup.name}</td>
-                <td>
+                <td data-label="Standup" className="t-small">{b.standup.name}</td>
+                <td data-label="Owner">
                   <span className="person-row"><span className="avatar avatar-sm" aria-hidden="true">{b.owner.displayName[0]}</span><span className="t-small">{b.owner.displayName}</span></span>
                 </td>
-                <td className="t-small secondary">{b.resolvedDate ? `Resolved ${shortDate(b.resolvedDate)}` : ageOf(b.openedDate)}</td>
-                <td>
+                <td data-label="Age" className="t-small secondary">{b.resolvedDate ? `Resolved ${shortDate(b.resolvedDate)}` : ageOf(b.openedDate)}</td>
+                <td data-label="Status">
                   <span className={`badge ${b.status === 'resolved' ? 'badge-success' : b.escalatedAt ? 'badge-danger' : b.status === 'acknowledged' ? 'badge-info' : 'badge-warning'}`}>
                     {b.status === 'resolved' ? 'Resolved' : b.escalatedAt ? 'Escalated' : b.status === 'acknowledged' ? 'Acknowledged' : 'Open'}
                   </span>
                 </td>
-                <td>
+                <td data-label="Tagged">
                   {b.tags.length ? (
                     <span className="avatars" aria-label={`Tagged: ${b.tags.map((t) => t.displayName).join(', ')}`}>
                       {b.tags.map((t) => <span key={t.userName} className="avatar avatar-sm" title={t.displayName}>{t.displayName[0]}</span>)}

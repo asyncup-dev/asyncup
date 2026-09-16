@@ -99,18 +99,18 @@ export function StandupsPage() {
                   const badge = todayBadge(s);
                   return (
                     <tr key={s.id}>
-                      <td>
+                      <td data-label="Standup">
                         <Link to="/standups/$id" params={{ id: String(s.id) }} className="row-link">
                           <div className="t-strong">{s.name}</div>
                           <div className="t-caption">{s.people.total} {s.people.total === 1 ? 'person' : 'people'}</div>
                         </Link>
                       </td>
-                      <td className="t-small secondary">
+                      <td data-label="Schedule" className="t-small secondary">
                         {s.schedule.promptTime}–{s.schedule.deadlineTime} {s.schedule.timezone}
                         <div className="t-caption">{daysLabel(s.schedule.days)}</div>
                       </td>
-                      <td className="t-small secondary">{spaceLabel(spaces.data, s.spaceName)}</td>
-                      <td>
+                      <td data-label="Space" className="t-small secondary">{spaceLabel(spaces.data, s.spaceName)}</td>
+                      <td data-label="Today">
                         {s.today.status ? (
                           <span className="progress-inline">
                             <span className="progress" aria-hidden="true"><span style={{ display: 'block', height: '100%', width: `${pct(s.today.submitted, s.today.expected)}%`, background: 'var(--accent-primary)' }} /></span>
@@ -120,7 +120,7 @@ export function StandupsPage() {
                           <span className="t-small muted">—</span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <span className={`badge ${badge.tone}`}>{badge.text}</span>
                       </td>
                     </tr>

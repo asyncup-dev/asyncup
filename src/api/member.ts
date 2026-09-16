@@ -1,5 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import { memberStandups, setMemberTimezone, setMemberVacation } from '../core/member.js';
+import { runProgress } from '../core/progress.js';
 import { apiError, clampInt, principalOf, type ApiContext } from './shared.js';
 
 /** The signed-in person's own view: their standups, answers and settings. */
@@ -27,9 +28,12 @@ export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
       return;
     }
     const mine = await memberStandups(repo, userName, ctx.now());
-    res.json({
-      linked: true,
-      standups: mine.map((m) => ({
+    const standups = [];
+    for (const m of mine) {
+      // How far the team has got today, so the console can say "7 of 9 have posted".
+      const run = m.today ? await repo.getRun(m.standup.id, ctx.now().setZone(m.standup.timezone).toISODate()!) : null;
+      const progress = run ? runProgress(await repo.listRunParticipants(run.id), await repo.listSubmissions(run.id)) : null;
+      standups.push({
         id: m.standup.id,
         name: m.standup.name,
         schedule: {
@@ -39,9 +43,18 @@ export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
           days: m.standup.days.split(','),
         },
         today: m.today,
+        progress: progress ? { submitted: progress.submitted, expected: progress.expected } : null,
         mandatory: m.mandatory,
         onVacation: m.onVacation,
-      })),
+      });
+    }
+    const dmSpace = await repo.getDmSpace(userName);
+    res.json({
+      linked: true,
+      timezone: await repo.getUserTimezone(userName),
+      // Answers stay in Chat: the console deep-links to the bot's DM once one exists.
+      chat: { dmUrl: dmSpace ? `https://chat.google.com/dm/${dmSpace.replace(/^spaces\//, '')}` : null },
+      standups,
     });
   });
 

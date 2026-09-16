@@ -137,9 +137,9 @@ describe('setup: entry and guard', () => {
     expect(screen.getAllByText('Done')).toHaveLength(3);
 
     cleanup();
-    stubApi({ 'GET /api/v1/me': { body: MEMBER } });
+    stubApi({ 'GET /api/v1/me': { body: MEMBER }, 'GET /api/v1/me/standups': { body: { linked: false, standups: [] } }, 'GET /api/v1/me/submissions?limit=5': { body: { submissions: [] } } });
     renderApp('/setup');
-    expect(await screen.findByRole('heading', { name: 'My standups' })).toBeInTheDocument();
+    expect(await screen.findByText('Your account is not linked to Google Chat yet')).toBeInTheDocument();
 
     cleanup();
     stubApi({ 'GET /api/v1/me': { status: 401, body: { error: { code: 'unauthenticated', message: 'x' } } }, 'GET /api/v1/auth/methods': { body: { google: false, saml: false, token: true } } });
