@@ -1,4 +1,5 @@
 import type { Router } from 'express';
+import { createStandup } from '../core/create-standup.js';
 import { buildCsv } from '../core/export.js';
 import { weeklySeries } from '../core/insights.js';
 import { runProgress } from '../core/progress.js';
@@ -42,22 +43,42 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
     res.json({ standups });
   });
 
+  const detail = async (standup: Standup, manage: boolean) => ({
+    ...(await summarise(repo, standup, ctx.now(), manage)),
+    participants: (await repo.listParticipants(standup.id)).map((x) => ({
+      userName: x.userName,
+      displayName: x.displayName,
+      mandatory: x.mandatory,
+      timezone: x.timezone,
+      onVacation: x.onVacation,
+    })),
+    admins: (await repo.listAdmins(standup.id)).map(person),
+  });
+
   api.get('/standups/:id', async (req, res) => {
     const standup = await loadStandup(ctx, req, res);
     if (!standup) return;
+    res.json(await detail(standup, canManage(principalOf(req), standup.id)));
+  });
+
+  // Admins only: the create flow picks a template, a space and a first roster.
+  // A signed-in creator becomes the standup's admin; the operator token leaves it open.
+  api.post('/standups', async (req, res) => {
     const p = principalOf(req);
-    const participants = await repo.listParticipants(standup.id);
-    res.json({
-      ...(await summarise(repo, standup, ctx.now(), canManage(p, standup.id))),
-      participants: participants.map((x) => ({
-        userName: x.userName,
-        displayName: x.displayName,
-        mandatory: x.mandatory,
-        timezone: x.timezone,
-        onVacation: x.onVacation,
-      })),
-      admins: (await repo.listAdmins(standup.id)).map(person),
-    });
+    if (p.kind !== 'admin') {
+      apiError(res, 403, 'forbidden', 'Only admins can create standups.');
+      return;
+    }
+    const body = req.body ?? {};
+    const creator = p.user?.userName ? { userName: p.user.userName, displayName: p.user.name } : null;
+    const result = await createStandup(repo, ctx.settings, p.tenantId, body, creator);
+    if (!result.ok) {
+      if (result.code === 'duplicate') apiError(res, 409, 'duplicate', result.message);
+      else apiError(res, 400, 'invalid', result.message, result.field);
+      return;
+    }
+    const runNow = body.runNow === true ? await ctx.scheduler.runNow(result.standup) : null;
+    res.status(201).json({ ...(await detail(result.standup, true)), template: result.template?.id ?? null, runNow });
   });
 
   api.patch('/standups/:id', async (req, res) => {

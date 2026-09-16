@@ -1,5 +1,17 @@
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from './types.js';
 
+/** A space the app has been added to. */
+export interface SpaceInfo {
+  name: string;
+  displayName: string;
+}
+
+/** A human member of a space, as a roster candidate. */
+export interface SpaceMember {
+  userName: string;
+  displayName: string;
+}
+
 /**
  * Platform abstraction. The core never touches Google Chat (or Slack/Teams)
  * APIs directly — only this interface. New platforms = new implementation.
@@ -50,4 +62,10 @@ export interface ChatAdapter {
    * Returns the platform message id, or null.
    */
   postPoll(standup: Standup, poll: Poll, tallies: number[]): Promise<string | null>;
+
+  /** Spaces the app is a member of — the create-standup space picker. */
+  listSpaces(): Promise<SpaceInfo[]>;
+
+  /** Human members of a space — roster suggestions when creating a standup. */
+  listSpaceMembers(spaceName: string): Promise<SpaceMember[]>;
 }

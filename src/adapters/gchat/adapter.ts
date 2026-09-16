@@ -1,5 +1,5 @@
 import { auth as chatAuth, chat, type chat_v1 } from '@googleapis/chat';
-import type { ChatAdapter } from '../../core/adapter.js';
+import type { ChatAdapter, SpaceInfo, SpaceMember } from '../../core/adapter.js';
 import type { SettingsService } from '../../core/settings.js';
 import type { Repo } from '../../db/repo.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
@@ -112,6 +112,36 @@ export class GoogleChatAdapter implements ChatAdapter {
       requestBody: pollMessage(poll, tallies),
     });
     return res.data.name ?? null;
+  }
+
+  /** Both list calls accept app credentials with the chat.bot scope; pages are 1000 wide. */
+  async listSpaces(): Promise<SpaceInfo[]> {
+    const client = await this.getClient();
+    const spaces: SpaceInfo[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await client.spaces.list({ pageSize: 1000, filter: 'spaceType = "SPACE"', pageToken });
+      for (const s of res.data.spaces ?? []) {
+        if (s.name) spaces.push({ name: s.name, displayName: s.displayName || s.name });
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    return spaces;
+  }
+
+  async listSpaceMembers(spaceName: string): Promise<SpaceMember[]> {
+    const client = await this.getClient();
+    const members: SpaceMember[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await client.spaces.members.list({ parent: spaceName, pageSize: 1000, filter: 'member.type = "HUMAN"', pageToken });
+      for (const m of res.data.memberships ?? []) {
+        const name = m.member?.name;
+        if (name) members.push({ userName: name, displayName: m.member?.displayName || name });
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    return members;
   }
 
   private async postInThread(
