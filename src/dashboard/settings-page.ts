@@ -1,5 +1,21 @@
 import type { AppSettings, SettingsService } from '../core/settings.js';
-import { HTTPS_URL_RE, isValidZone, looksLikeEmail } from '../core/validation.js';
+import {
+  badAdminEmail,
+  badAudience,
+  badOauthId,
+  badSaKey,
+  badSamlCert,
+  badSamlSsoUrl,
+  badTimezone,
+  BOOL_FIELDS,
+  FIELD_CHECKS,
+  googleSignInOn,
+  LOCKOUT_MSG,
+  locksOut,
+  samlSignInOn,
+  SECRET_FIELDS,
+  TOKEN_OFF_MSG,
+} from '../core/settings-rules.js';
 import { esc } from './chrome.js';
 
 /**
@@ -7,60 +23,7 @@ import { esc } from './chrome.js';
  * setup walkthrough. Both paths share the per-field checks below.
  */
 
-// ---------- per-field checks (single source for both save paths) ----------
-
-function badAudience(v: string): string | null {
-  // Accepts the GCP project number and/or the app URL (Chat API "Audience"
-  // can be either) — space/comma separated. Reject obvious mistakes like
-  // the project ID slug or org ID being pasted as the only value.
-  const bad = v.split(/[\s,]+/).filter(Boolean).find((a) => !/^\d+$/.test(a) && !HTTPS_URL_RE.test(a));
-  return bad
-    ? `"${bad}" isn't a GCP project number or an https app URL. Use the project number (digits) or the Chat app's HTTP endpoint URL — not the project ID slug or org ID.`
-    : null;
-}
-
-function badSaKey(v: string): string | null {
-  try {
-    const parsed = JSON.parse(v);
-    if (!parsed.client_email || !parsed.private_key) {
-      return 'That JSON is missing client_email / private_key — paste the full service-account key file.';
-    }
-  } catch {
-    return 'The service-account key must be valid JSON — paste the whole downloaded file.';
-  }
-  return null;
-}
-
-const badOauthId = (v: string): string | null =>
-  v && !v.endsWith('.apps.googleusercontent.com')
-    ? 'That does not look like an OAuth client ID (expected ….apps.googleusercontent.com).'
-    : null;
-
-const badSamlSsoUrl = (v: string): string | null =>
-  v && !HTTPS_URL_RE.test(v) ? 'The IdP SSO URL must be https://.' : null;
-
-const badSamlCert = (v: string): string | null =>
-  v && !v.includes('CERTIFICATE') && !/^[A-Za-z0-9+/=\s]+$/.test(v)
-    ? 'The IdP certificate should be the PEM (or base64) X.509 certificate from your IdP.'
-    : null;
-
-const badTimezone = (v: string): string | null =>
-  isValidZone(v) ? null : `Invalid IANA timezone: ${v || '(empty)'} — e.g. Asia/Kolkata.`;
-
-const badAdminEmail = (v: string): string | null =>
-  v && !looksLikeEmail(v) ? `"${v}" doesn't look like an email address.` : null;
-
-export const googleSignInOn = (s: AppSettings): boolean => !!(s.oauthClientId && s.oauthClientSecret);
-export const samlSignInOn = (s: AppSettings): boolean => !!(s.samlIdpEntityId && s.samlIdpSsoUrl && s.samlIdpCert);
-
-/** Would this change leave the dashboard with no working sign-in path? */
-function locksOut(s: AppSettings, change: Partial<AppSettings>): boolean {
-  const after = { ...s, ...change };
-  return !after.tokenSignIn && !googleSignInOn(after) && !samlSignInOn(after);
-}
-
-const LOCKOUT_MSG =
-  'That would remove the last working sign-in method. Re-enable token sign-in first, or configure the other method.';
+export { googleSignInOn, samlSignInOn } from '../core/settings-rules.js';
 
 // ---------- save paths ----------
 
@@ -154,45 +117,27 @@ function stageChange(s: AppSettings, body: any): Staged {
   return SECTION_STAGERS[section]!(s, body);
 }
 
-/** Secrets keep their stored value on an empty save; "clear" wipes them. */
-const SECRET_FIELDS = new Set(['serviceAccountJson', 'oauthClientSecret']);
-const BOOL_FIELDS = new Set(['calendarOoo', 'tokenSignIn']);
-
-const FIELD_CHECKS: Record<string, (v: string) => string | null> = {
-  chatAudience: badAudience,
-  serviceAccountJson: badSaKey,
-  defaultTimezone: badTimezone,
-  workspaceAdminEmail: badAdminEmail,
-  oauthClientId: badOauthId,
-  samlIdpSsoUrl: badSamlSsoUrl,
-  samlIdpCert: badSamlCert,
-  samlIdpEntityId: () => null,
-  samlAdminAttribute: () => null,
-  samlAdminGroup: () => null,
-  oauthClientSecret: () => null,
-};
-
 function stageField(s: AppSettings, body: any): Partial<AppSettings> | string {
   const key = String(body.key ?? '');
-  if (!BOOL_FIELDS.has(key) && !(key in FIELD_CHECKS)) return 'Unknown setting.';
+  if (!BOOL_FIELDS.has(key as keyof AppSettings) && !(key in FIELD_CHECKS)) return 'Unknown setting.';
 
-  if (BOOL_FIELDS.has(key)) {
+  if (BOOL_FIELDS.has(key as keyof AppSettings)) {
     const on = body.value === 'on';
     if (key === 'tokenSignIn' && !on && !googleSignInOn(s) && !samlSignInOn(s)) {
       // Friendlier wording than the generic lockout message; the guard in
       // applySettings would refuse this change regardless.
-      return 'Configure Google or SAML sign-in before turning the token off — otherwise nobody can sign in.';
+      return TOKEN_OFF_MSG;
     }
     return { [key]: on };
   }
 
   const value = String(body.value ?? '').trim();
-  if (SECRET_FIELDS.has(key)) {
+  if (SECRET_FIELDS.has(key as keyof AppSettings)) {
     if (body.clear === 'on') return { [key]: '' };
     if (!value) return {}; // empty box = keep the stored secret
   }
   if (value) {
-    const err = FIELD_CHECKS[key]!(value);
+    const err = FIELD_CHECKS[key as keyof AppSettings]!(value);
     if (err) return err;
   }
   return { [key]: value };

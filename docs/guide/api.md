@@ -28,7 +28,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `lockout`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
 
 ## Endpoints
 
@@ -119,3 +119,34 @@ Moods are withheld per person when the standup keeps them anonymous; only the te
 | `GET` | `/me/standups` | `linked: false` until the account has a Chat identity; otherwise each standup with `today` = `submitted`, `waiting`, `closed` or `null` |
 | `GET` | `/me/submissions?limit=10` | My recent answers |
 | `PATCH` | `/me` | `{ timezone?: string \| null, onVacation?: boolean }`; `409 not_linked` without a Chat identity |
+
+### Workspace settings
+
+Admins only.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/settings` | Grouped: `chat`, `workspace`, `signIn`, `tokens`, `setup`. Secrets are never echoed — only `{ "set": true }` (the service account also shows its `email`). |
+| `PATCH` | `/settings` | `{ key: value, … }` for any editable field: strings set, `null` clears a secret, an empty string keeps it, booleans for `calendarOoo`, `tokenSignIn`, `setupComplete`. Same rules as the dashboard; `400 invalid` names the `field`; `409 lockout` refuses a change that would leave no working sign-in method. |
+| `POST` | `/settings/tokens/:name` | `tick`, `export` or `scim` → `201 { token }`, shown once |
+| `DELETE` | `/settings/tokens/:name` | `204` |
+
+### Verification
+
+Every gate in setup and settings has a live check. All return the same shape:
+
+```json
+{ "state": "pass", "detail": "Key verified for bot@… — the app is already in at least one space.",
+  "checkedAt": "2026-09-16T10:42:00Z", "data": { "email": "bot@…", "spaces": 3 } }
+```
+
+| `POST` | Checks | Who |
+| --- | --- | --- |
+| `/verify/project` | The stored audience is a project number and/or https app URL | admin |
+| `/verify/service-account` | Mints a token from the stored key and calls `spaces.list` | admin |
+| `/verify/chat-event` | Whether a verified event has arrived at `/chat/events` since setup began — the gate setup polls while you save the Chat app configuration | admin |
+| `/verify/webhook` | `{ standupId }` — POSTs a signed `test` event to the standup's webhook URL | admin, manager |
+| `/verify/saml` | Builds a sign-in request from the stored IdP config and checks the SSO URL answers | admin |
+| `/verify/dm` | Sends the caller a Chat direct message | any signed-in person |
+
+`GET /health/chat` (no auth) mirrors the connection state without secrets: `audience`, `serviceAccount` (`set` / `unset`), `lastEventAt`, `lastRejectedAt`.

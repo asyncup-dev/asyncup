@@ -18,6 +18,10 @@ import { registerScim } from './scim/server.js';
 import { registerApi } from './api/api.js';
 import type { ChatAdapter } from './core/adapter.js';
 import type { BlockerService } from './core/blocker-service.js';
+import { createChatClient, type ChatClientFactory } from './adapters/gchat/adapter.js';
+import { NodeSamlBroker } from './auth/saml.js';
+import { LAST_EVENT_KEYS, recordChatEvent } from './core/verify.js';
+import { WebhookNotifier } from './core/webhooks.js';
 import type { UserDirectory } from './core/directory.js';
 
 export interface ServerDeps {
@@ -44,6 +48,10 @@ export interface ServerDeps {
   identityBroker?: (clientId: string, clientSecret: string) => IdentityBroker;
   /** Test override for the SAML exchange. */
   samlBroker?: (config: SamlConfig) => SamlBroker;
+  /** Test override for the Chat API client used by verification calls. */
+  chatClientFactory?: ChatClientFactory;
+  /** Test override for outbound HTTP (webhook tests, IdP reachability). */
+  externalFetch?: typeof fetch;
   now?: () => DateTime;
 }
 
@@ -141,6 +149,10 @@ export function createServer(deps: ServerDeps): Express {
     scheduler,
     adapter: deps.adapter,
     blockers: deps.blockers,
+    webhooks: new WebhookNotifier(undefined, deps.externalFetch, undefined, deps.webhookSecret),
+    chatClientFactory: deps.chatClientFactory ?? createChatClient,
+    samlBroker: deps.samlBroker ?? ((config) => new NodeSamlBroker(config)),
+    externalFetch: deps.externalFetch ?? fetch,
     secretKey: deps.secretKey ?? '',
     operatorToken: deps.dashboardToken,
     tenantId: deps.tenantId ?? 'default',
@@ -150,6 +162,17 @@ export function createServer(deps: ServerDeps): Express {
   // The root has no page of its own — land people on the user console,
   // which explains itself in every configuration state.
   app.get('/', (_req, res) => res.redirect('/me'));
+
+  // Public, secret-free summary of the Chat connection — the docs' verify step.
+  app.get('/health/chat', async (_req, res) => {
+    const s = await settings.get();
+    res.json({
+      audience: s.chatAudience ? 'set' : 'unset',
+      serviceAccount: s.serviceAccountJson ? 'set' : 'unset',
+      lastEventAt: await repo.getSettingValue(LAST_EVENT_KEYS.at),
+      lastRejectedAt: await repo.getSettingValue(LAST_EVENT_KEYS.rejectedAt),
+    });
+  });
 
   app.get('/healthz', async (_req, res) => {
     try {
@@ -175,10 +198,13 @@ export function createServer(deps: ServerDeps): Express {
       const result = await verifier.verify(req.header('authorization'));
       if (!result.ok) {
         console.warn(`[chat] rejected /chat/events (401) — ${logSafe(result.reason)}`);
+        await recordChatEvent(repo, now(), false, result.reason);
         res.status(401).json({ error: 'unauthorized' });
         return;
       }
     }
+    // Setup's "waiting for the first event" gate reads this.
+    await recordChatEvent(repo, now(), true);
     try {
       res.json(await router.handle(req.body));
     } catch (err) {

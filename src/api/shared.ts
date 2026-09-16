@@ -1,7 +1,10 @@
 import type { Request, Response } from 'express';
 import type { DateTime } from 'luxon';
+import type { ChatClientFactory } from '../adapters/gchat/adapter.js';
+import type { SamlBroker, SamlConfig } from '../auth/saml.js';
 import type { ChatAdapter } from '../core/adapter.js';
 import type { BlockerService } from '../core/blocker-service.js';
+import type { WebhookNotifier } from '../core/webhooks.js';
 import { runProgress } from '../core/progress.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { SettingsService } from '../core/settings.js';
@@ -31,6 +34,12 @@ export interface ApiContext {
   scheduler: Scheduler;
   adapter: ChatAdapter;
   blockers: BlockerService;
+  webhooks: WebhookNotifier;
+  /** Builds a Chat API client for verification calls (tests inject a fake). */
+  chatClientFactory: ChatClientFactory;
+  samlBroker: (config: SamlConfig) => SamlBroker;
+  /** Outbound HTTP for reachability checks (tests inject a fake). */
+  externalFetch: typeof fetch;
   now: () => DateTime;
 }
 
