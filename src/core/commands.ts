@@ -48,7 +48,7 @@ const HELP_ALL = `*AsyncUp commands* (mention me in this space — prefix with \
 \`questions\` / \`questions set Q1 | Q2 | …\` / \`questions reset\` — customize the form
 \`mood on|off|anon\` — mood question (\`anon\` hides who felt what; the wrap-up shows the team average)
 \`escalate @user\` / \`escalate days N\` / \`escalate off\` — DM someone when blockers stay open
-\`digest on|off\` · \`ai on|off\` — weekly digest, AI summaries
+\`digest on|off\` — weekly digest
 \`blocker <id> tag @user…\` / \`blocker <id> update <text>\` / \`blocker <id> resolve\` — work a blocker together
 \`poll Question? | Option A | Option B\` — team poll in the space (\`polls\`, \`poll <id> results\`, \`poll <id> close\`)
 \`status\` · \`trends\` · \`blockers\` · \`export\` — insights`;
@@ -161,8 +161,6 @@ export class CommandHandler {
         return this.escalate(standup, ctx.mentions, rest);
       case 'digest':
         return this.toggle(standup, 'digestEnabled', arg, 'Weekly digest');
-      case 'ai':
-        return this.toggle(standup, 'aiEnabled', arg, 'AI summaries');
       case 'status':
         return this.status(standup, false);
       case 'trends':
@@ -447,16 +445,13 @@ export class CommandHandler {
 
   private async toggle(
     standup: Standup,
-    field: 'moodEnabled' | 'digestEnabled' | 'aiEnabled',
+    field: 'moodEnabled' | 'digestEnabled',
     value: string,
     label: string,
   ): Promise<string> {
     const v = value.toLowerCase();
     if (v !== 'on' && v !== 'off') return `Use \`on\` or \`off\`, e.g. \`${label.split(' ')[0]?.toLowerCase()} on\`.`;
     await this.repo.updateStandup(standup.id, { [field]: v === 'on' });
-    if (field === 'aiEnabled' && v === 'on') {
-      return `✅ ${label} on. Requires an AI provider and API key in the dashboard settings — summaries are skipped silently otherwise.`;
-    }
     return `✅ ${label} ${v}.`;
   }
 
@@ -579,7 +574,6 @@ export class CommandHandler {
     const toggles = [
       standup.moodEnabled ? (standup.moodAnonymous ? 'mood ✓ (anon)' : 'mood ✓') : 'mood ✗',
       standup.digestEnabled ? 'digest ✓' : 'digest ✗',
-      standup.aiEnabled ? 'ai ✓' : 'ai ✗',
       standup.escalateUserName
         ? `escalate → ${standup.escalateDisplayName} (${standup.escalateAfterDays}d)`
         : 'escalate ✗',

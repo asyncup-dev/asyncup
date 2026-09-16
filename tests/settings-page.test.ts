@@ -57,7 +57,6 @@ describe('settings per-field checks', () => {
       ['samlIdpSsoUrl', 'http://idp.example/sso', 'must be https://', 'https://idp.example/sso'],
       ['samlIdpCert', '<<not a cert>>', 'PEM (or base64) X.509 certificate', 'MIICfakeCert=='],
       ['workspaceAdminEmail', 'not-an-email', "doesn't look like an email address", 'admin@org.com'],
-      ['llmProvider', 'bogus', 'Unknown AI provider.', 'openai'],
     ];
     for (const [key, bad, message, good] of cases) {
       const refused = await field(key, bad);
@@ -75,8 +74,6 @@ describe('settings per-field checks', () => {
       ['samlIdpEntityId', 'https://idp.example'],
       ['samlAdminAttribute', 'groups'],
       ['samlAdminGroup', 'asyncup-admins'],
-      ['llmModel', 'claude-x'],
-      ['llmApiKey', 'sk-new'],
       ['oauthClientSecret', 'GOCSPX-new'],
     ];
     for (const [key, value] of values) {
@@ -143,24 +140,6 @@ describe('settings grouped forms', () => {
     expect(saved.workspaceAdminEmail).toBe('admin@org.com');
   });
 
-  it('saves the AI step and validates the provider', async () => {
-    const { post, settings } = await startServer();
-    const noModel = await post({ section: 'ai', aiOn: 'on', llmProvider: 'openai' });
-    expect(noModel.status).toBe(400);
-    expect(await noModel.text()).toContain('OpenAI needs an explicit model name.');
-    expect((await post({ section: 'ai', aiOn: 'on', llmProvider: 'bogus' })).status).toBe(400);
-
-    expect((await post({ section: 'ai', aiOn: 'on', llmProvider: 'openai', llmModel: 'gpt-x', llmApiKey: 'sk-ai' })).status).toBe(302);
-    let saved = await settings.get();
-    expect(saved.llmProvider).toBe('openai');
-    expect(saved.llmModel).toBe('gpt-x');
-    expect(saved.llmApiKey).toBe('sk-ai');
-
-    expect((await post({ section: 'ai', clear_llmApiKey: 'on' })).status).toBe(302);
-    saved = await settings.get();
-    expect(saved.llmProvider).toBe('');
-    expect(saved.llmApiKey).toBe('');
-  });
 
   it('refuses any save that would remove the last sign-in method', async () => {
     const { post, settings, adminCookie } = await startServer();
@@ -200,12 +179,9 @@ describe('settings page rendering', () => {
     expect(html).toContain('Locked');
   });
 
-  it('flags a missing OpenAI model and offers to clear generated tokens', async () => {
-    const { page, post, settings } = await startServer();
-    await settings.update({ llmProvider: 'openai', llmModel: '' });
+  it('offers to clear generated tokens once one exists', async () => {
+    const { page, post } = await startServer();
     let html = await page();
-    expect(html).toContain('<span class="chip warn">Required</span>');
-    expect(html).toContain('On · openai');
     expect(html).not.toContain('value="clear-export"');
 
     const generated = await post({ action: 'generate-export' });

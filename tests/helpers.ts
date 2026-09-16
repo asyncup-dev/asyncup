@@ -1,6 +1,5 @@
 import { DateTime } from 'luxon';
 import { FakeAdapter } from '../src/adapters/fake/adapter.js';
-import { AiSummarizer } from '../src/ai/summarizer.js';
 import { BlockerService } from '../src/core/blocker-service.js';
 import { CommandHandler } from '../src/core/commands.js';
 import { PollService } from '../src/core/poll-service.js';
@@ -29,7 +28,6 @@ export async function closeOpenRepos(): Promise<void> {
 
 export async function makeStack(
   opts: {
-    summarizer?: AiSummarizer | null;
     ooo?: OooChecker | null;
     directory?: UserDirectory | null;
     webhookFetch?: typeof fetch;
@@ -68,7 +66,6 @@ export async function makeStack(
     clock.now,
     () => {},
     {
-      summarizer: async () => opts.summarizer ?? null,
       ooo: async () => opts.ooo ?? null,
       directory: async () => opts.directory ?? null,
     },

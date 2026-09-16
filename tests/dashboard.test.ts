@@ -88,7 +88,6 @@ describe('dashboard', () => {
 
     const page = await (await get('/dashboard/settings')).text();
     expect(page).toContain('Google Chat');
-    expect(page).toContain('AI summaries');
     expect(page).toContain('Access tokens');
 
     const post = (body: Record<string, string>) =>
@@ -119,14 +118,6 @@ describe('dashboard', () => {
     expect(after).toContain('bot@p.iam.gserviceaccount.com');
     expect(after).not.toContain('private_key');
 
-    // saving AI section with empty key keeps configured values intact
-    expect((await post({ section: 'ai', aiOn: 'on', llmProvider: 'anthropic', llmModel: '' })).status).toBe(302);
-    expect((await settings.get()).llmProvider).toBe('anthropic');
-
-    // unchecking the master toggle turns the feature off even though the
-    // (CSS-hidden) provider fields still submit
-    expect((await post({ section: 'ai', llmProvider: 'anthropic' })).status).toBe(302);
-    expect((await settings.get()).llmProvider).toBe('');
   });
 
   it('generates tokens shown once and enforces them on /tick', async () => {
@@ -282,11 +273,11 @@ describe('dashboard', () => {
     expect((await post({ section: 'field', key: 'nope', value: 'x' })).status).toBe(400);
 
     // Empty save keeps a stored secret; the clear checkbox wipes it.
-    await settings.update({ llmApiKey: 'sk-keepme' });
-    expect((await post({ section: 'field', key: 'llmApiKey', value: '' })).status).toBe(302);
-    expect((await settings.get()).llmApiKey).toBe('sk-keepme');
-    expect((await post({ section: 'field', key: 'llmApiKey', value: '', clear: 'on' })).status).toBe(302);
-    expect((await settings.get()).llmApiKey).toBe('');
+    await settings.update({ oauthClientSecret: 'GOCSPX-keepme' });
+    expect((await post({ section: 'field', key: 'oauthClientSecret', value: '' })).status).toBe(302);
+    expect((await settings.get()).oauthClientSecret).toBe('GOCSPX-keepme');
+    expect((await post({ section: 'field', key: 'oauthClientSecret', value: '', clear: 'on' })).status).toBe(302);
+    expect((await settings.get()).oauthClientSecret).toBe('');
 
     // Token sign-in cannot be switched off while it is the only way in.
     const refused = await post({ section: 'field', key: 'tokenSignIn' });

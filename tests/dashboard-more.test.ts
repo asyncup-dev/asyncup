@@ -238,24 +238,22 @@ describe('setup walkthrough', () => {
     expect(stay.headers.get('location')).toBe('/dashboard/setup?step=1');
 
     const finish = await post('/dashboard/setup', {
-      section: 'ai',
-      step: '4',
+      section: 'workspace',
+      step: '3',
       finish: '1',
-      aiOn: 'on',
-      llmProvider: 'anthropic',
-      llmApiKey: 'sk-setup',
+      defaultTimezone: 'Europe/Berlin',
+      calendarOoo: 'on',
     });
     expect(finish.status).toBe(303);
     expect(finish.headers.get('location')).toBe('/dashboard');
     const saved = await settings.get();
     expect(saved.setupComplete).toBe(true);
-    expect(saved.llmProvider).toBe('anthropic');
-    expect(saved.llmApiKey).toBe('sk-setup');
+    expect(saved.defaultTimezone).toBe('Europe/Berlin');
   });
 
   it('clamps the requested step to the last one', async () => {
     const { get } = await startServer();
-    expect(await (await get('/dashboard/setup?step=9')).text()).toContain('Optional extras');
+    expect(await (await get('/dashboard/setup?step=9')).text()).toContain('Workspace defaults');
   });
 });
 

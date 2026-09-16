@@ -206,12 +206,10 @@ describe('CommandHandler', () => {
     await commands.handle(ctx('setup'));
     expect(await commands.handle(ctx('mood off'))).toContain('Mood question off');
     expect(await commands.handle(ctx('digest on'))).toContain('Weekly digest on');
-    expect(await commands.handle(ctx('ai on'))).toContain('dashboard settings');
-    expect(await commands.handle(ctx('ai banana'))).toContain('`on` or `off`');
+    expect(await commands.handle(ctx('digest banana'))).toContain('`on` or `off`');
     const standup = (await repo.listStandupsBySpace(TENANT, SPACE))[0]!;
     expect(standup.moodEnabled).toBe(false);
     expect(standup.digestEnabled).toBe(true);
-    expect(standup.aiEnabled).toBe(true);
   });
 
   it('lists open blockers with age', async () => {

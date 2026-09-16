@@ -30,7 +30,6 @@ Open `https://<your-host>/dashboard?token=<DASHBOARD_TOKEN>` → **Settings**:
 | --- | --- |
 | Audience (GCP project number and/or app URL) | Verifies incoming webhooks are signed by Google Chat — space/comma separated when both |
 | Service-account key (JSON) | Paste the downloaded key file — used for Chat API calls and Calendar OOO. Empty = [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) (e.g. Cloud Run service identity) |
-| AI provider / API key / model | Bring-your-own-key [AI summaries](./ai) |
 | Default timezone | Assigned to newly created standups |
 | Calendar OOO sync | Auto-mark people away on out-of-office days |
 | Workspace admin email | Enables Directory API lookups (email + admin status by Chat user id). With it, Calendar OOO covers people who never interacted with the bot |

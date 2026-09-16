@@ -148,10 +148,6 @@ export function layout(title: string, active: NavState, body: string, opts: { us
   details.hint>summary::-webkit-details-marker{display:none}
   details.hint p{font-size:.85rem;color:var(--muted);margin:.35rem 0 0;background:rgba(21,67,95,.05);border-radius:8px;padding:.5rem .7rem}
   /* master-toggle reveal: fields hidden until the checkbox is on */
-  .gated{display:none}
-  .ai-form:has(input[name="aiOn"]:checked) .gated{display:block}
-  .ai-grp:has(option[value="anthropic"]:checked) .gated,
-  .ai-grp:has(option[value="openai"]:checked) .gated{display:block}
   /* one value, one box */
   .field{border:1px solid var(--ink-faint);border-radius:10px;background:rgba(255,255,255,.55);padding:.75rem 1rem .85rem;margin:.7rem 0}
   .field form{margin:0}

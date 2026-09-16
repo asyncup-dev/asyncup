@@ -30,12 +30,12 @@ describe('Repo', () => {
     await repo.updateStandup(standup.id, {
       promptTime: '08:00',
       questions: ['What shipped?', 'Blockers?'],
-      aiEnabled: true,
+      digestEnabled: true,
     });
     const updated = (await repo.getStandupById(standup.id))!;
     expect(updated.promptTime).toBe('08:00');
     expect(updated.questions).toEqual(['What shipped?', 'Blockers?']);
-    expect(updated.aiEnabled).toBe(true);
+    expect(updated.digestEnabled).toBe(true);
     await repo.updateStandup(standup.id, { questions: null });
     expect((await repo.getStandupById(standup.id))!.questions).toBeNull();
   });

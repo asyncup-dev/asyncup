@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'bun:test';
-import { AiSummarizer } from '../src/ai/summarizer.js';
 import type { RunSummary } from '../src/core/types.js';
 import { ANSWERS, makeStack, seedStandup } from './helpers.js';
 
@@ -219,38 +218,4 @@ describe('Scheduler', () => {
     expect(digests[0]!.threadKey).toContain('digest-');
   });
 
-  it('posts an AI summary after close when enabled and configured', async () => {
-    const fakeLlm = async (_system: string, prompt: string) => `TLDR for: ${prompt.slice(0, 20)}…`;
-    const { repo, adapter, scheduler, service, clock } = await makeStack({
-      summarizer: new AiSummarizer(fakeLlm),
-    });
-    const standup = await seedStandup(repo);
-    await repo.updateStandup(standup.id, { aiEnabled: true });
-
-    clock.set('2026-06-10T09:30');
-    await scheduler.tick();
-    const run = (await repo.getRun(standup.id, '2026-06-10'))!;
-    await service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
-
-    clock.set('2026-06-10T11:30');
-    await scheduler.tick();
-
-    const texts = adapter.posts.filter((p) => p.kind === 'text');
-    expect(texts).toHaveLength(1);
-    expect(texts[0]!.text).toContain('🤖 *AI summary*');
-    expect(texts[0]!.threadKey).toBe(run.threadKey);
-  });
-
-  it('never posts an AI summary when no one submitted', async () => {
-    const fakeLlm = async () => 'should not be called';
-    const { repo, adapter, scheduler, clock } = await makeStack({ summarizer: new AiSummarizer(fakeLlm) });
-    const standup = await seedStandup(repo);
-    await repo.updateStandup(standup.id, { aiEnabled: true });
-
-    clock.set('2026-06-10T09:30');
-    await scheduler.tick();
-    clock.set('2026-06-10T11:30');
-    await scheduler.tick();
-    expect(adapter.posts.filter((p) => p.kind === 'text')).toHaveLength(0);
-  });
 });

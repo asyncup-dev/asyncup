@@ -1,6 +1,5 @@
 import type { AppSettings, SettingsService } from '../core/settings.js';
 import { HTTPS_URL_RE, isValidZone, looksLikeEmail } from '../core/validation.js';
-import { DEFAULT_ANTHROPIC_MODEL } from '../ai/llm.js';
 import { esc } from './chrome.js';
 
 /**
@@ -95,24 +94,6 @@ function stageChat(_s: AppSettings, body: any): Staged {
   };
 }
 
-function stageAi(_s: AppSettings, body: any): Staged {
-  const clearKey = body.clear_llmApiKey === 'on' ? { llmApiKey: '' } : {};
-  const llmProvider = String(body.llmProvider ?? 'anthropic');
-  const llmModel = String(body.llmModel ?? '').trim();
-  const key = String(body.llmApiKey ?? '').trim();
-  // Master toggle: unchecked turns the feature off regardless of the
-  // (CSS-hidden but still submitted) fields below it.
-  if (body.aiOn !== 'on') return { llmProvider: '', llmModel: '', ...clearKey };
-  if (!['anthropic', 'openai'].includes(llmProvider)) return 'Unknown AI provider.';
-  if (llmProvider === 'openai' && !llmModel) return 'OpenAI needs an explicit model name.';
-  return {
-    llmProvider: llmProvider as AppSettings['llmProvider'],
-    llmModel,
-    ...(key ? { llmApiKey: key } : {}),
-    ...clearKey,
-  };
-}
-
 function stageOauth(_s: AppSettings, body: any): Staged {
   const clientId = String(body.oauthClientId ?? '').trim();
   const idErr = badOauthId(clientId);
@@ -162,7 +143,6 @@ function stageWorkspace(_s: AppSettings, body: any): Staged {
 const SECTION_STAGERS: Record<string, (s: AppSettings, body: any) => Staged> = {
   field: stageField,
   chat: stageChat,
-  ai: stageAi,
   oauth: stageOauth,
   saml: stageSaml,
   workspace: stageWorkspace,
@@ -175,7 +155,7 @@ function stageChange(s: AppSettings, body: any): Staged {
 }
 
 /** Secrets keep their stored value on an empty save; "clear" wipes them. */
-const SECRET_FIELDS = new Set(['serviceAccountJson', 'oauthClientSecret', 'llmApiKey']);
+const SECRET_FIELDS = new Set(['serviceAccountJson', 'oauthClientSecret']);
 const BOOL_FIELDS = new Set(['calendarOoo', 'tokenSignIn']);
 
 const FIELD_CHECKS: Record<string, (v: string) => string | null> = {
@@ -189,10 +169,7 @@ const FIELD_CHECKS: Record<string, (v: string) => string | null> = {
   samlIdpEntityId: () => null,
   samlAdminAttribute: () => null,
   samlAdminGroup: () => null,
-  llmModel: () => null,
-  llmApiKey: () => null,
   oauthClientSecret: () => null,
-  llmProvider: (v) => (['', 'anthropic', 'openai'].includes(v) ? null : 'Unknown AI provider.'),
 };
 
 function stageField(s: AppSettings, body: any): Partial<AppSettings> | string {
@@ -399,37 +376,6 @@ export async function settingsPage(
   ${box({ key: 'samlAdminAttribute', label: 'Admin attribute', hint: 'Assertion attribute checked for the admin group.', control: textControl(s.samlAdminAttribute, 'groups') })}
   ${box({ key: 'samlAdminGroup', label: 'Admin group value', hint: 'Members get the admin console; Google Directory admins always do.', control: textControl(s.samlAdminGroup, 'asyncup-admins') })}`;
 
-  // --- AI summaries ---
-  const aiOn = !!s.llmProvider;
-  const aiBody = `<div class="ai-grp">
-  ${box({
-    key: 'llmProvider',
-    label: 'AI summaries',
-    hint: 'Daily TL;DR + week-in-review, via your own key — nothing leaves your infra otherwise. Then enable per standup with <code>@AsyncUp ai on</code>.',
-    status: aiOn ? chip(true, `On · ${s.llmProvider}`) : chip(false, '', 'Off'),
-    control: `<select name="value">
-      <option value="" ${!s.llmProvider ? 'selected' : ''}>Off</option>
-      <option value="anthropic" ${s.llmProvider === 'anthropic' ? 'selected' : ''}>Anthropic</option>
-      <option value="openai" ${s.llmProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
-    </select>`,
-  })}
-  <div class="gated">
-  ${box({
-    key: 'llmApiKey',
-    label: 'API key',
-    status: secretStatus(s.llmApiKey),
-    control: textControl('', s.llmApiKey ? 'Enter a new key to replace the stored one' : 'sk-…', 'password'),
-    extra: clearExtra(!!s.llmApiKey),
-  })}
-  ${box({
-    key: 'llmModel',
-    label: 'Model',
-    hint: `Anthropic default: <code>${DEFAULT_ANTHROPIC_MODEL}</code>. OpenAI needs an explicit model name.`,
-    status: s.llmProvider === 'openai' && !s.llmModel ? '<span class="chip warn">Required</span>' : chip(!!s.llmModel, 'Set', 'Default'),
-    control: textControl(s.llmModel, `anthropic default: ${DEFAULT_ANTHROPIC_MODEL}`),
-  })}
-  </div></div>`;
-
   const tokensSet = [s.tickToken, s.exportToken, s.scimToken].filter(Boolean).length;
   const tokensBody = `${tokenRow('tickToken', 'Scheduler tick token', 'Authorizes POST /tick for external cron (scale-to-zero deploys).')}
     ${tokenRow('exportToken', 'CSV export token', 'Enables GET /export. Endpoint stays off until a token exists.')}
@@ -457,6 +403,5 @@ export async function settingsPage(
     status: googleOn || samlOn ? chip(true, [googleOn && 'Google', samlOn && 'SAML'].filter(Boolean).join(' + ') + (s.tokenSignIn ? ' + token' : '')) : chip(s.tokenSignIn, 'Token only', 'Locked'),
     body: signInBody,
   })}
-  ${section({ title: 'AI summaries', desc: 'bring your own key', status: aiOn ? chip(true, `On · ${s.llmProvider}`) : chip(false, '', 'Off'), body: aiBody })}
   ${section({ title: 'Access tokens', desc: 'machine endpoints: /tick, /export, /scim', status: chip(tokensSet > 0, `${tokensSet} set`, 'None set'), open: !!revealed, body: tokensBody })}`;
 }
