@@ -10,7 +10,7 @@ export interface RangeStats {
   moodCount: number;
 }
 
-export async function rangeStats(
+async function rangeStats(
   repo: Repo,
   standupId: number,
   fromDate: string,

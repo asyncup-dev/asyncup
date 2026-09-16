@@ -76,7 +76,7 @@ export function registerScim(app: Express, deps: ScimDeps): void {
     const { scimToken } = await deps.settings.get();
     const bearer = bearerToken(req);
     if (!scimToken) {
-      scimError(res, 404, 'SCIM is disabled — generate a SCIM token in dashboard settings.');
+      scimError(res, 404, 'SCIM is disabled — generate a SCIM token under Settings › API & tokens.');
       return false;
     }
     if (!tokenEquals(bearer, scimToken)) {
@@ -123,7 +123,7 @@ export function registerScim(app: Express, deps: ScimDeps): void {
       changePassword: { supported: false },
       sort: { supported: false },
       etag: { supported: false },
-      authenticationSchemes: [{ type: 'oauthbearertoken', name: 'Bearer token', description: 'Dashboard-generated SCIM token' }],
+      authenticationSchemes: [{ type: 'oauthbearertoken', name: 'Bearer token', description: 'SCIM token from Settings › API & tokens' }],
     });
   });
 

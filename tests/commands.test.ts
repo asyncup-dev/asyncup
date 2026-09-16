@@ -238,7 +238,7 @@ describe('CommandHandler', () => {
     expect(await commands.handle(ctx('trends'))).toContain('last 4 weeks');
     const exportReply = await commands.handle(ctx('export'));
     expect(exportReply).toContain('/export?standupId=');
-    expect(exportReply).toContain('dashboard settings');
+    expect(exportReply).toContain('Settings › API & tokens');
   });
 
   it('reports status including today’s progress with away handling', async () => {

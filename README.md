@@ -43,7 +43,7 @@ Each answer is posted as one card per person under a **per-date thread** in your
 - **Anonymous mood** (`mood anon`) — cards hide who felt what; the wrap-up shows the team average.
 - **Web app with Google sign-in** — guided setup with live verification, then the console: standups, blockers, reports, team and settings. Workspace admins get the console automatically; everyone else gets a personal page (their standups, answers, timezone, vacation). Token access (`DASHBOARD_TOKEN`) stays as break-glass.
 - **Enterprise SSO without the SSO tax** — SAML 2.0 sign-in (Google Workspace, Okta, Entra, OneLogin) and a SCIM 2.0 provisioning endpoint (deactivate in the IdP → removed from every roster), all in the MIT core.
-- **Insights** — `trends` in chat, 8-week dashboard charts (participation, mood, blockers), weekly digest (`digest on`), CSV export.
+- **Insights** — `trends` in chat, 8-week charts in the web app (participation, mood, blockers), weekly digest (`digest on`), CSV export.
 - **See it work immediately** — `run now` opens today's run and prompts everyone on the spot; `archive` retires a standup with history intact.
 - **Outbound webhooks** — per-standup JSON POSTs on every submission and wrap-up; pipe standups into Sheets, Zapier/n8n, or your own service.
 - **Polls** — `poll Ship Friday? | Yes | No` posts a live-updating card in the space; one tap to vote, change your vote anytime, close for final results.

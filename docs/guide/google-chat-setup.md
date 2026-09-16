@@ -6,7 +6,7 @@ Workspace admin (for domain-wide install) and have a Google Cloud project.
 ## 1. Create a GCP project and enable the Chat API
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project (e.g. `asyncup`).
-2. Note the **project number** (Dashboard → Project info) — you'll paste it into AsyncUp's settings.
+2. Note the **project number** (Cloud overview → Project info) — you'll paste it into AsyncUp's setup.
 3. Enable the API: **APIs & Services → Library → Google Chat API → Enable**.
 
 ## 2. Create a service account
@@ -14,7 +14,7 @@ Workspace admin (for domain-wide install) and have a Google Cloud project.
 1. **IAM & Admin → Service Accounts → Create service account** (e.g. `asyncup`).
    No project roles are needed — Chat API access comes from the app configuration.
 2. Open the account → **Keys → Add key → JSON** and download the key file.
-   You'll paste its contents into the dashboard in step 3 — no file mounting.
+   You'll paste its contents into AsyncUp's setup in step 3 — no file mounting.
 
 ## 3. Deploy the bot and connect it
 
@@ -58,7 +58,7 @@ and use the service's own identity via Application Default Credentials.)
 > add-on path needs the same distribution steps below.
 
 Save. The app status should become **LIVE**. Paste the **project number** into the
-dashboard's **Audience** field (Settings → Google Chat) so it matches the
+app's **Project number** field (Settings › Google Chat) so it matches the
 Authentication Audience you set here.
 
 ## 5. Get the bot to your team
@@ -95,7 +95,7 @@ event, the service account needs **domain-wide delegation**:
    - Scopes (comma-separated):
      `https://www.googleapis.com/auth/calendar.events.readonly, https://www.googleapis.com/auth/admin.directory.user.readonly`
 3. Enable the **Google Calendar API** and **Admin SDK API** in your GCP project.
-4. Dashboard → **Settings → Workspace** → tick *Google Calendar OOO sync* and
+4. In the app, **Settings › General** → tick *Calendar out-of-office* and
    set the **Workspace admin email**.
 
 With the admin email set, AsyncUp resolves each person's email through the

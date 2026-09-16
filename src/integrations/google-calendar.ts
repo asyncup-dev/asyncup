@@ -6,7 +6,7 @@ const SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
 
 /**
  * Looks for "Out of office" events in the user's primary Google Calendar.
- * Requires a service-account key (pasted in dashboard settings) with
+ * Requires a service-account key (pasted under Settings › Google Chat) with
  * domain-wide delegation for the calendar.events.readonly scope.
  */
 export class GoogleCalendarOoo implements OooChecker {
