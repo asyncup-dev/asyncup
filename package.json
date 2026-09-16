@@ -23,7 +23,8 @@
     "web:dev": "bun run --cwd web dev",
     "web:build": "bun run --cwd web build",
     "web:test": "bun run --cwd web test",
-    "web:typecheck": "bun run --cwd web typecheck"
+    "web:typecheck": "bun run --cwd web typecheck",
+    "site:build": "bun scripts/build-site.ts"
   },
   "dependencies": {
     "@googleapis/chat": "^45.0.0",

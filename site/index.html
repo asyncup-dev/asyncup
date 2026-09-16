@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>AsyncUp — daily standups that run themselves</title>
+  <meta name="description" content="Open-source, self-hosted async daily standups for Google Chat. Cards in DMs, one thread a day, honest wrap-ups, blockers you can track. Runs on a 512 MB box you own.">
+  <meta property="og:title" content="AsyncUp — daily standups that run themselves">
+  <meta property="og:description" content="No meeting. No SaaS. Your data. Open source, self-hosted, Google Chat today.">
+  <meta property="og:image" content="logo-256.png">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="lockup" href="./" aria-label="AsyncUp home">
+      <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="10" fill="var(--brand-ink-deep)"/><rect x="11" y="28" width="6" height="10" rx="1.5" fill="var(--accent-primary)"/><rect x="21" y="20" width="6" height="18" rx="1.5" fill="var(--accent-primary)"/><rect x="31" y="11" width="6" height="27" rx="1.5" fill="var(--accent-primary)"/></svg>
+      <span>AsyncUp</span>
+    </a>
+    <nav aria-label="Site">
+      <a href="#product">Product</a>
+      <a href="docs/">Docs</a>
+      <a href="#self-host">Self-host</a>
+      <a href="https://github.com/asyncup-dev/asyncup">GitHub ↗</a>
+      <a class="btn btn-primary" href="docs/guide/getting-started">Get started</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="product">
+      <div class="badges">
+        <span class="badge">Open source · MIT</span>
+        <span class="badge">Self-hosted in 15 minutes</span>
+        <span class="badge">Google Chat today · Slack and Teams planned</span>
+      </div>
+      <h1>Daily standups that run themselves.<br>No meeting. No SaaS. Your data.</h1>
+      <p class="lede">AsyncUp DMs every teammate a card each morning, collects answers into one tidy thread per day, names who’s missing at the deadline, and turns blockers into work you can actually track. Runs on a 512 MB box you own — forever free.</p>
+      <div class="cta">
+        <a class="btn btn-primary btn-lg" href="docs/guide/getting-started">Get started →</a>
+        <a class="btn btn-lg" href="docs/guide/handbook">Read the handbook</a>
+      </div>
+      <pre class="cmd"><code>$ docker compose up -d</code></pre>
+
+      <div class="shot" role="img" aria-label="The AsyncUp console: submitted today, participation, open blockers, missing today, and a table of standups with progress bars">
+        <div class="shot-side">
+          <div class="shot-brand">AsyncUp</div>
+          <div class="shot-nav"><span class="on">Standups</span><span>Blockers</span><span>Reports</span><span>Team</span><span>Settings</span></div>
+        </div>
+        <div class="shot-main">
+          <div class="shot-top"><b>Standups</b><span>Wednesday 16 September · 3 runs today, 1 still open</span><em>New standup</em></div>
+          <div class="shot-stats">
+            <div><small>Submitted today</small><b>19 / 23</b><span>4 still waiting</span></div>
+            <div><small>Participation · 7 days</small><b>87%</b><span>↑ 4 pts vs last week</span></div>
+            <div><small>Open blockers</small><b>2</b><span>1 escalated, 3 days old</span></div>
+            <div><small>Missing today</small><b>4</b><span>Asha, Rohit, Priya, Lena</span></div>
+          </div>
+          <div class="shot-table">
+            <div class="shot-row"><span><b>Engineering</b><small>9 people</small></span><span>09:30–11:30 IST</span><span><i style="--w:78%"></i>7 / 9</span><span class="tag warn">Run open · 2 waiting</span></div>
+            <div class="shot-row"><span><b>Design</b><small>5 people</small></span><span>10:00–12:00 CET</span><span><i style="--w:100%"></i>5 / 5</span><span class="tag ok">Wrapped up</span></div>
+            <div class="shot-row"><span><b>SRE Standup</b><small>6 people</small></span><span>08:30–10:00 UTC</span><span><i style="--w:50%"></i>3 / 6</span><span class="tag warn">Run open · 3 waiting</span></div>
+            <div class="shot-row"><span><b>Product Weekly</b><small>4 people</small></span><span>Mon 10:00</span><span>—</span><span class="tag">Next Monday</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="how">
+      <h2>How it works</h2>
+      <div class="grid-3">
+        <article class="card"><span class="badge">09:30</span><h3>Everyone gets a card</h3><p>One DM, one form: yesterday, today, blockers, mood. Edit until the deadline; the posted card updates in place.</p></article>
+        <article class="card"><span class="badge">As they answer</span><h3>Answers land in one thread</h3><p>Each answer is a card under today’s thread in your space. Away people are never nagged or counted as missing.</p></article>
+        <article class="card"><span class="badge">11:30</span><h3>The wrap-up tells the truth</h3><p>How many submitted and exactly who didn’t. Blockers open as items you can tag, acknowledge and resolve.</p></article>
+      </div>
+    </section>
+
+    <section class="features">
+      <h2>Everything a standup bot should do. Nothing it shouldn’t.</h2>
+      <div class="grid-3">
+        <article class="card"><h3>Away-aware</h3><p>Skip today, vacation mode and Google Calendar OOO sync. Away people are neither nagged nor counted.</p></article>
+        <article class="card"><h3>Blockers that follow up</h3><p>Tag teammates, acknowledge, post updates, resolve. Daily nudges until acknowledged; escalation when stale.</p></article>
+        <article class="card"><h3>Per-person timezones</h3><p>Prompts go out at 09:30 in each person’s own zone. Late submissions are flagged, not lost.</p></article>
+        <article class="card"><h3>Insights built in</h3><p>Participation, mood and blocker trends. Weekly digest, CSV export, signed webhooks.</p></article>
+        <article class="card"><h3>Enterprise SSO, no tax</h3><p>Google sign-in, SAML 2.0 and SCIM provisioning — all in the MIT core.</p></article>
+        <article class="card"><h3>MCP server</h3><p>Your team’s AI assistants can read standups and work blockers. No model runs inside AsyncUp.</p></article>
+      </div>
+    </section>
+
+    <section class="self-host" id="self-host">
+      <h2>Yours to run. Yours to keep.</h2>
+      <p class="lede">One ~300 MB container. Embedded SQLite by default, or bring your own PostgreSQL with one variable. No telemetry, no account with us, no plan to upgrade to.</p>
+      <dl class="numbers">
+        <div><dt>$0</dt><dd>per month, forever</dd></div>
+        <div><dt>15 min</dt><dd>from zero to first standup</dd></div>
+        <div><dt>1 vCPU</dt><dd>512 MB is plenty</dd></div>
+        <div><dt>MIT</dt><dd>licence</dd></div>
+      </dl>
+      <a class="btn btn-primary btn-lg" href="docs/guide/server-setup">Read the setup guide →</a>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a class="lockup" href="./"><span>AsyncUp</span></a>
+    <nav aria-label="Footer">
+      <a href="docs/">Docs</a>
+      <a href="docs/guide/handbook">Handbook</a>
+      <a href="https://github.com/asyncup-dev/asyncup">GitHub</a>
+      <a href="https://github.com/asyncup-dev/asyncup/security/policy">Security</a>
+      <a href="https://github.com/asyncup-dev/asyncup/blob/main/LICENSE">MIT licence</a>
+    </nav>
+  </footer>
+</body>
+</html>

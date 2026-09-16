@@ -49,7 +49,7 @@ export function TokenSettings() {
       <SectionCard title="JSON API">
         <SettingsRow label="Base URL" hint="Same rules as this app: session cookie plus the X-Requested-With header, or a bearer token.">
           <span className="t-mono">{typeof location !== 'undefined' ? location.origin : ''}/api/v1</span>
-          <a className="btn btn-ghost" style={{ height: 28 }} href="https://asyncup-dev.github.io/asyncup/guide/api" target="_blank" rel="noreferrer">API reference ↗</a>
+          <a className="btn btn-ghost" style={{ height: 28 }} href="https://asyncup-dev.github.io/asyncup/docs/guide/api" target="_blank" rel="noreferrer">API reference ↗</a>
         </SettingsRow>
       </SectionCard>
     </>

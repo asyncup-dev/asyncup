@@ -13,3 +13,4 @@ coverage/
 web/dist/
 web/coverage/
 .claude/
+site-dist/

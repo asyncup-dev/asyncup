@@ -1,9 +1,9 @@
-name: Deploy docs
+name: Deploy site
 
 on:
   push:
     branches: [main]
-    paths: ['docs/**', '.github/workflows/docs.yml']
+    paths: ['docs/**', 'site/**', 'scripts/**', 'web/public/**', 'web/src/tokens.css', '.github/workflows/docs.yml']
   workflow_dispatch:
 
 permissions:
@@ -16,6 +16,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The project site: https://asyncup-dev.github.io/asyncup/ — landing page at
+  # the root, docs under /docs/, redirect stubs at the old docs URLs.
   build:
     runs-on: ubuntu-latest
     steps:
@@ -24,12 +26,10 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      # Served at https://<user>.github.io/<repo>/ unless a custom domain
-      # (CNAME) is configured in the Pages settings — then DOCS_BASE is "/".
-      - run: DOCS_BASE="/${GITHUB_REPOSITORY#*/}/" bun run docs:build
+      - run: SITE_BASE="/${GITHUB_REPOSITORY#*/}/" LEGACY_REDIRECTS=1 bun run site:build
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: docs/.vitepress/dist
+          path: site-dist
 
   deploy:
     needs: build
@@ -40,3 +40,35 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # The org site: https://asyncup-dev.github.io/ — the same build at the
+  # root, pushed to the asyncup-dev/asyncup-dev.github.io repository. Runs
+  # only once that repository exists and SITE_DEPLOY_KEY (a deploy key with
+  # write access to it) is set on this repository; skipped silently otherwise.
+  org-site:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - id: key
+        env:
+          KEY: ${{ secrets.SITE_DEPLOY_KEY }}
+        run: echo "present=$([ -n "$KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v7
+      - if: steps.key.outputs.present == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - if: steps.key.outputs.present == 'true'
+        run: bun install --frozen-lockfile
+      - if: steps.key.outputs.present == 'true'
+        run: SITE_BASE=/ bun run site:build
+      - if: steps.key.outputs.present == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.SITE_DEPLOY_KEY }}
+          external_repository: asyncup-dev/asyncup-dev.github.io
+          publish_branch: main
+          publish_dir: site-dist
+          cname: false
+          commit_message: 'Publish site from asyncup@${{ github.sha }}'
