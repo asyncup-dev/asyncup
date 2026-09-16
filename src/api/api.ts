@@ -1,14 +1,18 @@
 import express, { type Express } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { DateTime } from 'luxon';
+import type { ChatClientFactory } from '../adapters/gchat/adapter.js';
+import type { SamlBroker, SamlConfig } from '../auth/saml.js';
 import type { ChatAdapter } from '../core/adapter.js';
 import type { BlockerService } from '../core/blocker-service.js';
+import type { WebhookNotifier } from '../core/webhooks.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { SettingsService } from '../core/settings.js';
 import type { Repo } from '../db/repo.js';
 import { registerBlockerRoutes } from './blockers.js';
 import { registerMemberRoutes } from './member.js';
 import { registerPeopleRoutes } from './people.js';
+import { registerSettingsRoutes } from './settings.js';
 import { resolvePrincipal } from './principal.js';
 import { apiError, CSRF_HEADER, CSRF_VALUE, principalOf, type ApiContext, type ApiRequest } from './shared.js';
 import { registerStandupRoutes } from './standups.js';
@@ -26,6 +30,10 @@ export interface ApiDeps {
   scheduler: Scheduler;
   adapter: ChatAdapter;
   blockers: BlockerService;
+  webhooks: WebhookNotifier;
+  chatClientFactory: ChatClientFactory;
+  samlBroker: (config: SamlConfig) => SamlBroker;
+  externalFetch: typeof fetch;
   secretKey: string;
   operatorToken: string;
   tenantId: string;
@@ -41,6 +49,10 @@ export function registerApi(app: Express, deps: ApiDeps): void {
     scheduler: deps.scheduler,
     adapter: deps.adapter,
     blockers: deps.blockers,
+    webhooks: deps.webhooks,
+    chatClientFactory: deps.chatClientFactory,
+    samlBroker: deps.samlBroker,
+    externalFetch: deps.externalFetch,
     now: deps.now ?? (() => DateTime.utc()),
   };
   const api = express.Router();
@@ -78,6 +90,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
   registerBlockerRoutes(api, ctx);
   registerPeopleRoutes(api, ctx);
   registerMemberRoutes(api, ctx);
+  registerSettingsRoutes(api, ctx);
 
   api.use((_req, res) => apiError(res, 404, 'not_found', 'No such API route.'));
   app.use('/api/v1', api);

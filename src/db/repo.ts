@@ -1463,6 +1463,11 @@ export class Repo {
 
   // --- settings (key/value, optionally encrypted) ---
 
+  async getSettingValue(key: string): Promise<string | null> {
+    const row = await this.db.get('SELECT value FROM settings WHERE key = ?', [key]);
+    return row?.value ?? null;
+  }
+
   async getSettingRows(): Promise<{ key: string; value: string; encrypted: boolean }[]> {
     const rows = await this.db.all('SELECT key, value, encrypted FROM settings');
     return rows.map((r: any) => ({ key: r.key, value: r.value, encrypted: !!r.encrypted }));

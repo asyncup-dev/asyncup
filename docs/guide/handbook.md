@@ -256,6 +256,7 @@ All token comparisons are constant-time; ✱ = covered by the rate limiter
 | Endpoint | Auth | Purpose |
 | --- | --- | --- |
 | `GET /healthz` | none | Liveness (pings the DB) |
+| `GET /health/chat` | none | Chat connection state without secrets: audience/key set, last verified or rejected event time |
 | `POST /chat/events` | Google-signed JWT (verified against your audience) | Chat webhook — refuses events until the audience is configured |
 | `POST /tick` ✱ | Bearer tick token (open until one exists) | External cron for scale-to-zero |
 | `GET /export?standupId=N&days=D` ✱ | Bearer export token (404 until one exists) | CSV, D clamped 1–365 |
