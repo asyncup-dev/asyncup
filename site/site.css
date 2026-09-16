@@ -1,0 +1,73 @@
+/* The marketing page. Colours, spacing and radii come from tokens.css (the app's own tokens). */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg-canvas); color: var(--text-primary); font-family: var(--font-sans); font-size: 16px; line-height: 24px; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; text-align: center; max-width: 1200px; margin-inline: auto; }
+h2 { font-size: clamp(26px, 3.5vw, 36px); line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; text-align: center; }
+h3 { font-size: 18px; line-height: 24px; font-weight: 600; }
+.lede { color: var(--text-secondary); text-align: center; max-width: 760px; margin-inline: auto; font-size: 17px; line-height: 26px; }
+section { padding: 80px max(16px, calc((100% - 1200px) / 2)); display: grid; gap: 32px; justify-items: center; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-surface); color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+.btn:hover { background: var(--bg-hover); }
+.btn-primary { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--text-on-accent); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-lg { height: 40px; padding: 0 22px; }
+.badge { display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-text); font-size: 12px; font-weight: 600; }
+.card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-card); padding: 24px; display: grid; gap: 10px; align-content: start; }
+.card p { color: var(--text-secondary); font-size: 15px; line-height: 22px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; width: 100%; }
+
+.nav, .foot { display: flex; align-items: center; gap: 24px; padding: 18px max(16px, calc((100% - 1200px) / 2)); }
+.nav { border-bottom: 1px solid var(--border-default); background: var(--bg-surface); position: sticky; top: 0; z-index: 2; }
+.nav nav, .foot nav { margin-left: auto; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; font-weight: 500; color: var(--text-secondary); }
+.nav nav a:hover, .foot nav a:hover { color: var(--text-primary); }
+.lockup { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; }
+.foot { border-top: 1px solid var(--border-default); color: var(--text-secondary); font-size: 14px; }
+
+.hero { padding-top: 64px; gap: 24px; }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.cmd { margin: 0; padding: 10px 16px; border-radius: var(--radius-sm); background: var(--brand-ink-deep); color: #f7f9fb; font-family: var(--font-mono); font-size: 14px; }
+
+/* Product shot: a static rendering of the console, so the page needs no screenshot to stay honest. */
+.shot { width: min(1080px, 100%); margin-top: 24px; display: grid; grid-template-columns: 180px 1fr; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--bg-surface); box-shadow: var(--shadow-modal); overflow: hidden; font-size: 12px; line-height: 16px; text-align: left; }
+.shot-side { background: var(--bg-sidebar); border-right: 1px solid var(--border-default); padding: 16px 12px; }
+.shot-brand { font-weight: 600; font-size: 14px; margin-bottom: 16px; }
+.shot-nav { display: grid; gap: 4px; color: var(--text-secondary); }
+.shot-nav span { padding: 6px 10px; border-radius: 6px; }
+.shot-nav .on { background: var(--accent-soft); color: var(--accent-text); font-weight: 500; }
+.shot-main { padding: 16px 20px; display: grid; gap: 14px; }
+.shot-top { display: flex; align-items: baseline; gap: 12px; }
+.shot-top b { font-size: 18px; }
+.shot-top span { color: var(--text-muted); flex: 1; }
+.shot-top em { font-style: normal; padding: 5px 10px; border-radius: 6px; background: var(--accent-primary); color: var(--text-on-accent); font-weight: 500; }
+.shot-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.shot-stats > div { border: 1px solid var(--border-default); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; }
+.shot-stats small { color: var(--text-secondary); font-size: 11px; }
+.shot-stats b { font-size: 18px; }
+.shot-stats span { color: var(--text-muted); font-size: 11px; }
+.shot-table { border: 1px solid var(--border-default); border-radius: 8px; overflow: hidden; }
+.shot-row { display: grid; grid-template-columns: 1.6fr 1.2fr 1.2fr 1.2fr; gap: 12px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--border-default); color: var(--text-secondary); }
+.shot-row:first-child { border-top: 0; }
+.shot-row b { display: block; color: var(--text-primary); }
+.shot-row small { color: var(--text-muted); }
+.shot-row i { display: inline-block; vertical-align: middle; width: 70px; height: 5px; margin-right: 8px; border-radius: 999px; background: linear-gradient(to right, var(--accent-primary) var(--w), var(--bg-surface-2) var(--w)); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--bg-surface-2); font-size: 11px; font-weight: 500; }
+.tag.ok { background: var(--success-bg); color: var(--success-fg); }
+.tag.warn { background: var(--warning-bg); color: var(--warning-fg); }
+
+.numbers { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; margin: 0; }
+.numbers div { text-align: center; }
+.numbers dt { font-size: 32px; line-height: 40px; font-weight: 700; letter-spacing: -0.01em; }
+.numbers dd { margin: 0; color: var(--text-secondary); font-size: 14px; }
+
+@media (max-width: 800px) {
+  section { padding-block: 48px; }
+  .shot { grid-template-columns: 1fr; }
+  .shot-side { display: none; }
+  .shot-stats { grid-template-columns: repeat(2, 1fr); }
+  .shot-row { grid-template-columns: 1fr 1fr; }
+  .shot-row > :nth-child(2) { display: none; }
+  .nav nav a:not(.btn) { display: none; }
+}
