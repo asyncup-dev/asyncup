@@ -74,6 +74,7 @@ const app = createServer({
   skipVerification: config.adapter === 'fake',
   webhookSecret: (standupId) => deriveWebhookSecret(config.secretKey, standupId),
   secretKey: config.secretKey,
+  tenantId: config.tenantId,
   directory: providers.directory,
 });
 if (config.dashboardToken) console.log('[dashboard] enabled at /dashboard');

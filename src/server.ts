@@ -15,6 +15,7 @@ import { registerUserConsole } from './dashboard/me.js';
 import { registerAuth, type IdentityBroker } from './auth/google.js';
 import { registerSaml, type SamlBroker, type SamlConfig } from './auth/saml.js';
 import { registerScim } from './scim/server.js';
+import { registerApi } from './api/api.js';
 import type { UserDirectory } from './core/directory.js';
 
 export interface ServerDeps {
@@ -30,6 +31,8 @@ export interface ServerDeps {
   webhookSecret?: (standupId: number) => string;
   /** Signs sessions; empty disables Google sign-in. */
   secretKey?: string;
+  /** Tenant every API principal belongs to (single-tenant installs: TENANT_ID). */
+  tenantId?: string;
   /** Directory lookups for Workspace roles (admin vs user). */
   directory?: () => Promise<UserDirectory | null>;
   /** Test override for the Google OAuth exchange. */
@@ -125,6 +128,15 @@ export function createServer(deps: ServerDeps): Express {
     secretKey: deps.secretKey,
     signInEnabled,
     samlEnabled,
+  });
+
+  registerApi(app, {
+    repo,
+    settings,
+    secretKey: deps.secretKey ?? '',
+    operatorToken: deps.dashboardToken,
+    tenantId: deps.tenantId ?? 'default',
+    now: deps.now,
   });
 
   // The root has no page of its own — land people on the user console,
