@@ -115,6 +115,13 @@ describe('api: authentication', () => {
     expect((await asBearer(OPERATOR, '/standups', { method: 'POST' })).status).toBe(400);
   });
 
+  it('tells the web app which sign-in methods are on, without signing in', async () => {
+    const { call, settings } = await startServer();
+    expect(await (await call('/auth/methods')).json() as any).toEqual({ google: false, saml: false, token: true });
+    await settings.update({ oauthClientId: 'x.apps.googleusercontent.com', oauthClientSecret: 'GOCSPX-1', samlIdpEntityId: 'https://idp', samlIdpSsoUrl: 'https://idp/sso', samlIdpCert: 'MIIC', tokenSignIn: false });
+    expect(await (await call('/auth/methods')).json() as any).toEqual({ google: true, saml: true, token: false });
+  });
+
   it('answers unknown routes with JSON, not HTML', async () => {
     const { asBearer } = await startServer();
     const res = await asBearer(OPERATOR, '/nope');
