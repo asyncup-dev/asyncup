@@ -3,7 +3,17 @@ import { createRootRoute, createRoute, createRouter, Navigate, Outlet, RouterPro
 import { useQuery } from '@tanstack/react-query';
 import { api, type Settings } from './lib/api';
 import { useMe } from './lib/auth';
+import { BlockersPage } from './pages/blockers';
 import { Placeholder } from './pages/placeholder';
+import { ReportsPage } from './pages/reports';
+import { ChatSettings } from './pages/settings/chat';
+import { DangerSettings } from './pages/settings/danger';
+import { GeneralSettings } from './pages/settings/general';
+import { SettingsLayout } from './pages/settings/layout';
+import { McpSettings } from './pages/settings/mcp';
+import { SignInSettings } from './pages/settings/sign-in';
+import { TokenSettings } from './pages/settings/tokens';
+import { TeamPage } from './pages/team';
 import { SignInPage } from './pages/sign-in';
 import { ChatAppPage } from './pages/setup/chat-app';
 import { CreateStandupPage } from './pages/setup/create';
@@ -17,7 +27,8 @@ import { WelcomePage } from './pages/setup/welcome';
 import { HistoryPage } from './pages/standup/history';
 import { StandupLayout } from './pages/standup/layout';
 import { OverviewPage } from './pages/standup/overview';
-import { StandupStub } from './pages/standup/stub';
+import { InsightsPage } from './pages/standup/insights';
+import { StandupSettingsPage } from './pages/standup/settings';
 import { StandupsPage } from './pages/standups';
 import { Shell } from './shell/shell';
 
@@ -80,14 +91,23 @@ export function buildRouter(): AnyRouter {
   const standupTabs = [
     createRoute({ getParentRoute: () => standup, path: '/', component: OverviewPage }),
     createRoute({ getParentRoute: () => standup, path: '/history', component: HistoryPage }),
-    createRoute({ getParentRoute: () => standup, path: '/insights', component: () => <StandupStub title="Insights" /> }),
-    createRoute({ getParentRoute: () => standup, path: '/settings', component: () => <StandupStub title="Settings" /> }),
+    createRoute({ getParentRoute: () => standup, path: '/insights', component: InsightsPage }),
+    createRoute({ getParentRoute: () => standup, path: '/settings', component: StandupSettingsPage }),
   ];
-  const stubs = (['blockers', 'reports', 'team', 'settings'] as const).map((name) =>
-    createRoute({ getParentRoute: () => shell, path: `/${name}`, component: () => <Placeholder title={name[0]!.toUpperCase() + name.slice(1)} /> }),
-  );
+  const blockers = createRoute({ getParentRoute: () => shell, path: '/blockers', component: BlockersPage });
+  const reports = createRoute({ getParentRoute: () => shell, path: '/reports', component: ReportsPage });
+  const team = createRoute({ getParentRoute: () => shell, path: '/team', component: TeamPage });
+  const settings = createRoute({ getParentRoute: () => shell, path: '/settings', component: SettingsLayout });
+  const settingsPages = [
+    createRoute({ getParentRoute: () => settings, path: '/', component: GeneralSettings }),
+    createRoute({ getParentRoute: () => settings, path: '/chat', component: ChatSettings }),
+    createRoute({ getParentRoute: () => settings, path: '/sign-in', component: SignInSettings }),
+    createRoute({ getParentRoute: () => settings, path: '/mcp', component: McpSettings }),
+    createRoute({ getParentRoute: () => settings, path: '/tokens', component: TokenSettings }),
+    createRoute({ getParentRoute: () => settings, path: '/danger', component: DangerSettings }),
+  ];
   const mine = createRoute({ getParentRoute: () => shell, path: '/me', component: () => <Placeholder title="My standups" /> });
-  const routeTree = root.addChildren([signIn, setup.addChildren(setupRoutes), shell.addChildren([home, standups, standup.addChildren(standupTabs), mine, ...stubs])]);
+  const routeTree = root.addChildren([signIn, setup.addChildren(setupRoutes), shell.addChildren([home, standups, standup.addChildren(standupTabs), mine, blockers, reports, team, settings.addChildren(settingsPages)])]);
   return createRouter({ routeTree, basepath: '/app', defaultNotFoundComponent: () => <Placeholder title="Not found" /> });
 }
 
