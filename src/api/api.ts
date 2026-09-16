@@ -10,6 +10,7 @@ import type { Scheduler } from '../core/scheduler.js';
 import type { SettingsService } from '../core/settings.js';
 import type { Repo } from '../db/repo.js';
 import { registerBlockerRoutes } from './blockers.js';
+import { registerMcpRoutes } from './mcp.js';
 import { registerMemberRoutes } from './member.js';
 import { registerPeopleRoutes } from './people.js';
 import { registerSettingsRoutes } from './settings.js';
@@ -93,6 +94,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
   registerMemberRoutes(api, ctx);
   registerSettingsRoutes(api, ctx);
   registerSpaceRoutes(api, ctx);
+  registerMcpRoutes(api, ctx);
 
   api.use((_req, res) => apiError(res, 404, 'not_found', 'No such API route.'));
   app.use('/api/v1', api);

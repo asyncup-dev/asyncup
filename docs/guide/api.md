@@ -28,7 +28,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `lockout`, `chat_unavailable`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `lockout`, `chat_unavailable`, `mcp_disabled`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
 
 ## Endpoints
 
@@ -144,6 +144,27 @@ Admins only.
 | `POST` | `/settings/tokens/:name` | `tick`, `export` or `scim` → `201 { token }`, shown once |
 | `DELETE` | `/settings/tokens/:name` | `204` |
 
+### MCP server
+
+AsyncUp has no AI of its own. Instead it speaks the [Model Context Protocol](https://modelcontextprotocol.io) at `POST /mcp` (Streamable HTTP, stateless), so the team's own assistants — Claude, ChatGPT, an IDE agent — can read standups and, with the right scopes, act as a person. Off by default.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `PATCH` | `/settings` | `mcpEnabled` (boolean) switches the endpoint on; `mcpDefaultScopes` (`"read"`, `"read,blockers:write"`, …) seeds new tokens. `GET /settings` shows the `mcp` section with the scope catalogue |
+| `GET` | `/mcp/tokens` | Every token in the tenant for admins; only your own otherwise |
+| `POST` | `/mcp/tokens` | `{ name, kind?: "personal" \| "service", scopes?: [...] }` → `201` with the token once (`secret`) and a ready-to-paste `config` (`url`, `headers`). Personal tokens act as you and need a signed-in person; service tokens are admin-only and always read-only |
+| `DELETE` | `/mcp/tokens/:id` | Revokes; `204` |
+| `GET` | `/mcp/activity?limit=50` | Newest first: `tool`, `argsSummary`, `ok`, `at`, `token` |
+| `POST` | `/verify/mcp` | Verification shape: fails while the server is off or no token exists |
+
+Scopes: `read` (list_standups, list_runs, get_run, list_blockers, get_team, get_insights), `blockers:write` (acknowledge_blocker, update_blocker, resolve_blocker), `submit` (submit_answers, today's run only). Tools see exactly what their owner sees in this API; moods stay anonymous where the standup says so. Tokens expire 90 days after their last use and are stored hashed. The endpoint answers `503 mcp_disabled` while switched off and `401` for a missing, unknown, revoked or expired token.
+
+Client config, as returned on creation:
+
+```json
+{ "url": "https://asyncup.example.com/mcp", "headers": { "Authorization": "Bearer amcp_…" } }
+```
+
 ### Verification
 
 Every gate in setup and settings has a live check. All return the same shape:
@@ -161,5 +182,6 @@ Every gate in setup and settings has a live check. All return the same shape:
 | `/verify/webhook` | `{ standupId }` — POSTs a signed `test` event to the standup's webhook URL | admin, manager |
 | `/verify/saml` | Builds a sign-in request from the stored IdP config and checks the SSO URL answers | admin |
 | `/verify/dm` | Sends the caller a Chat direct message | any signed-in person |
+| `/verify/mcp` | The MCP server is on and at least one token exists | admin |
 
 `GET /health/chat` (no auth) mirrors the connection state without secrets: `audience`, `serviceAccount` (`set` / `unset`), `lastEventAt`, `lastRejectedAt`.

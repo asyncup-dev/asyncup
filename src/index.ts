@@ -70,6 +70,7 @@ const app = createServer({
   scheduler,
   adapter,
   blockers: blockerService,
+  service: service,
   repo,
   settings,
   dashboardToken: config.dashboardToken,

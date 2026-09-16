@@ -15,6 +15,8 @@ import type {
   ScimUser,
   Standup,
   Submission,
+  McpActivity,
+  McpToken,
 } from '../core/types.js';
 
 /**
@@ -254,6 +256,34 @@ DROP INDEX IF EXISTS idx_blockers_open;
 ALTER TABLE standups DROP COLUMN ai_enabled;
 DELETE FROM settings WHERE key IN ('llmProvider', 'llmApiKey', 'llmModel');
 `,
+  // 11 — MCP server: per-person and service tokens (hash only, rolling
+  //      expiry) and a call log for the settings screen
+  `
+CREATE TABLE mcp_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  owner_user_name TEXT,
+  owner_display_name TEXT,
+  owner_admin INTEGER NOT NULL DEFAULT 0,
+  scopes TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+CREATE TABLE mcp_activity (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_id INTEGER NOT NULL REFERENCES mcp_tokens(id),
+  tool TEXT NOT NULL,
+  args_summary TEXT NOT NULL,
+  ok INTEGER NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX idx_mcp_activity_at ON mcp_activity(at);
+`,
 ];
 
 /**
@@ -443,7 +473,53 @@ DROP INDEX IF EXISTS idx_blockers_open;
 ALTER TABLE standups DROP COLUMN ai_enabled;
 DELETE FROM settings WHERE key IN ('llmProvider', 'llmApiKey', 'llmModel');
 `,
+  // 11 — MCP server: per-person and service tokens (hash only, rolling
+  //      expiry) and a call log for the settings screen
+  `
+CREATE TABLE mcp_tokens (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  owner_user_name TEXT,
+  owner_display_name TEXT,
+  owner_admin INTEGER NOT NULL DEFAULT 0,
+  scopes TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+CREATE TABLE mcp_activity (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  token_id INTEGER NOT NULL REFERENCES mcp_tokens(id),
+  tool TEXT NOT NULL,
+  args_summary TEXT NOT NULL,
+  ok INTEGER NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX idx_mcp_activity_at ON mcp_activity(at);
+`,
 ];
+
+function toMcpToken(row: any): McpToken {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    name: row.name,
+    kind: row.kind,
+    ownerUserName: row.owner_user_name ?? null,
+    ownerDisplayName: row.owner_display_name ?? null,
+    ownerAdmin: !!row.owner_admin,
+    scopes: row.scopes,
+    tokenHash: row.token_hash,
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at ?? null,
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at ?? null,
+  };
+}
 
 function toStandup(row: any): Standup {
   return {
@@ -1459,6 +1535,103 @@ export class Repo {
   async removeParticipantEverywhere(userName: string): Promise<number> {
     const result = await this.db.run('UPDATE participants SET active = 0 WHERE user_name = ? AND active = 1', [userName]);
     return result.changes;
+  }
+
+  // --- MCP tokens + activity ---
+
+  async createMcpToken(input: {
+    tenantId: string;
+    name: string;
+    kind: 'personal' | 'service';
+    ownerUserName: string | null;
+    ownerDisplayName: string | null;
+    ownerAdmin: boolean;
+    scopes: string;
+    tokenHash: string;
+    createdAt: string;
+    expiresAt: string;
+  }): Promise<number> {
+    return this.db.insert(
+      `INSERT INTO mcp_tokens (tenant_id, name, kind, owner_user_name, owner_display_name, owner_admin, scopes, token_hash, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.tenantId,
+        input.name,
+        input.kind,
+        input.ownerUserName,
+        input.ownerDisplayName,
+        input.ownerAdmin ? 1 : 0,
+        input.scopes,
+        input.tokenHash,
+        input.createdAt,
+        input.expiresAt,
+      ],
+    );
+  }
+
+  async getMcpTokenByHash(tokenHash: string): Promise<McpToken | null> {
+    const row = await this.db.get('SELECT * FROM mcp_tokens WHERE token_hash = ?', [tokenHash]);
+    return row ? toMcpToken(row) : null;
+  }
+
+  async getMcpTokenById(id: number): Promise<McpToken | null> {
+    const row = await this.db.get('SELECT * FROM mcp_tokens WHERE id = ?', [id]);
+    return row ? toMcpToken(row) : null;
+  }
+
+  /** Every token in the tenant, or only one person's. */
+  async listMcpTokens(tenantId: string, ownerUserName?: string): Promise<McpToken[]> {
+    const rows = ownerUserName
+      ? await this.db.all('SELECT * FROM mcp_tokens WHERE tenant_id = ? AND owner_user_name = ? ORDER BY id', [tenantId, ownerUserName])
+      : await this.db.all('SELECT * FROM mcp_tokens WHERE tenant_id = ? ORDER BY id', [tenantId]);
+    return rows.map(toMcpToken);
+  }
+
+  async touchMcpToken(id: number, lastUsedAt: string, expiresAt: string): Promise<void> {
+    await this.db.run('UPDATE mcp_tokens SET last_used_at = ?, expires_at = ? WHERE id = ?', [lastUsedAt, expiresAt, id]);
+  }
+
+  async revokeMcpToken(id: number, at: string): Promise<boolean> {
+    const result = await this.db.run('UPDATE mcp_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL', [at, id]);
+    return result.changes > 0;
+  }
+
+  async logMcpActivity(input: { tokenId: number; tool: string; argsSummary: string; ok: boolean; at: string }): Promise<void> {
+    await this.db.run('INSERT INTO mcp_activity (token_id, tool, args_summary, ok, at) VALUES (?, ?, ?, ?, ?)', [
+      input.tokenId,
+      input.tool,
+      input.argsSummary,
+      input.ok ? 1 : 0,
+      input.at,
+    ]);
+  }
+
+  /** Newest first; `tokenIds` narrows to what the caller may see. */
+  async listMcpActivity(tenantId: string, opts: { tokenIds?: number[]; limit: number }): Promise<McpActivity[]> {
+    if (opts.tokenIds && opts.tokenIds.length === 0) return [];
+    const filter = opts.tokenIds ? ` AND a.token_id IN (${opts.tokenIds.map(() => '?').join(',')})` : '';
+    const rows = await this.db.all(
+      `SELECT a.id, a.token_id, a.tool, a.args_summary, a.ok, a.at, t.name AS token_name
+       FROM mcp_activity a JOIN mcp_tokens t ON t.id = a.token_id
+       WHERE t.tenant_id = ?${filter} ORDER BY a.id DESC LIMIT ?`,
+      [tenantId, ...(opts.tokenIds ?? []), opts.limit],
+    );
+    return rows.map((r: any) => ({
+      id: r.id,
+      token: { id: r.token_id, name: r.token_name },
+      tool: r.tool,
+      argsSummary: r.args_summary,
+      ok: !!r.ok,
+      at: r.at,
+    }));
+  }
+
+  async lastMcpActivityAt(tenantId: string): Promise<string | null> {
+    const row = await this.db.get(
+      'SELECT MAX(a.at) AS at FROM mcp_activity a JOIN mcp_tokens t ON t.id = a.token_id WHERE t.tenant_id = ?',
+      [tenantId],
+    );
+    return row?.at ?? null;
   }
 
   // --- settings (key/value, optionally encrypted) ---

@@ -4,34 +4,12 @@ import { buildCsv } from '../core/export.js';
 import { weeklySeries } from '../core/insights.js';
 import { runProgress } from '../core/progress.js';
 import { validateStandupConfig } from '../core/standup-config.js';
-import { MOOD_SCORE, type Standup, type Submission } from '../core/types.js';
+import type { Standup } from '../core/types.js';
 import { clampExportDays, LIMITS } from '../core/validation.js';
 import { apiError, canManage, clampInt, loadStandup, principalOf, summarise, visibleStandups, type ApiContext } from './shared.js';
+import { person, runsView, runView, todayView } from './views.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function person(p: { userName: string; displayName: string }) {
-  return { userName: p.userName, displayName: p.displayName };
-}
-
-/** Team mood for a run, rounded to one decimal; null when nobody picked one. */
-function averageMood(submissions: Submission[]): number | null {
-  const scores = submissions.flatMap((s) => (s.mood ? [MOOD_SCORE[s.mood]] : []));
-  return scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null;
-}
-
-/** A submission as the API shows it — mood withheld when the standup keeps moods anonymous. */
-function submissionView(standup: Standup, s: Submission) {
-  return {
-    userName: s.userName,
-    displayName: s.displayName,
-    submittedAt: s.submittedAt,
-    editedAt: s.editedAt,
-    late: s.late,
-    mood: standup.moodAnonymous ? null : s.mood,
-    answers: s.answers,
-  };
-}
 
 export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   const { repo } = ctx;
@@ -129,45 +107,13 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   api.get('/standups/:id/runs', async (req, res) => {
     const standup = await loadStandup(ctx, req, res);
     if (!standup) return;
-    const runs = [];
-    for (const run of await repo.listRecentRuns(standup.id, clampInt(req.query.limit, 14, 1, 90))) {
-      const progress = runProgress(await repo.listRunParticipants(run.id), await repo.listSubmissions(run.id));
-      runs.push({
-        date: run.date,
-        status: run.status,
-        submitted: progress.submitted,
-        expected: progress.expected,
-        missing: progress.missingMandatory.map(person),
-      });
-    }
-    res.json({ runs });
+    res.json({ runs: await runsView(repo, standup, clampInt(req.query.limit, 14, 1, 90)) });
   });
 
-  // Today, shaped for polling: who is done, who is still expected, who is away.
   api.get('/standups/:id/runs/today', async (req, res) => {
     const standup = await loadStandup(ctx, req, res);
     if (!standup) return;
-    const date = ctx.now().setZone(standup.timezone).toISODate()!;
-    const run = await repo.getRun(standup.id, date);
-    if (!run) {
-      res.json({ date, status: null, expected: 0, submitted: [], waiting: [], away: [], teamMood: null });
-      return;
-    }
-    const submissions = await repo.listSubmissions(run.id);
-    const progress = runProgress(await repo.listRunParticipants(run.id), submissions);
-    const byUser = new Map(submissions.map((s) => [s.userName, s]));
-    res.json({
-      date,
-      status: run.status,
-      expected: progress.expected,
-      submitted: progress.done.map((rp) => {
-        const s = byUser.get(rp.userName)!;
-        return { ...person(rp), submittedAt: s.submittedAt, late: s.late, mood: standup.moodAnonymous ? null : s.mood };
-      }),
-      waiting: progress.pending.map((rp) => ({ ...person(rp), mandatory: rp.mandatory, remindedAt: rp.remindedAt })),
-      away: progress.away.map((rp) => ({ ...person(rp), reason: rp.skippedAt ? 'skipped' : 'vacation' })),
-      teamMood: standup.moodAnonymous ? averageMood(submissions) : null,
-    });
+    res.json(await todayView(repo, standup, ctx.now()));
   });
 
   api.get('/standups/:id/runs/:date', async (req, res) => {
@@ -178,22 +124,12 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 400, 'invalid', 'Date must be YYYY-MM-DD.', 'date');
       return;
     }
-    const run = await repo.getRun(standup.id, date);
+    const run = await runView(repo, standup, date);
     if (!run) {
       apiError(res, 404, 'not_found', 'No run on that date.');
       return;
     }
-    const submissions = await repo.listSubmissions(run.id);
-    const progress = runProgress(await repo.listRunParticipants(run.id), submissions);
-    res.json({
-      date,
-      status: run.status,
-      submitted: progress.submitted,
-      expected: progress.expected,
-      missing: progress.missingMandatory.map(person),
-      submissions: submissions.map((s) => submissionView(standup, s)),
-      teamMood: standup.moodAnonymous ? averageMood(submissions) : null,
-    });
+    res.json(run);
   });
 
   api.get('/standups/:id/insights', async (req, res) => {

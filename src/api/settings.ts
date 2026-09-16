@@ -1,4 +1,5 @@
 import type { Request, Response, Router } from 'express';
+import { MCP_SCOPE_HELP, parseScopes } from '../core/mcp-scopes.js';
 import { googleSignInOn, LOCKOUT_MSG, locksOut, samlSignInOn, stageFieldValue } from '../core/settings-rules.js';
 import type { AppSettings } from '../core/settings.js';
 import { generateToken } from '../core/crypto.js';
@@ -34,6 +35,7 @@ function view(s: AppSettings) {
     },
     tokens: { tick: { set: !!s.tickToken }, export: { set: !!s.exportToken }, scim: { set: !!s.scimToken } },
     setup: { complete: s.setupComplete, chatConfigured: !!(s.chatAudience && s.serviceAccountJson), signInConfigured: googleSignInOn(s) || samlSignInOn(s) },
+    mcp: { enabled: s.mcpEnabled, defaultScopes: parseScopes(s.mcpDefaultScopes), endpoint: '/mcp', scopes: MCP_SCOPE_HELP },
   };
 }
 

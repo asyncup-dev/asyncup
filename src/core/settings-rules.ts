@@ -1,4 +1,5 @@
 import type { AppSettings } from './settings.js';
+import { MCP_SCOPES, type McpScope } from './mcp-scopes.js';
 import { HTTPS_URL_RE, isValidZone, looksLikeEmail } from './validation.js';
 
 /**
@@ -48,6 +49,11 @@ export const badTimezone = (v: string): string | null =>
 export const badAdminEmail = (v: string): string | null =>
   v && !looksLikeEmail(v) ? `"${v}" doesn't look like an email address.` : null;
 
+const badMcpScopes = (v: string): string | null => {
+  const bad = v.split(/[\s,]+/).filter(Boolean).find((scope) => !MCP_SCOPES.includes(scope as McpScope));
+  return bad ? `"${bad}" is not an MCP scope (${MCP_SCOPES.join(', ')}).` : null;
+};
+
 export const googleSignInOn = (s: AppSettings): boolean => !!(s.oauthClientId && s.oauthClientSecret);
 export const samlSignInOn = (s: AppSettings): boolean => !!(s.samlIdpEntityId && s.samlIdpSsoUrl && s.samlIdpCert);
 
@@ -64,7 +70,7 @@ export const TOKEN_OFF_MSG =
 
 /** Secrets keep their stored value on an empty save; an explicit clear wipes them. */
 export const SECRET_FIELDS = new Set<keyof AppSettings>(['serviceAccountJson', 'oauthClientSecret']);
-export const BOOL_FIELDS = new Set<keyof AppSettings>(['calendarOoo', 'tokenSignIn', 'setupComplete']);
+export const BOOL_FIELDS = new Set<keyof AppSettings>(['calendarOoo', 'tokenSignIn', 'setupComplete', 'mcpEnabled']);
 
 export const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => string | null>> = {
   chatAudience: badAudience,
@@ -78,6 +84,7 @@ export const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => stri
   samlAdminAttribute: () => null,
   samlAdminGroup: () => null,
   oauthClientSecret: () => null,
+  mcpDefaultScopes: badMcpScopes,
 };
 
 export const EDITABLE_FIELDS: (keyof AppSettings)[] = [...BOOL_FIELDS, ...(Object.keys(FIELD_CHECKS) as (keyof AppSettings)[])];
