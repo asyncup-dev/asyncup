@@ -1,7 +1,7 @@
 import type { Request, Response, Router } from 'express';
 import { memberStandups, setMemberTimezone, setMemberVacation } from '../core/member.js';
 import { runProgress } from '../core/progress.js';
-import { apiError, clampInt, principalOf, type ApiContext } from './shared.js';
+import { apiError, clampInt, findVisibleStandup, principalOf, type ApiContext } from './shared.js';
 
 /** The signed-in person's own view: their standups, answers and settings. */
 export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
@@ -72,6 +72,30 @@ export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
         answers: submission.answers,
       })),
     });
+  });
+
+  // Skip today's run for one standup — the API twin of the DM `skip` command.
+  api.post('/me/skip', async (req, res) => {
+    const userName = linkedUser(req, res);
+    if (!userName) return;
+    if (!ctx.service) {
+      apiError(res, 503, 'unavailable', 'Skipping is not available on this server.');
+      return;
+    }
+    const found = await findVisibleStandup(repo, principalOf(req), Number(req.body?.standupId));
+    if (!found) {
+      apiError(res, 404, 'not_found', 'No such standup.');
+      return;
+    }
+    const run = await repo.getRun(found.standup.id, ctx.now().setZone(found.standup.timezone).toISODate()!);
+    if (!run || run.status !== 'open') {
+      apiError(res, 409, 'no_open_run', run ? 'Today’s run has already closed.' : 'Today’s run has not opened yet.');
+      return;
+    }
+    const result = await ctx.service.skipToday(run.id, userName);
+    if (result === 'already_submitted') return apiError(res, 409, 'already_submitted', 'You already answered today — edit your answers in Chat instead.');
+    if (result === 'not_found') return apiError(res, 404, 'not_found', 'You are not on today’s run.');
+    res.json({ result, date: run.date });
   });
 
   api.patch('/me', async (req, res) => {

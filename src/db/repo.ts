@@ -1537,6 +1537,31 @@ export class Repo {
     return result.changes;
   }
 
+  // --- history wipe (Settings › Danger zone) ---
+
+  /**
+   * Removes every run, submission, blocker and poll in the tenant, leaving
+   * standups, rosters, admins and settings untouched. One transaction, so a
+   * failure part-way leaves the history as it was.
+   */
+  async deleteHistory(tenantId: string): Promise<{ runs: number; submissions: number; blockers: number; polls: number }> {
+    const standups = 'SELECT id FROM standups WHERE tenant_id = ?';
+    const runs = `SELECT id FROM runs WHERE standup_id IN (${standups})`;
+    const blockers = `SELECT id FROM blockers WHERE standup_id IN (${standups})`;
+    const polls = `SELECT id FROM polls WHERE standup_id IN (${standups})`;
+    return this.db.transaction(async () => {
+      await this.db.run(`DELETE FROM blocker_tags WHERE blocker_id IN (${blockers})`, [tenantId]);
+      await this.db.run(`DELETE FROM blocker_updates WHERE blocker_id IN (${blockers})`, [tenantId]);
+      const b = await this.db.run(`DELETE FROM blockers WHERE standup_id IN (${standups})`, [tenantId]);
+      await this.db.run(`DELETE FROM poll_votes WHERE poll_id IN (${polls})`, [tenantId]);
+      const p = await this.db.run(`DELETE FROM polls WHERE standup_id IN (${standups})`, [tenantId]);
+      const sub = await this.db.run(`DELETE FROM submissions WHERE run_id IN (${runs})`, [tenantId]);
+      await this.db.run(`DELETE FROM run_participants WHERE run_id IN (${runs})`, [tenantId]);
+      const r = await this.db.run(`DELETE FROM runs WHERE standup_id IN (${standups})`, [tenantId]);
+      return { runs: r.changes, submissions: sub.changes, blockers: b.changes, polls: p.changes };
+    });
+  }
+
   // --- MCP tokens + activity ---
 
   async createMcpToken(input: {

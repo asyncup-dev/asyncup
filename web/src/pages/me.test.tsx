@@ -29,6 +29,7 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}) {
       'GET /api/v1/me/submissions?limit=5': { body: { submissions: SUBS } },
       'GET /api/v1/me/submissions?limit=50': { body: { submissions: [...SUBS, { ...SUBS[0], date: '2026-09-13' }] } },
       'PATCH /api/v1/me': { body: (init?: RequestInit) => { patches.push(JSON.parse(String(init?.body))); return { timezone: 'UTC', onVacation: false }; } },
+      'POST /api/v1/me/skip': { body: (init?: RequestInit) => { patches.push(JSON.parse(String(init?.body))); return { result: 'skipped', date: '2026-09-16' }; } },
       ...over,
     }),
   };
@@ -55,6 +56,10 @@ describe('member console', () => {
     expect(screen.getByText('Engineering · late · edited · 🙂')).toBeInTheDocument();
     expect(screen.getByText('Your recent answers: mostly 🙂')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'View all' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Skip today' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Skipped today’s Engineering');
+    expect(patches).toContainEqual({ standupId: 1 });
 
     await user.selectOptions(screen.getByLabelText('My timezone'), 'UTC');
     await waitFor(() => expect(patches).toContainEqual({ timezone: 'UTC' }));
@@ -83,11 +88,16 @@ describe('member console', () => {
   });
 
   it('reports failures and a rejected save', async () => {
-    server({ 'PATCH /api/v1/me': { status: 400, body: { error: { code: 'invalid', message: 'Invalid IANA timezone: Nope', field: 'timezone' } } } });
+    server({
+      'PATCH /api/v1/me': { status: 400, body: { error: { code: 'invalid', message: 'Invalid IANA timezone: Nope', field: 'timezone' } } },
+      'POST /api/v1/me/skip': { status: 409, body: { error: { code: 'already_submitted', message: 'You already answered today — edit your answers in Chat instead.' } } },
+    });
     renderApp('/me');
     const user = userEvent.setup();
     await user.selectOptions(await screen.findByLabelText('My timezone'), 'UTC');
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid IANA timezone');
+    await user.click(screen.getByRole('button', { name: 'Skip today' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('You already answered today');
 
     vi.unstubAllGlobals();
     server({ 'GET /api/v1/me/standups': { status: 500, body: { error: { code: 'boom', message: 'db' } } } });

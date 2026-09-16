@@ -60,7 +60,12 @@ export function MePage() {
     mutationFn: (body: { timezone?: string | null; onVacation?: boolean }) => api<{ timezone: string | null; onVacation: boolean }>('/me', { method: 'PATCH', body }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['me-standups'] }),
   });
+  const skip = useMutation({
+    mutationFn: (standupId: number) => api<{ result: string; date: string }>('/me/skip', { method: 'POST', body: { standupId } }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['me-standups'] }),
+  });
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const name = me.data?.user?.name?.split(' ')[0] ?? 'there';
   const d = mine.data;
   if (mine.isError) return <div className="alert">Could not load your standups: {mine.error.message}</div>;
@@ -89,6 +94,7 @@ export function MePage() {
         </div>
       </div>
       {error ? <div className="alert" role="alert">{error}</div> : null}
+      {notice ? <div className="toast" role="status">{notice}</div> : null}
       {!d.linked ? (
         <div className="card section">
           <div className="t-h3">Your account is not linked to Google Chat yet</div>
@@ -109,6 +115,22 @@ export function MePage() {
                 </div>
               </div>
               <a className="btn btn-primary btn-lg" href={answerHref} target="_blank" rel="noreferrer">Answer in Chat ↗</a>
+              <button
+                type="button"
+                className="btn btn-lg"
+                disabled={skip.isPending}
+                onClick={() => void (async () => {
+                  try {
+                    setError(null);
+                    await skip.mutateAsync(s.id);
+                    setNotice(`Skipped today’s ${s.name} — you won’t be counted as missing.`);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'That did not work.');
+                  }
+                })()}
+              >
+                Skip today
+              </button>
             </div>
           </div>
         );

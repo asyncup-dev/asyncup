@@ -23,6 +23,7 @@ async function startServer() {
     dashboardToken: OPERATOR,
     skipVerification: true,
     secretKey: SECRET,
+    service: stack.service,
     now: stack.clock.now,
   });
   const server = app.listen(0);
@@ -367,5 +368,29 @@ describe('api: member', () => {
     expect(await (await patch({ timezone: 'Europe/Berlin', onVacation: true })).json()).toEqual({ timezone: 'Europe/Berlin', onVacation: true });
     expect(await (await patch({ timezone: null, onVacation: false })).json()).toEqual({ timezone: null, onVacation: false });
     expect(await (await patch({})).json()).toEqual({ timezone: null, onVacation: false });
+  });
+  it('skips today for one standup with the same rules as the DM command', async () => {
+    const { as, op, cookieFor, repo, openRun, service, json } = await startServer();
+    const s = await seedStandup(repo);
+    const alice = cookieFor('alice');
+    const skip = (who: string, body: unknown) => as(who, '/me/skip', { method: 'POST', body: json(body) });
+    expect(((await (await op('/me/skip', { method: 'POST', body: json({ standupId: s.id }) })).json()) as any).error.code).toBe('not_linked');
+    expect((await skip(alice, { standupId: 999 })).status).toBe(404);
+    let res = await skip(alice, { standupId: s.id });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).error.message).toContain('not opened yet');
+
+    const run = await openRun(s.id);
+    expect((await skip(cookieFor('dave'), { standupId: s.id })).status).toBe(404);
+    expect(await (await skip(alice, { standupId: s.id })).json()).toEqual({ result: 'skipped', date: '2026-06-10' });
+    expect((await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')!.skippedAt).not.toBeNull();
+    await service.submit(run.id, 'users/bob', 'Bob', ANSWERS);
+    res = await skip(cookieFor('bob'), { standupId: s.id });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).error.code).toBe('already_submitted');
+    // carol is optional and never prompted differently — she can skip too; then the run closes.
+    expect((await skip(cookieFor('carol'), { standupId: s.id })).status).toBe(200);
+    await repo.closeRun(run.id);
+    expect(((await (await skip(alice, { standupId: s.id })).json()) as any).error.message).toContain('already closed');
   });
 });

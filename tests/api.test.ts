@@ -122,6 +122,13 @@ describe('api: authentication', () => {
     expect(await (await call('/auth/methods')).json() as any).toEqual({ google: true, saml: true, token: false });
   });
 
+  it('says so when the host has no standup service to skip with', async () => {
+    const { asCookie, cookieFor } = await startServer();
+    const res = await asCookie(cookieFor('alice', 'alice@o.com'), '/me/skip', { method: 'POST', headers: { 'x-requested-with': 'asyncup', 'content-type': 'application/json' }, body: '{"standupId":1}' });
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as any).error.code).toBe('unavailable');
+  });
+
   it('answers unknown routes with JSON, not HTML', async () => {
     const { asBearer } = await startServer();
     const res = await asBearer(OPERATOR, '/nope');

@@ -79,6 +79,17 @@ export function registerSettingsRoutes(api: Router, ctx: ApiContext): void {
   });
 
   // Machine tokens are shown once, at generation.
+  // Danger zone: wipe every run, submission, blocker and poll. The typed
+  // phrase travels with the request so a stray client call cannot do it.
+  api.delete('/history', async (req, res) => {
+    if (!adminOnly(req, res)) return;
+    if (req.body?.confirm !== 'DELETE HISTORY') {
+      apiError(res, 400, 'invalid', 'Send { "confirm": "DELETE HISTORY" } to delete every run, submission, blocker and poll.', 'confirm');
+      return;
+    }
+    res.json({ deleted: await repo.deleteHistory(principalOf(req).tenantId) });
+  });
+
   api.post('/settings/tokens/:name', async (req, res) => {
     if (!adminOnly(req, res)) return;
     const field = TOKENS[String(req.params.name) as keyof typeof TOKENS];

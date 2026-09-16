@@ -28,7 +28,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `lockout`, `chat_unavailable`, `mcp_disabled`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `lockout`, `chat_unavailable`, `mcp_disabled`, `unavailable`, `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
 
 ## Endpoints
 
@@ -132,6 +132,7 @@ Moods are withheld per person when the standup keeps them anonymous; only the te
 | `GET` | `/me/standups` | `linked: false` until the account has a Chat identity; otherwise `timezone` (own override or `null`), `chat.dmUrl` (deep link to the bot's DM once one exists) and each standup with `today` = `submitted`, `waiting`, `closed` or `null` plus `progress` (`{ submitted, expected }` while a run exists) |
 | `GET` | `/me/submissions?limit=10` | My recent answers |
 | `PATCH` | `/me` | `{ timezone?: string \| null, onVacation?: boolean }`; `409 not_linked` without a Chat identity |
+| `POST` | `/me/skip` | `{ standupId }` — skip today's run, as the DM `skip` command does; `409 no_open_run` before it opens or after it closes, `409 already_submitted` once answered |
 
 ### Workspace settings
 
@@ -143,6 +144,7 @@ Admins only.
 | `PATCH` | `/settings` | `{ key: value, … }` for any editable field: strings set, `null` clears a secret, an empty string keeps it, booleans for `calendarOoo`, `tokenSignIn`, `setupComplete`. Same rules as the dashboard; `400 invalid` names the `field`; `409 lockout` refuses a change that would leave no working sign-in method. |
 | `POST` | `/settings/tokens/:name` | `tick`, `export` or `scim` → `201 { token }`, shown once |
 | `DELETE` | `/settings/tokens/:name` | `204` |
+| `DELETE` | `/history` | `{ "confirm": "DELETE HISTORY" }` — removes every run, submission, blocker and poll in the workspace; standups, rosters and settings stay. Returns the counts. `400 invalid` without the phrase |
 
 ### MCP server
 

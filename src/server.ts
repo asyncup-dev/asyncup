@@ -129,6 +129,7 @@ export function createServer(deps: ServerDeps): Express {
     scheduler,
     adapter: deps.adapter,
     blockers: deps.blockers,
+    service: deps.service ?? null,
     webhooks: new WebhookNotifier(undefined, deps.externalFetch, undefined, deps.webhookSecret),
     chatClientFactory: deps.chatClientFactory ?? createChatClient,
     samlBroker: deps.samlBroker ?? ((config) => new NodeSamlBroker(config)),
