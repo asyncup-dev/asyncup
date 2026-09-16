@@ -4,7 +4,7 @@ import { EventRouter } from '../src/adapters/gchat/events.js';
 import { newSession, sealSession } from '../src/auth/session.js';
 import type { SamlBroker } from '../src/auth/saml.js';
 import { createServer } from '../src/server.js';
-import { makeStack, seedStandup, TENANT } from './helpers.js';
+import { ANSWERS, makeStack, seedStandup, TENANT, withBlocker } from './helpers.js';
 
 const SECRET = 'api-test-secret';
 const OPERATOR = 'dash-secret';
@@ -165,6 +165,38 @@ describe('api: settings', () => {
     expect((await settings.get()).exportToken).toBe(token);
     expect((await op('/settings/tokens/export', { method: 'DELETE' })).status).toBe(204);
     expect((await settings.get()).exportToken).toBe('');
+  });
+});
+
+describe('api: delete history', () => {
+  it('wipes runs, submissions, blockers and polls for the tenant only, with the typed phrase', async () => {
+    const { op, as, cookieFor, repo, service, polls, clock, scheduler } = await startServer();
+    const s = await seedStandup(repo);
+    clock.set('2026-06-10T09:30');
+    await scheduler.tick();
+    const run = (await repo.getRun(s.id, '2026-06-10'))!;
+    await service.submit(run.id, 'users/alice', 'Alice', withBlocker('Keys please'));
+    await service.submit(run.id, 'users/bob', 'Bob', ANSWERS);
+    const poll = await polls.create(s, 'Retro Friday?', ['Yes', 'No'], { userName: 'users/alice', displayName: 'Alice' });
+    await polls.vote(poll.id, { userName: 'users/bob', displayName: 'Bob' }, 0);
+    const other = await repo.createStandup({ tenantId: 'other', spaceName: 'spaces/elsewhere', name: 'Theirs', timezone: 'UTC' });
+    await repo.upsertParticipant({ standupId: other.id, userName: 'users/zed', displayName: 'Zed' });
+
+    expect((await as(cookieFor('alice'), '/history', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE HISTORY' }) })).status).toBe(403);
+    const refused = await op('/history', { method: 'DELETE', body: JSON.stringify({ confirm: 'yes' }) });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as any).error.field).toBe('confirm');
+    expect((await repo.listRecentRuns(s.id, 5)).length).toBe(1);
+
+    const res = await op('/history', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE HISTORY' }) });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ deleted: { runs: 1, submissions: 2, blockers: 1, polls: 1 } });
+    expect(await repo.listRecentRuns(s.id, 5)).toEqual([]);
+    expect(await repo.listOpenBlockers(s.id)).toEqual([]);
+    expect(await repo.listParticipants(s.id)).toHaveLength(3);
+    expect((await repo.getStandupById(s.id))!.name).toBe('Daily Standup');
+    expect((await repo.listParticipants(other.id)).map((p) => p.userName)).toEqual(['users/zed']);
+    expect(await op('/history', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE HISTORY' }) }).then((r) => r.json())).toEqual({ deleted: { runs: 0, submissions: 0, blockers: 0, polls: 0 } });
   });
 });
 

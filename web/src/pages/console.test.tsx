@@ -82,6 +82,7 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}, m
       'GET /api/v1/mcp/activity?limit=8': { body: { activity: [{ id: 1, token: { id: 1, name: 'Claude Desktop — Asha' }, tool: 'list_standups', argsSummary: '{}', ok: true, at: '2026-09-16T05:22:00Z' }, { id: 2, token: { id: 1, name: 'Claude Desktop — Asha' }, tool: 'resolve_blocker', argsSummary: '{"blockerId":9}', ok: false, at: '2026-09-16T05:21:00Z' }] } },
       'POST /api/v1/settings/tokens/tick': { status: 201, body: { name: 'tick', token: 'tick-secret' } },
       'DELETE /api/v1/settings/tokens/export': { status: 204, body: null },
+      'DELETE /api/v1/history': { body: { deleted: { runs: 12, submissions: 40, blockers: 3, polls: 1 } } },
       ...over,
     }),
   };
@@ -302,7 +303,7 @@ describe('settings', () => {
   });
 
   it('disconnects Google Chat only after the typed confirmation', async () => {
-    const { patches } = server();
+    const { patches, calls } = server();
     renderApp('/settings/danger');
     const user = userEvent.setup();
     expect(await screen.findByRole('heading', { name: 'Danger zone' })).toBeInTheDocument();
@@ -314,5 +315,26 @@ describe('settings', () => {
     await user.click(confirm);
     await waitFor(() => expect(patches).toContainEqual({ chatAudience: '', serviceAccountJson: null, setupComplete: false }));
     expect(await screen.findByText('Not connected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Delete history' }));
+    const wipe = await screen.findByRole('dialog');
+    await user.click(within(wipe).getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Delete history' }));
+    const again = await screen.findByRole('dialog');
+    await user.type(within(again).getByRole('textbox'), 'DELETE HISTORY');
+    await user.click(within(again).getByRole('button', { name: 'Delete history' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Deleted 12 runs, 40 submissions, 3 blockers and 1 polls.');
+    expect(calls).toContain('DELETE /api/v1/history');
+  });
+
+  it('reports a refused history deletion', async () => {
+    server({ 'DELETE /api/v1/history': { status: 403, body: { error: { code: 'forbidden', message: 'Admins only.' } } } });
+    renderApp('/settings/danger');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Delete history' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('textbox'), 'DELETE HISTORY');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete history' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Admins only.');
   });
 });

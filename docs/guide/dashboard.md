@@ -35,9 +35,11 @@ detects a working Chat connection and skips straight to the standup step.
 - **Team** — everyone on a roster with role, standups, timezone and status;
   roster changes with confirmation.
 - **Settings** — General, Google Chat (with live verification), Sign-in & SSO,
-  MCP server, API & tokens, Danger zone.
+  MCP server, API & tokens, Danger zone (disconnect Chat; delete all history —
+  both behind a typed confirmation).
 - **My standups** (`/app/me`) — for everyone else: today's standup with an
-  *Answer in Chat* link, recent answers, timezone and vacation mode.
+  *Answer in Chat* link and *Skip today*, recent answers, timezone and vacation
+  mode.
 
 Admins see the whole workspace. **Managers** — people who administer at least
 one standup — see and manage their own standups, blockers, reports and team
