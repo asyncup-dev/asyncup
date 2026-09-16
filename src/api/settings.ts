@@ -58,7 +58,7 @@ export function registerSettingsRoutes(api: Router, ctx: ApiContext): void {
     const body: Record<string, unknown> = req.body && typeof req.body === 'object' ? req.body : {};
     const change: Partial<AppSettings> = {};
     for (const [key, raw] of Object.entries(body)) {
-      const staged = stageFieldValue(s, key as keyof AppSettings, raw);
+      const staged = stageFieldValue(s, key, raw);
       if (!staged.ok) {
         apiError(res, 400, 'invalid', staged.message, key);
         return;

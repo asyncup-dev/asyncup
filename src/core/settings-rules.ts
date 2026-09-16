@@ -88,14 +88,17 @@ export type FieldChange = { ok: true; change: Partial<AppSettings> } | { ok: fal
  * Validate one field's new value. Strings are trimmed; `null` clears a
  * secret; an empty string keeps a secret (dashboard boxes submit empty).
  */
-export function stageFieldValue(s: AppSettings, key: keyof AppSettings, raw: unknown): FieldChange {
+export function stageFieldValue(s: AppSettings, requested: string, raw: unknown): FieldChange {
+  // Resolve the name from the allowlist so the written property is never the
+  // caller's string (and prototype names like "constructor" can't slip through).
+  const key = EDITABLE_FIELDS.find((k) => k === requested);
+  if (!key) return { ok: false, message: 'Unknown setting.' };
   if (BOOL_FIELDS.has(key)) {
     if (typeof raw !== 'boolean') return { ok: false, message: 'Must be true or false.' };
     if (key === 'tokenSignIn' && !raw && !googleSignInOn(s) && !samlSignInOn(s)) return { ok: false, message: TOKEN_OFF_MSG };
     return { ok: true, change: { [key]: raw } };
   }
-  const check = FIELD_CHECKS[key];
-  if (!check) return { ok: false, message: 'Unknown setting.' };
+  const check = FIELD_CHECKS[key]!;
   if (SECRET_FIELDS.has(key)) {
     if (raw === null) return { ok: true, change: { [key]: '' } };
     if (raw === undefined || String(raw).trim() === '') return { ok: true, change: {} };

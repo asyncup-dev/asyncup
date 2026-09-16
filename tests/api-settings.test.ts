@@ -107,12 +107,18 @@ describe('api: settings', () => {
       [{ calendarOoo: 'no' }, 'calendarOoo'],
       [{ tokenSignIn: false }, 'tokenSignIn'],
       [{ nonsense: 'x' }, 'nonsense'],
+      [{ constructor: 'x' }, 'constructor'],
       [{ serviceAccountJson: '{}' }, 'serviceAccountJson'],
     ] as const) {
       const res = await patch(body);
       expect(res.status).toBe(400);
       expect((await res.json() as any).error.field).toBe(field);
     }
+
+    // JSON.parse makes __proto__ an own key; a literal would not.
+    const proto = await patch(undefined, { body: '{"__proto__":"x"}' });
+    expect(proto.status).toBe(400);
+    expect((await proto.json() as any).error.field).toBe('__proto__');
 
     // Secrets: empty keeps, null clears.
     await patch({ serviceAccountJson: '' });
