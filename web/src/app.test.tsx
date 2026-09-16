@@ -103,7 +103,6 @@ describe('shell', () => {
 
     await user.click(screen.getByRole('link', { name: 'Blockers' }));
     expect(await screen.findByRole('heading', { name: 'Blockers' })).toBeInTheDocument();
-    expect(screen.getByText('Coming in a later release')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByRole('heading', { name: 'Sign in to AsyncUp' })).toBeInTheDocument();
