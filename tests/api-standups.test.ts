@@ -244,7 +244,7 @@ describe('api: blockers', () => {
 
   it('lists blockers across the tenant with status, standup and owner filters', async () => {
     const t = await startServer();
-    const { s, aliceB, bobB } = await seedBlockers(t);
+    const { aliceB, bobB } = await seedBlockers(t);
     const other = await t.repo.createStandup({ tenantId: TENANT, spaceName: 'spaces/o', name: 'Other', timezone: 'UTC' });
 
     expect((await t.op('/blockers?status=weird')).status).toBe(400);
