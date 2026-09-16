@@ -14,6 +14,10 @@ import { ServiceAccountPage } from './pages/setup/service-account';
 import { SignInSetupPage } from './pages/setup/sign-in';
 import { TemplatePage } from './pages/setup/template';
 import { WelcomePage } from './pages/setup/welcome';
+import { HistoryPage } from './pages/standup/history';
+import { StandupLayout } from './pages/standup/layout';
+import { OverviewPage } from './pages/standup/overview';
+import { StandupStub } from './pages/standup/stub';
 import { StandupsPage } from './pages/standups';
 import { Shell } from './shell/shell';
 
@@ -72,11 +76,18 @@ export function buildRouter(): AnyRouter {
   const shell = createRoute({ getParentRoute: () => root, id: 'shell', component: Protected });
   const home = createRoute({ getParentRoute: () => shell, path: '/', component: Home });
   const standups = createRoute({ getParentRoute: () => shell, path: '/standups', component: StandupsPage });
+  const standup = createRoute({ getParentRoute: () => shell, path: '/standups/$id', component: StandupLayout });
+  const standupTabs = [
+    createRoute({ getParentRoute: () => standup, path: '/', component: OverviewPage }),
+    createRoute({ getParentRoute: () => standup, path: '/history', component: HistoryPage }),
+    createRoute({ getParentRoute: () => standup, path: '/insights', component: () => <StandupStub title="Insights" /> }),
+    createRoute({ getParentRoute: () => standup, path: '/settings', component: () => <StandupStub title="Settings" /> }),
+  ];
   const stubs = (['blockers', 'reports', 'team', 'settings'] as const).map((name) =>
     createRoute({ getParentRoute: () => shell, path: `/${name}`, component: () => <Placeholder title={name[0]!.toUpperCase() + name.slice(1)} /> }),
   );
   const mine = createRoute({ getParentRoute: () => shell, path: '/me', component: () => <Placeholder title="My standups" /> });
-  const routeTree = root.addChildren([signIn, setup.addChildren(setupRoutes), shell.addChildren([home, standups, mine, ...stubs])]);
+  const routeTree = root.addChildren([signIn, setup.addChildren(setupRoutes), shell.addChildren([home, standups, standup.addChildren(standupTabs), mine, ...stubs])]);
   return createRouter({ routeTree, basepath: '/app', defaultNotFoundComponent: () => <Placeholder title="Not found" /> });
 }
 

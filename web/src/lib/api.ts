@@ -144,3 +144,55 @@ export interface TodayRun {
   away: { userName: string; displayName: string; reason: 'skipped' | 'vacation' }[];
   teamMood: number | null;
 }
+
+export const MOOD_EMOJI: Record<string, string> = { great: '😄', good: '🙂', okay: '😐', meh: '😕', struggling: '😫' };
+
+export interface StandupDetail extends StandupSummary {
+  questions: string[];
+  mood: { enabled: boolean; anonymous: boolean };
+  digestEnabled: boolean;
+  escalation: { afterDays: number; contact: Person | null };
+  webhook: { configured: boolean };
+  participants: (Person & { mandatory: boolean; timezone: string | null; onVacation: boolean })[];
+  admins: Person[];
+}
+
+export interface RunListItem {
+  date: string;
+  status: 'open' | 'closed';
+  submitted: number;
+  expected: number;
+  missing: Person[];
+}
+
+export interface RunDetail {
+  date: string;
+  status: 'open' | 'closed';
+  submitted: number;
+  expected: number;
+  missing: Person[];
+  submissions: { userName: string; displayName: string; submittedAt: string; editedAt: string | null; late: boolean; mood: string | null; answers: { question: string; answer: string }[] }[];
+  teamMood: number | null;
+}
+
+export interface BlockerView {
+  id: number;
+  standup: { id: number; name: string };
+  owner: Person;
+  text: string;
+  openedDate: string;
+  resolvedDate: string | null;
+  resolvedBy: string | null;
+  escalatedAt: string | null;
+  status: 'open' | 'acknowledged' | 'resolved';
+  tags: (Person & { acknowledgedAt: string | null })[];
+  updates: (Person & { text: string; at: string })[];
+}
+
+export interface WeekPoint {
+  label: string;
+  participationPct: number | null;
+  mood: number | null;
+  blockersOpened: number;
+  blockersResolved: number;
+}

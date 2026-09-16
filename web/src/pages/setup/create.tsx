@@ -113,7 +113,7 @@ export function CreateStandupPage() {
       </div>
       <div className="setup-centered" style={{ maxWidth: 760, justifyItems: 'stretch', textAlign: 'left' }}>
         <div>
-          <h1 className="t-h1" style={{ margin: 0 }}>Create your first standup</h1>
+          <h1 className="t-h1" style={{ margin: 0 }}>{progress.data && progress.data.standups > 0 ? 'Create a standup' : 'Create your first standup'}</h1>
           <p className="lede">Four things and it runs. Everything can be changed later in the standup’s settings.</p>
         </div>
 

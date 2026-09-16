@@ -88,7 +88,7 @@ describe('shell', () => {
     const { calls } = stubApi({ 'GET /api/v1/me': { body: ADMIN }, 'GET /api/v1/standups': { body: { standups: [STANDUP] } } });
     renderApp('/');
     expect(await screen.findByRole('heading', { name: 'Standups' })).toBeInTheDocument();
-    expect(screen.getByText('1 standup · 1 open today')).toBeInTheDocument();
+    expect(screen.getByText('Wed 16 Sept · 1 standup · 1 open today')).toBeInTheDocument();
     expect(screen.getByText('Engineering')).toBeInTheDocument();
     expect(screen.getByText('7 / 9 in')).toHaveClass('badge-warning');
     expect(screen.getByRole('link', { name: 'Standups' })).toHaveAttribute('aria-current', 'page');
@@ -153,7 +153,7 @@ describe('shell', () => {
     renderApp('/standups');
     expect(await screen.findByText('Wrapped up')).toHaveClass('badge-success');
     expect(screen.getByText('Not started')).toBeInTheDocument();
-    expect(screen.getByText('3 standups · 1 open today')).toBeInTheDocument();
+    expect(screen.getByText('Wed 16 Sept · 3 standups · 1 open today')).toBeInTheDocument();
     expect(screen.getByText('7 / 9 in')).toHaveClass('badge-success');
   });
 });
