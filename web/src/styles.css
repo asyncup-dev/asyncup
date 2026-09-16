@@ -255,3 +255,76 @@ a:hover {
   .topbar .search { display: none; }
   .content { padding: var(--space-4); }
 }
+
+/* Setup walkthrough */
+.setup { display: grid; grid-template-columns: 320px 1fr; min-height: 100%; }
+.setup-rail { padding: var(--space-7) var(--space-8); background: var(--bg-sidebar); border-right: 1px solid var(--border-default); display: flex; flex-direction: column; gap: var(--space-2); }
+.setup-rail .intro { margin: var(--space-6) 0 var(--space-4); }
+.setup-rail .intro p { margin: var(--space-1) 0 0; }
+.step { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-2) 0; color: var(--text-secondary); }
+.step-num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-strong); font-size: 12px; font-weight: 600; flex: none; }
+.step-current { color: var(--text-primary); }
+.step-current .step-num { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--text-on-accent); }
+.step-done { color: var(--text-secondary); }
+.step-done .step-num { background: var(--success-bg); border-color: var(--success-bg); color: var(--success-fg); }
+.setup-rail .spacer { flex: 1; }
+.stuck { padding: var(--space-3) var(--space-4); }
+.setup-main { padding: var(--space-9) 64px; }
+.setup-col { max-width: 720px; display: grid; gap: var(--space-6); }
+.setup-col h1 { margin: 0; }
+.setup-col .lede { margin: var(--space-2) 0 0; color: var(--text-secondary); }
+.setup-wide { max-width: 880px; }
+.setup-centered { max-width: 640px; margin: 0 auto; padding: var(--space-9) var(--space-6); display: grid; gap: var(--space-6); justify-items: center; text-align: center; }
+.setup-centered .card { width: 100%; text-align: left; }
+.setup-brandbar { padding: var(--space-6) var(--space-8) 0; }
+.setup-actions { display: flex; align-items: center; gap: var(--space-3); }
+.setup-actions .grow { flex: 1; }
+
+.checklist { display: grid; }
+.checklist label { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-4); border-bottom: 1px solid var(--border-default); cursor: pointer; }
+.checklist label:last-child { border-bottom: 0; }
+.checklist input { margin-top: 2px; }
+.plan-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border-default); }
+.plan-row:last-child { border-bottom: 0; }
+.plan-row .grow { flex: 1; }
+
+.verify { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: var(--bg-surface-2); color: var(--text-secondary); }
+.verify-pass { background: var(--success-bg); color: var(--success-fg); border-color: transparent; }
+.verify-fail { background: var(--danger-bg); color: var(--danger-fg); border-color: transparent; }
+.verify-checking { color: var(--text-primary); }
+
+.copy-row { display: grid; grid-template-columns: 230px 1fr auto; gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); }
+.copy-row:last-child { border-bottom: 0; }
+.copy-row-value { overflow-wrap: anywhere; }
+.section-head { padding: var(--space-2) var(--space-4); background: var(--bg-surface-2); border-bottom: 1px solid var(--border-default); }
+.paste { width: 100%; min-height: 120px; padding: var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-inset); color: var(--text-primary); font-family: var(--font-mono); font-size: 13px; resize: vertical; }
+.row { display: flex; gap: var(--space-3); align-items: center; }
+.row-wrap { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-4); }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-4); }
+.choice { padding: var(--space-5); text-align: left; cursor: pointer; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); color: inherit; font: inherit; display: grid; gap: var(--space-2); }
+.choice:hover { border-color: var(--border-strong); }
+.choice[aria-pressed='true'] { border-color: var(--accent-primary); box-shadow: 0 0 0 1px var(--accent-primary); }
+.section { padding: var(--space-5); display: grid; gap: var(--space-4); }
+.section h2 { margin: 0; }
+.chip { display: inline-flex; align-items: center; gap: var(--space-2); height: 28px; padding: 0 var(--space-2) 0 var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-pill); background: var(--bg-surface-2); }
+.chip button { border: 0; background: transparent; cursor: pointer; color: var(--text-muted); font: inherit; padding: 0 4px; }
+.days { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.day { height: 28px; padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-surface); color: var(--text-secondary); font: inherit; cursor: pointer; }
+.day[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-primary); }
+.qrow { display: flex; gap: var(--space-2); align-items: center; }
+.switch { display: flex; gap: var(--space-3); align-items: flex-start; }
+.switch input { margin-top: 3px; }
+.progress { height: 8px; border-radius: var(--radius-pill); background: var(--bg-surface-2); overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent-primary); }
+.live-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+.live-row .grow { flex: 1; }
+.check-circle { width: 56px; height: 56px; border-radius: 50%; background: var(--success-bg); color: var(--success-fg); display: inline-flex; align-items: center; justify-content: center; font-size: 26px; }
+
+@media (max-width: 900px) {
+  .setup { grid-template-columns: 1fr; }
+  .setup-rail { border-right: 0; border-bottom: 1px solid var(--border-default); padding: var(--space-4); }
+  .setup-rail .spacer, .stuck { display: none; }
+  .setup-main { padding: var(--space-5) var(--space-4); }
+  .copy-row { grid-template-columns: 1fr; }
+}

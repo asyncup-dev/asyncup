@@ -78,3 +78,69 @@ export interface StandupSummary {
   today: { date: string; status: 'open' | 'closed' | null; submitted: number; expected: number; missing: { userName: string; displayName: string }[] };
   permissions: { manage: boolean };
 }
+
+export interface Verification {
+  state: 'pass' | 'fail';
+  detail: string;
+  checkedAt: string;
+  data?: Record<string, unknown>;
+}
+
+export interface Settings {
+  chat: { audience: string; serviceAccount: { set: boolean; email: string | null; clientId: string | null } };
+  workspace: { defaultTimezone: string; calendarOoo: boolean; workspaceAdminEmail: string };
+  signIn: {
+    tokenSignIn: boolean;
+    google: { clientId: string; clientSecret: { set: boolean }; on: boolean };
+    saml: { entityId: string; ssoUrl: string; cert: { set: boolean }; adminAttribute: string; adminGroup: string; on: boolean };
+  };
+  setup: { complete: boolean; chatConfigured: boolean; signInConfigured: boolean };
+}
+
+export interface ChatHealth {
+  audience: 'set' | 'unset';
+  serviceAccount: 'set' | 'unset';
+  lastEventAt: string | null;
+  lastRejectedAt: string | null;
+}
+
+/** Public, outside /api/v1: the connection state without secrets. */
+export async function chatHealth(): Promise<ChatHealth> {
+  const res = await fetch('/health/chat', { credentials: 'same-origin' });
+  if (!res.ok) throw new ApiError(res.status, 'http_error', `Request failed (${res.status}).`);
+  return (await res.json()) as ChatHealth;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  description: string;
+  questions: string[] | null;
+  days: string[];
+  promptTime: string;
+  deadlineTime: string;
+  moodEnabled: boolean;
+  moodAnonymous: boolean;
+  digestEnabled: boolean;
+}
+
+export interface Space {
+  name: string;
+  displayName: string;
+  standups: { id: number; name: string }[];
+}
+
+export interface Person {
+  userName: string;
+  displayName: string;
+}
+
+export interface TodayRun {
+  date: string;
+  status: 'open' | 'closed' | null;
+  expected: number;
+  submitted: { userName: string; displayName: string; submittedAt: string; late: boolean; mood: string | null }[];
+  waiting: { userName: string; displayName: string; mandatory: boolean; remindedAt: string | null }[];
+  away: { userName: string; displayName: string; reason: 'skipped' | 'vacation' }[];
+  teamMood: number | null;
+}
