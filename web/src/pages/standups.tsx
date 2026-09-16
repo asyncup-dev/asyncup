@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { EmptyState } from '../components/empty-state';
 import { api, type StandupSummary } from '../lib/api';
 
@@ -23,10 +24,11 @@ export function StandupsPage() {
             {list.length ? `${list.length} standup${list.length === 1 ? '' : 's'} · ${open} open today` : 'Nothing running yet'}
           </div>
         </div>
+        {list.length ? <Link to="/setup/template" className="btn btn-primary">New standup</Link> : null}
       </div>
       {list.length === 0 ? (
-        <EmptyState title="No standups yet">
-          Create one from a template and pick the Chat space it reports to. The guided setup arrives with the next release; until then, use <code>setup</code> in Google Chat.
+        <EmptyState title="No standups yet" action={<Link to="/setup" className="btn btn-primary">Set up your first standup</Link>}>
+          Pick a template, choose the Chat space it reports to and add the people to prompt. About two minutes once Google Chat is connected.
         </EmptyState>
       ) : (
         <div className="card">

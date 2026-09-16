@@ -9,7 +9,7 @@ export const ADMIN: Me = { kind: 'admin', via: 'session', tenantId: 'default', u
 export const MEMBER: Me = { kind: 'member', via: 'session', tenantId: 'default', user: { userName: 'users/2', email: 'bob@example.com', name: 'Bob' }, managedStandupIds: [] };
 export const OPERATOR: Me = { kind: 'admin', via: 'token', tenantId: 'default', user: null, managedStandupIds: [] };
 
-type Route = { status?: number; body: unknown };
+type Route = { status?: number; body: unknown | ((init?: RequestInit) => unknown) };
 
 /** A fetch stub keyed by "METHOD path"; unknown calls answer 404 with the API envelope. */
 export function stubApi(routes: Record<string, Route>) {
@@ -19,10 +19,11 @@ export function stubApi(routes: Record<string, Route>) {
     calls.push(key);
     const route = routes[key] ?? { status: 404, body: { error: { code: 'not_found', message: 'No such API route.' } } };
     const status = route.status ?? 200;
-    return { ok: status < 400, status, json: async () => route.body };
+    const body = typeof route.body === 'function' ? (route.body as (init?: RequestInit) => unknown)(init) : route.body;
+    return { ok: status < 400, status, json: async () => body };
   });
   vi.stubGlobal('fetch', fn);
-  return { calls };
+  return { calls, fn };
 }
 
 export function renderApp(path: string) {

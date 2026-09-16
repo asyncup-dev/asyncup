@@ -8,7 +8,7 @@ import { makeStack, seedStandup, TENANT } from './helpers.js';
 
 const SECRET = 'api-test-secret';
 const OPERATOR = 'dash-secret';
-const SA_KEY = JSON.stringify({ type: 'service_account', client_email: 'bot@p.iam.gserviceaccount.com', private_key: 'k' });
+const SA_KEY = JSON.stringify({ type: 'service_account', client_email: 'bot@p.iam.gserviceaccount.com', client_id: '1049283746551', private_key: 'k' });
 let close: (() => void) | null = null;
 
 type Fake = { spaces?: number; fail?: string; fetchStatus?: number; fetchThrows?: boolean; brokerThrows?: boolean; realBroker?: boolean; skipVerification?: boolean };
@@ -77,15 +77,15 @@ describe('api: settings', () => {
     expect((await as(cookieFor('alice'), '/settings')).status).toBe(403);
     await settings.update({ serviceAccountJson: SA_KEY, oauthClientSecret: 'GOCSPX-x', tickToken: 't' });
     const body = await (await op('/settings')).json() as any;
-    expect(body.chat.serviceAccount).toEqual({ set: true, email: 'bot@p.iam.gserviceaccount.com' });
+    expect(body.chat.serviceAccount).toEqual({ set: true, email: 'bot@p.iam.gserviceaccount.com', clientId: '1049283746551' });
     expect(body.signIn.google).toEqual({ clientId: '', clientSecret: { set: true }, on: false });
     expect(body.tokens).toEqual({ tick: { set: true }, export: { set: false }, scim: { set: false } });
     expect(body.setup).toEqual({ complete: false, chatConfigured: false, signInConfigured: false });
     expect(JSON.stringify(body)).not.toContain('GOCSPX');
     await settings.update({ serviceAccountJson: '{"client_email":1}' });
-    expect((await (await op('/settings')).json() as any).chat.serviceAccount.email).toBe(1);
+    expect((await (await op('/settings')).json() as any).chat.serviceAccount).toEqual({ set: true, email: 1, clientId: null });
     await settings.update({ serviceAccountJson: 'not json' });
-    expect((await (await op('/settings')).json() as any).chat.serviceAccount.email).toBeNull();
+    expect((await (await op('/settings')).json() as any).chat.serviceAccount).toEqual({ set: true, email: null, clientId: null });
   });
 
   it('patches fields with the shared rules and refuses lockouts', async () => {

@@ -8,18 +8,21 @@ import { apiError, loadStandup, principalOf, type ApiContext } from './shared.js
 
 const TOKENS = { tick: 'tickToken', export: 'exportToken', scim: 'scimToken' } as const;
 
-function saEmail(json: string): string | null {
+/** Email and numeric client ID from the key, the latter being what domain-wide delegation asks for. */
+function saIdentity(json: string): { email: string | null; clientId: string | null } {
+  if (!json) return { email: null, clientId: null };
   try {
-    return JSON.parse(json).client_email ?? null;
+    const parsed = JSON.parse(json);
+    return { email: parsed.client_email ?? null, clientId: parsed.client_id ?? null };
   } catch {
-    return null;
+    return { email: null, clientId: null };
   }
 }
 
 /** Settings as the admin console shows them — secrets are never echoed, only their presence. */
 function view(s: AppSettings) {
   return {
-    chat: { audience: s.chatAudience, serviceAccount: { set: !!s.serviceAccountJson, email: s.serviceAccountJson ? saEmail(s.serviceAccountJson) : null } },
+    chat: { audience: s.chatAudience, serviceAccount: { set: !!s.serviceAccountJson, ...saIdentity(s.serviceAccountJson) } },
     workspace: { defaultTimezone: s.defaultTimezone, calendarOoo: s.calendarOoo, workspaceAdminEmail: s.workspaceAdminEmail },
     signIn: {
       tokenSignIn: s.tokenSignIn,
