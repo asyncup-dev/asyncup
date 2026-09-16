@@ -648,6 +648,24 @@ export class Repo {
     return row ? toStandup(row) : null;
   }
 
+  /** Active standups in one tenant — what an admin sees. */
+  async listStandupsForTenant(tenantId: string): Promise<Standup[]> {
+    return (
+      await this.db.all('SELECT * FROM standups WHERE tenant_id = ? AND active = 1 ORDER BY id', [tenantId])
+    ).map(toStandup);
+  }
+
+  /** Active standups this person administers — the manager role is derived from this. */
+  async listStandupsAdministeredBy(userName: string): Promise<Standup[]> {
+    return (
+      await this.db.all(
+        `SELECT s.* FROM standups s JOIN standup_admins a ON a.standup_id = s.id
+         WHERE a.user_name = ? AND s.active = 1 ORDER BY s.id`,
+        [userName],
+      )
+    ).map(toStandup);
+  }
+
   async listStandupsBySpace(tenantId: string, spaceName: string): Promise<Standup[]> {
     const rows = await this.db.all(
       'SELECT * FROM standups WHERE tenant_id = ? AND space_name = ? AND active = 1 ORDER BY id',
