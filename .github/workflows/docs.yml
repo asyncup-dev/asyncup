@@ -8,45 +8,17 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: site
   cancel-in-progress: false
 
 jobs:
-  # The project site: https://asyncup-dev.github.io/asyncup/ — landing page at
-  # the root, docs under /docs/, redirect stubs at the old docs URLs.
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
-      - run: SITE_BASE="/${GITHUB_REPOSITORY#*/}/" LEGACY_REDIRECTS=1 bun run site:build
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: site-dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
-
-  # The org site: https://asyncup-dev.github.io/ — the same build at the
-  # root, pushed to the asyncup-dev/asyncup-dev.github.io repository. Runs
-  # only once that repository exists and SITE_DEPLOY_KEY (a deploy key with
-  # write access to it) is set on this repository; skipped silently otherwise.
-  org-site:
-    needs: build
+  # https://asyncup-dev.github.io/ — the landing page at the root, docs under
+  # /docs/ — published by pushing the build to asyncup-dev/asyncup-dev.github.io.
+  # Needs SITE_DEPLOY_KEY (a deploy key with write access to that repository)
+  # on this repository; skipped silently where it is absent, such as forks.
+  publish:
     runs-on: ubuntu-latest
     steps:
       - id: key

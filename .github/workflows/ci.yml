@@ -65,5 +65,5 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - run: SITE_BASE="/${GITHUB_REPOSITORY#*/}/" LEGACY_REDIRECTS=1 bun run site:build
-      - run: test -f site-dist/index.html && test -f site-dist/docs/index.html && test -f site-dist/guide/handbook.html && test -f site-dist/logo-256.png
+      - run: SITE_BASE=/ bun run site:build
+      - run: test -f site-dist/index.html && test -f site-dist/docs/index.html && test -f site-dist/logo-256.png
