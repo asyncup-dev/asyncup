@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/asyncup-dev/asyncup/actions/workflows/ci.yml"><img src="https://github.com/asyncup-dev/asyncup/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://asyncup-dev.github.io/asyncup/docs/"><img src="https://img.shields.io/badge/docs-asyncup--dev.github.io-15435f" alt="Docs"></a>
+  <a href="https://asyncup-dev.github.io/docs/"><img src="https://img.shields.io/badge/docs-asyncup--dev.github.io-15435f" alt="Docs"></a>
 </p>
 
 **Open-source, self-hosted async daily standups for Google Chat.**
