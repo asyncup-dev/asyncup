@@ -27,7 +27,7 @@
     "site:build": "bun scripts/build-site.ts"
   },
   "dependencies": {
-    "@googleapis/chat": "^45.0.0",
+    "@googleapis/chat": "^50.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@node-saml/node-saml": "^5.1.0",
