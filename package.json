@@ -45,7 +45,7 @@
     "@types/luxon": "^3.7.1",
     "@types/node": "^26.5.1",
     "@types/pg": "^8.20.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitepress": "^1.6.4"
   }
 }
