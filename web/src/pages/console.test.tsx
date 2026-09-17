@@ -7,8 +7,10 @@ import { headline } from './reports';
 
 const STANDUP = { id: 1, name: 'Engineering', spaceName: 'spaces/A', active: true, schedule: { promptTime: '09:30', deadlineTime: '11:30', timezone: 'Asia/Kolkata', days: ['mon'], reminderMinutesBefore: 60 }, people: { total: 2, mandatory: 2 }, today: { date: '2026-09-16', status: 'open', submitted: 1, expected: 2, missing: [] }, permissions: { manage: true } };
 const B = (id: number, over: Record<string, unknown> = {}) => ({ id, standup: { id: 1, name: 'Engineering' }, owner: { userName: 'users/bob', displayName: 'Bob Mehta' }, text: `Blocker ${id}`, openedDate: '2026-09-13', resolvedDate: null, resolvedBy: null, escalatedAt: null, status: 'open', tags: [], updates: [], ...over });
+/** Opened three days before the test runs, so the age column reads the same every day. */
+const THREE_DAYS_AGO = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
 const BLOCKERS = [
-  B(11, { text: 'Waiting on API keys', escalatedAt: '2026-09-15T00:00:00Z', tags: [{ userName: 'users/1', displayName: 'Asha', acknowledgedAt: null }] }),
+  B(11, { text: 'Waiting on API keys', openedDate: THREE_DAYS_AGO, escalatedAt: '2026-09-15T00:00:00Z', tags: [{ userName: 'users/1', displayName: 'Asha', acknowledgedAt: null }] }),
   B(12, { text: 'CI saturated', status: 'acknowledged', owner: { userName: 'users/carol', displayName: 'Carol Chen' }, updates: [{ userName: 'users/carol', displayName: 'Carol Chen', text: 'Talking to infra', at: '2026-09-15T10:00:00Z' }] }),
   B(13, { text: 'Old one', status: 'resolved', resolvedDate: '2026-09-10', openedDate: '2026-09-01' }),
 ];
