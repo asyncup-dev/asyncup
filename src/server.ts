@@ -63,6 +63,8 @@ export interface ServerDeps {
   now?: () => DateTime;
 }
 
+const CHAT_EVENT_TYPES = new Set(['MESSAGE', 'ADDED_TO_SPACE', 'REMOVED_FROM_SPACE', 'CARD_CLICKED', 'UNKNOWN']);
+
 /** Collapse control chars (incl. newlines) and cap length before logging untrusted text — prevents log forging. */
 function logSafe(value: unknown): string {
   return String(value).replace(/\p{Cc}/gu, ' ').slice(0, 200);
@@ -188,8 +190,9 @@ export function createServer(deps: ServerDeps): Express {
     const addon = isAddonEvent(req.body);
     const event = addon ? fromAddonEvent(req.body) : req.body;
     const reply = (body: object) => res.json(addon ? toAddonResponse(body, event) : body);
-    const eventType = event?.type ?? 'unknown';
-    console.log(`[chat] POST /chat/events type=${logSafe(eventType)}${addon ? ' format=add-on' : ''}`);
+    // Log a known type name or "unknown" — never the request's own text.
+    const eventType = CHAT_EVENT_TYPES.has(event?.type) ? (event.type as string) : 'unknown';
+    console.log(`[chat] POST /chat/events type=${eventType}${addon ? ' format=add-on' : ''}`);
     const verifier = await getVerifier();
     if (verifier === 'unconfigured') {
       // Fail closed: without an audience, any request could impersonate Chat.

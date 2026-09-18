@@ -83,7 +83,6 @@ export class ChatRequestVerifier {
     if (!token) return { ok: false, reason: 'missing or malformed Authorization header' };
 
     const claims = decodeClaims(token);
-    if (claims.iss && ADDON_ISSUERS.includes(claims.iss)) return this.verifyAddonToken(token, claims);
     const certs = await this.getCerts();
     let lastError = 'unknown error';
     for (const audience of this.audiences) {
@@ -94,6 +93,11 @@ export class ChatRequestVerifier {
         lastError = err instanceof Error ? err.message : String(err);
       }
     }
+    // Not a Chat-signed token — an add-on-built app sends Google-issued ones.
+    // Both paths verify the signature; only the failure message is chosen
+    // from the (unverified) issuer claim, so the reason matches the token kind.
+    const addon = await this.verifyAddonToken(token, claims);
+    if (addon.ok || (claims.iss && ADDON_ISSUERS.includes(claims.iss))) return addon;
     return classifyFailure(claims, this.audiences, lastError);
   }
 
