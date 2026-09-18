@@ -6,7 +6,7 @@ import { ADMIN, renderApp, stubApi } from '../../test/harness';
 const ENG = {
   id: 1, name: 'Engineering', spaceName: 'spaces/A', active: true,
   schedule: { promptTime: '09:30', deadlineTime: '11:30', timezone: 'Asia/Kolkata', days: ['mon', 'tue'], reminderMinutesBefore: 30 },
-  questions: ['Q1?', 'Q2?'], mood: { enabled: true, anonymous: false }, digestEnabled: false,
+  questions: ['Q1?', 'Q2?'], mood: { enabled: true, anonymous: false }, digestEnabled: false, timeOffPolicy: 'self',
   escalation: { afterDays: 2, contact: null }, webhook: { configured: true },
   people: { total: 2, mandatory: 1 },
   today: { date: '2026-09-16', status: 'closed', submitted: 2, expected: 2, missing: [] },
@@ -52,7 +52,7 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('standup settings tab', () => {
-  it('saves schedule, questions, mood, escalation, webhook and digest', async () => {
+  it('saves the schedule, questions and mood', async () => {
     const { patches, calls } = server();
     renderApp('/standups/1/settings');
     const user = userEvent.setup();
@@ -73,6 +73,13 @@ describe('standup settings tab', () => {
     await user.click(screen.getByLabelText('answers shown anonymously'));
     await waitFor(() => expect(patches.at(-1)).toEqual({ moodAnonymous: true }));
 
+  });
+
+  it('saves escalation, the webhook and the digest', async () => {
+    const { patches, calls } = server();
+    renderApp('/standups/1/settings');
+    const user = userEvent.setup();
+    await screen.findByLabelText('Prompt time');
     await user.selectOptions(screen.getByLabelText('Escalation contact'), 'users/bob');
     await user.click(screen.getAllByRole('button', { name: 'Save' })[2]!);
     await waitFor(() => expect(patches.at(-1)).toEqual({ escalateAfterDays: 2, escalateUserName: 'users/bob' }));
