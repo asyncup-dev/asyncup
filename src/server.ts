@@ -24,6 +24,7 @@ import { NodeSamlBroker } from './auth/saml.js';
 import { LAST_EVENT_KEYS, recordChatEvent } from './core/verify.js';
 import { WebhookNotifier } from './core/webhooks.js';
 import type { StandupService } from './core/standup-service.js';
+import type { ScheduleService } from './core/schedule.js';
 import { registerMcp } from './mcp/server.js';
 import { APP_VERSION } from './version.js';
 import type { UserDirectory } from './core/directory.js';
@@ -58,6 +59,8 @@ export interface ServerDeps {
   externalFetch?: typeof fetch;
   /** Needed for the MCP submit_answers tool; without it the tool is not offered. */
   service?: StandupService;
+  /** Personal schedules; without it the schedule routes answer 503. */
+  schedule?: ScheduleService;
   /** Built web app (web/dist). Defaults to the checked-out path; missing = /app answers 404. */
   webDist?: string;
   now?: () => DateTime;
@@ -133,6 +136,7 @@ export function createServer(deps: ServerDeps): Express {
     adapter: deps.adapter,
     blockers: deps.blockers,
     service: deps.service ?? null,
+    schedule: deps.schedule ?? null,
     webhooks: new WebhookNotifier(undefined, deps.externalFetch, undefined, deps.webhookSecret),
     chatClientFactory: deps.chatClientFactory ?? createChatClient,
     samlBroker: deps.samlBroker ?? ((config) => new NodeSamlBroker(config)),
@@ -152,6 +156,7 @@ export function createServer(deps: ServerDeps): Express {
     settings,
     blockers: deps.blockers,
     service: deps.service ?? null,
+    schedule: deps.schedule ?? null,
     tenantId: deps.tenantId ?? 'default',
     version: APP_VERSION,
     now,

@@ -5,6 +5,8 @@ import { z } from 'zod';
 import type { Principal } from '../api/principal.js';
 import { findVisibleStandup, summarise, visibleStandups } from '../api/shared.js';
 import { BLOCKER_STATUSES, blockersView, peopleView, runsView, runView, visibleBlocker } from '../api/views.js';
+import { actorFor, displayNameOf, managesPerson, overrideView, scheduleView } from '../api/schedule.js';
+import type { ScheduleService } from '../core/schedule.js';
 import type { BlockerService } from '../core/blocker-service.js';
 import { weeklySeries } from '../core/insights.js';
 import { parseScopes, type McpScope } from '../core/mcp-scopes.js';
@@ -18,6 +20,8 @@ export interface McpToolDeps {
   blockers: BlockerService;
   /** Absent when the server was built without the standup service; submit_answers is then not offered. */
   service: StandupService | null;
+  /** Absent when the server was built without personal schedules; the schedule tools then refuse. */
+  schedule: ScheduleService | null;
   now: () => DateTime;
   version: string;
 }
@@ -205,6 +209,129 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       },
     );
   }
+
+  // ---- personal schedules: the owner's own, or someone the owner manages
+  const ISO_DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+  const schedule = () => {
+    if (!deps.schedule) throw new ToolRefused('Personal schedules are not available on this install.');
+    return deps.schedule;
+  };
+  const targetFor = async (userName?: string) => {
+    if (!userName || userName === p.user?.userName) {
+      const who = me();
+      return { ...who, actor: actorFor(p, who.userName, await managesPerson(repo, p, who.userName)) };
+    }
+    if (!(await managesPerson(repo, p, userName))) throw new ToolRefused('Only admins and this person’s managers can do that.');
+    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p, userName, true) };
+  };
+  const expand = (dates: string[] | undefined, from: string | undefined, to: string | undefined): string[] => {
+    const out = new Set(dates ?? []);
+    if (from && to) {
+      if (to < from) throw new ToolRefused('from must be on or before to.');
+      for (let d = new Date(`${from}T00:00:00Z`); d.toISOString().slice(0, 10) <= to && out.size <= 31; d.setUTCDate(d.getUTCDate() + 1)) out.add(d.toISOString().slice(0, 10));
+    }
+    if (out.size === 0) throw new ToolRefused('Give dates, or from and to.');
+    if (out.size > 31) throw new ToolRefused('At most 31 days at a time.');
+    return [...out].sort();
+  };
+  const managerOnly = () => {
+    if (p.kind === 'member') throw new ToolRefused('Only admins and managers can do that.');
+  };
+
+  register(
+    'get_schedule',
+    'read',
+    {
+      description: 'A person’s working week, the time-off policy of their standups and their upcoming days off. Omit userName for the owner.',
+      inputSchema: z.object({ userName: z.string().optional() }),
+      readOnly: true,
+    },
+    async ({ userName }) => {
+      const svc = schedule();
+      const t = await targetFor(userName);
+      return scheduleView(repo, svc, t.userName, t.displayName);
+    },
+  );
+
+  register(
+    'list_time_off_requests',
+    'read',
+    { description: 'Time-off requests waiting for a manager’s decision, for the people the owner manages.', inputSchema: z.object({}), readOnly: true },
+    async () => {
+      schedule();
+      managerOnly();
+      let names: string[] | undefined;
+      if (p.kind === 'manager') {
+        names = [];
+        for (const id of p.managedStandupIds) for (const x of await repo.listParticipants(id)) names.push(x.userName);
+      }
+      return { requests: (await repo.listPendingOverrides(names)).map(overrideView) };
+    },
+  );
+
+  register(
+    'set_working_days',
+    'schedule',
+    {
+      description: 'Set a personal week: "mon-thu", "mon,wed,fri", "adhoc" (only dated working days count) or "reset" to follow the standup. Omit userName for the owner.',
+      inputSchema: z.object({ userName: z.string().optional(), workingDays: z.string().trim().min(1) }),
+      readOnly: false,
+    },
+    async ({ userName, workingDays }) => {
+      const svc = schedule();
+      const t = await targetFor(userName);
+      const r = await svc.setWorkingDays(t, workingDays, t.actor, 'api');
+      if (!r.ok) throw new ToolRefused(r.message);
+      return { message: r.message, schedule: await scheduleView(repo, svc, t.userName, t.displayName) };
+    },
+  );
+
+  register(
+    'set_days_off',
+    'schedule',
+    {
+      description: 'Mark dates off (or, with working=true, as extra working days) with an optional reason. Subject to the standup’s time-off policy: the result says whether it applied or became a request.',
+      inputSchema: z.object({ userName: z.string().optional(), dates: z.array(ISO_DATE).max(31).optional(), from: ISO_DATE.optional(), to: ISO_DATE.optional(), working: z.boolean().default(false), reason: z.string().trim().max(200).default('') }),
+      readOnly: false,
+    },
+    async ({ userName, dates, from, to, working, reason }) => {
+      const svc = schedule();
+      const t = await targetFor(userName);
+      const r = await svc.setOverride({ target: t, dates: expand(dates, from, to), working, reason, actor: t.actor, channel: 'api' });
+      if (!r.ok) throw new ToolRefused(r.message);
+      return { status: r.status, message: r.message };
+    },
+  );
+
+  register(
+    'cancel_day_off',
+    'schedule',
+    { description: 'Withdraw a day off, extra working day or pending request on a date.', inputSchema: z.object({ userName: z.string().optional(), date: ISO_DATE }), readOnly: false },
+    async ({ userName, date }) => {
+      const svc = schedule();
+      const t = await targetFor(userName);
+      const r = await svc.cancelOverride(t, date, t.actor);
+      if (!r.ok) throw new ToolRefused(r.message);
+      return { message: r.message };
+    },
+  );
+
+  register(
+    'decide_time_off_request',
+    'schedule',
+    {
+      description: 'Approve or decline pending time-off requests by id (one request can span several dates). A decline note is sent to the person.',
+      inputSchema: z.object({ ids: z.array(ID).min(1), approve: z.boolean(), note: z.string().trim().max(200).optional() }),
+      readOnly: false,
+    },
+    async ({ ids, approve, note }) => {
+      const svc = schedule();
+      managerOnly();
+      const r = await svc.decide(ids, approve, { userName: p.user?.userName ?? 'operator', displayName: p.user?.name ?? 'Operator', admin: p.kind === 'admin' }, note ?? null);
+      if (!r.ok) throw new ToolRefused(r.message);
+      return { message: r.message };
+    },
+  );
 
   return server;
 }

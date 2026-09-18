@@ -3,6 +3,7 @@ import type { BlockerService } from '../../core/blocker-service.js';
 import type { CommandHandler, Mention } from '../../core/commands.js';
 import type { PollService } from '../../core/poll-service.js';
 import type { StandupService } from '../../core/standup-service.js';
+import { describeDates, parseDateSpec, type ScheduleService } from '../../core/schedule.js';
 import type { Repo } from '../../db/repo.js';
 import {
   isBlockerQuestion,
@@ -13,6 +14,10 @@ import {
 } from '../../core/types.js';
 import {
   ACK_BLOCKER_FN,
+  APPROVE_REQUEST_FN,
+  DECLINE_REQUEST_FN,
+  SUBMIT_DECLINE_FN,
+  declineDialog,
   blockerUpdateDialog,
   OPEN_BLOCKER_UPDATE_FN,
   OPEN_DIALOG_FN,
@@ -40,6 +45,7 @@ export class EventRouter {
     private polls: PollService | null = null,
     /** The app's events URL when known — add-on builds address card clicks to it. */
     private endpoint: () => Promise<string | null> = async () => null,
+    private schedule: ScheduleService | null = null,
   ) {}
 
   async handle(event: any): Promise<object> {
@@ -108,13 +114,46 @@ export class EventRouter {
           : "You're not on any standup roster yet.",
       };
     }
+    if (this.schedule && /^(off|working|days)(\s|$)/.test(text)) {
+      return { text: await this.onScheduleDm(user, raw) };
+    }
     return {
       text:
         'When a standup is due you\'ll get a card here with a *Fill standup* button.\n' +
         'DM commands: `vacation` (pause prompts while you\'re away) · `back` (resume) · ' +
+        '`off <date|range> [reason]` (a day off, e.g. `off tomorrow comp off`) · `working <date>` · `off list` · `off cancel <date>` · ' +
+        '`days mon-thu|adhoc|reset` (your own week) · ' +
         '`timezone <IANA>` (get your prompts at the standup time in *your* zone; `timezone reset` to follow the standup zone).\n' +
         'Team configuration happens in the team space — mention me with `help` there.',
     };
+  }
+
+  /** DM `off` / `working` / `days` — the person's own schedule, under their standups' time-off policy. */
+  private async onScheduleDm(user: Mention, raw: string): Promise<string> {
+    const schedule = this.schedule!;
+    const [verb, ...rest] = raw.trim().split(/\s+/);
+    const command = verb!.toLowerCase();
+    const text = rest.join(' ');
+    const standups = await this.repo.listStandupsForUser(user.userName);
+    const zone = standups[0]?.timezone ?? 'UTC';
+    const now = schedule.nowIn(zone);
+    const actor = { userName: user.userName, displayName: user.displayName, self: true, manager: (await this.repo.listStandupsAdministeredBy(user.userName)).length > 0 };
+    if (command === 'days') return (await schedule.setWorkingDays(user, text, actor, 'chat')).message;
+    if (command === 'off' && /^list\b/i.test(text)) {
+      const upcoming = await schedule.listUpcoming(user.userName, zone);
+      if (upcoming.length === 0) return 'Nothing coming up — your usual week applies. `off <date>` to mark a day off.';
+      const lines = upcoming.map((o) => `• ${describeDates([o.date])} · ${o.working ? 'working' : 'off'}${o.reason ? ` (${o.reason})` : ''}${o.status === 'active' ? '' : ` · ${o.status}`}`);
+      return `Coming up:\n${lines.join('\n')}`;
+    }
+    if (command === 'off' && /^cancel\b/i.test(text)) {
+      const spec = parseDateSpec(text.replace(/^cancel\s*/i, ''), now);
+      if (!spec.ok) return spec.message;
+      return (await schedule.cancelOverride(user, spec.dates[0]!, actor)).message;
+    }
+    const spec = parseDateSpec(text, now);
+    if (!spec.ok) return spec.message;
+    const result = await schedule.setOverride({ target: user, dates: spec.dates, working: command === 'working', reason: spec.rest, actor, channel: 'chat' });
+    return result.message;
   }
 
   /** DM `timezone` — personal prompt timezone across all the user's standups. */
@@ -189,6 +228,16 @@ export class EventRouter {
       }
       // Replace the clicked card with fresh tallies — no extra API call needed.
       return { actionResponse: { type: 'UPDATE_MESSAGE' }, ...pollMessage(result.poll, result.tallies, false, await this.endpoint()) };
+    }
+
+    if ((fn === APPROVE_REQUEST_FN || fn === DECLINE_REQUEST_FN || fn === SUBMIT_DECLINE_FN) && this.schedule) {
+      const ids = String(getParameter(event, 'requestIds') ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
+      if (fn === DECLINE_REQUEST_FN) return declineDialog(ids.join(','), await this.endpoint());
+      const decision = { userName: user.userName, displayName: user.displayName, admin: false };
+      if (fn === APPROVE_REQUEST_FN) return { text: (await this.schedule.decide(ids, true, decision, null)).message };
+      const note = getFormValue(event, 'note').trim() || null;
+      const result = await this.schedule.decide(ids, false, decision, note);
+      return result.ok ? dialogOk(result.message) : dialogError(result.message);
     }
 
     const blockerId = Number(getParameter(event, 'blockerId'));

@@ -7,8 +7,8 @@ import { POSTGRES_MIGRATIONS, Repo, SQLITE_MIGRATIONS } from '../src/db/repo.js'
 
 describe('migration 10 — AI removal', () => {
   it('keeps both dialect arrays aligned', () => {
-    expect(SQLITE_MIGRATIONS).toHaveLength(11);
-    expect(POSTGRES_MIGRATIONS).toHaveLength(11);
+    expect(SQLITE_MIGRATIONS).toHaveLength(12);
+    expect(POSTGRES_MIGRATIONS).toHaveLength(12);
     for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
       expect(migrations[9]).toContain('DROP COLUMN ai_enabled');
       expect(migrations[9]).toContain("'llmApiKey'");
@@ -45,7 +45,7 @@ describe('migration 10 — AI removal', () => {
     const columns = (check.query('PRAGMA table_info(standups)').all() as { name: string }[]).map((c) => c.name);
     expect(columns).not.toContain('ai_enabled');
     expect(columns).toContain('digest_enabled');
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(11);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(12);
     check.close();
   });
 });
@@ -89,7 +89,47 @@ describe('migration 11 — MCP tokens and activity', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(11);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(12);
+    check.close();
+  });
+});
+
+describe('migration 12 — personal schedules', () => {
+  it('adds the schedule tables and columns in both dialects', () => {
+    for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
+      expect(migrations[11]).toContain('ALTER TABLE participants ADD COLUMN working_days TEXT');
+      expect(migrations[11]).toContain('ALTER TABLE run_participants ADD COLUMN away_reason TEXT');
+      expect(migrations[11]).toContain("ADD COLUMN time_off_policy TEXT NOT NULL DEFAULT 'self'");
+      expect(migrations[11]).toContain('CREATE TABLE schedule_overrides');
+      expect(migrations[11]).toContain('CREATE TABLE schedule_changes');
+      expect(migrations[11]).toContain('UNIQUE (user_name, date)');
+    }
+  });
+
+  it('upgrades a v11 database, defaulting every standup to self-service and every participant to the standup week', async () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), 'asyncup-mig-')), 'v11.db');
+    const raw = new Database(dbPath);
+    for (const migration of SQLITE_MIGRATIONS.slice(0, 11)) raw.exec(migration);
+    raw.exec(`
+      PRAGMA user_version = 11;
+      INSERT INTO standups (tenant_id, space_name, name, timezone) VALUES ('default', 'spaces/x', 'Engineering', 'UTC');
+      INSERT INTO participants (standup_id, user_name, display_name) VALUES (1, 'users/a', 'Asha');
+    `);
+    raw.close();
+
+    const repo = await Repo.sqlite(dbPath);
+    const standup = (await repo.listStandupsBySpace('default', 'spaces/x'))[0]!;
+    expect(standup.timeOffPolicy).toBe('self');
+    expect((await repo.listParticipants(standup.id))[0]!.workingDays).toBeNull();
+    const saved = await repo.upsertOverride({
+      userName: 'users/a', displayName: 'Asha', date: '2026-09-19', working: false, reason: 'comp off', status: 'active',
+      setByUserName: 'users/a', setByDisplayName: 'Asha', channel: 'chat', at: '2026-09-18T10:00:00Z',
+    });
+    expect((await repo.getOverride('users/a', '2026-09-19'))!.id).toBe(saved.id);
+    await repo.close();
+
+    const check = new Database(dbPath, { readonly: true });
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(12);
     check.close();
   });
 });

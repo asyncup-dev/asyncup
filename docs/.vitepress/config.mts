@@ -35,6 +35,7 @@ export default defineConfig({
           { text: 'Google Chat setup', link: '/guide/google-chat-setup' },
           { text: 'Installing for your team', link: '/guide/distribution' },
           { text: 'Commands', link: '/guide/commands' },
+          { text: 'Personal schedules', link: '/guide/schedules' },
           { text: 'Configuration', link: '/guide/configuration' },
           { text: 'Web app', link: '/guide/web-app' },
           { text: 'Enterprise SSO (SAML + SCIM)', link: '/guide/enterprise-sso' },

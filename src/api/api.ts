@@ -9,10 +9,12 @@ import type { WebhookNotifier } from '../core/webhooks.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { SettingsService } from '../core/settings.js';
 import type { StandupService } from '../core/standup-service.js';
+import type { ScheduleService } from '../core/schedule.js';
 import type { Repo } from '../db/repo.js';
 import { registerBlockerRoutes } from './blockers.js';
 import { registerMcpRoutes } from './mcp.js';
 import { registerMemberRoutes } from './member.js';
+import { registerScheduleRoutes } from './schedule.js';
 import { registerPeopleRoutes } from './people.js';
 import { registerSettingsRoutes } from './settings.js';
 import { registerSpaceRoutes } from './spaces.js';
@@ -34,6 +36,7 @@ export interface ApiDeps {
   adapter: ChatAdapter;
   blockers: BlockerService;
   service: StandupService | null;
+  schedule?: ScheduleService | null;
   webhooks: WebhookNotifier;
   chatClientFactory: ChatClientFactory;
   samlBroker: (config: SamlConfig) => SamlBroker;
@@ -54,6 +57,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
     adapter: deps.adapter,
     blockers: deps.blockers,
     service: deps.service,
+    schedule: deps.schedule ?? null,
     webhooks: deps.webhooks,
     chatClientFactory: deps.chatClientFactory,
     samlBroker: deps.samlBroker,
@@ -105,6 +109,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
   registerBlockerRoutes(api, ctx);
   registerPeopleRoutes(api, ctx);
   registerMemberRoutes(api, ctx);
+  registerScheduleRoutes(api, ctx);
   registerSettingsRoutes(api, ctx);
   registerSpaceRoutes(api, ctx);
   registerMcpRoutes(api, ctx);

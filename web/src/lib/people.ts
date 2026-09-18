@@ -7,6 +7,8 @@ export interface PersonRow {
   email: string | null;
   timezone: string | null;
   onVacation: boolean;
+  workingDays: string | null;
+  workingDaysLabel: string;
   standups: { id: number; name: string; mandatory: boolean; admin: boolean }[];
 }
 
