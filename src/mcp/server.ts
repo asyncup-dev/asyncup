@@ -7,6 +7,7 @@ import type { BlockerService } from '../core/blocker-service.js';
 import { bearerToken } from '../core/http.js';
 import type { SettingsService } from '../core/settings.js';
 import type { StandupService } from '../core/standup-service.js';
+import type { ScheduleService } from '../core/schedule.js';
 import type { McpToken } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import { authenticateMcpToken } from './tokens.js';
@@ -17,6 +18,7 @@ export interface McpDeps {
   settings: SettingsService;
   blockers: BlockerService;
   service: StandupService | null;
+  schedule: ScheduleService | null;
   tenantId: string;
   version: string;
   now: () => DateTime;

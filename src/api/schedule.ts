@@ -1,7 +1,40 @@
 import type { Request, Response, Router } from 'express';
-import { AWAY_LABEL, describeWorkingDays, type Actor } from '../core/schedule.js';
+import { AWAY_LABEL, describeWorkingDays, type Actor, type ScheduleService } from '../core/schedule.js';
+import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
 import { apiError, canManage, principalOf, type ApiContext } from './shared.js';
+
+/** Whether the caller manages a standup this person is on (workspace admins manage everyone). */
+export async function managesPerson(repo: Repo, p: Principal, userName: string): Promise<boolean> {
+  if (p.kind === 'admin') return true;
+  for (const s of await repo.listStandupsForUser(userName)) if (canManage(p, s.id)) return true;
+  return false;
+}
+
+export function actorFor(p: Principal, target: string, manager: boolean): Actor {
+  return { userName: p.user?.userName ?? 'operator', displayName: p.user?.name ?? 'Operator', self: p.user?.userName === target, manager };
+}
+
+/** A person's display name from any roster they are on, else their id. */
+export async function displayNameOf(repo: Repo, userName: string): Promise<string> {
+  const roster = await repo.listStandupsForUser(userName);
+  return roster.length ? ((await repo.listParticipants(roster[0]!.id)).find((x) => x.userName === userName)?.displayName ?? userName) : userName;
+}
+
+/** The schedule view the console and the MCP tools share. */
+export async function scheduleView(repo: Repo, schedule: ScheduleService, userName: string, displayName: string) {
+  const workingDays = await repo.getUserWorkingDays(userName);
+  const standups = await repo.listStandupsForUser(userName);
+  const zone = standups[0]?.timezone ?? 'UTC';
+  return {
+    userName,
+    displayName,
+    workingDays,
+    workingDaysLabel: describeWorkingDays(workingDays),
+    policies: standups.map((s) => ({ standupId: s.id, name: s.name, timeOffPolicy: s.timeOffPolicy })),
+    overrides: (await schedule.listUpcoming(userName, zone)).map(overrideView),
+  };
+}
 
 /**
  * Personal weeks, days off and time-off approvals — the console's side of
@@ -24,34 +57,8 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
     return { userName: user.userName, displayName: user.name };
   };
 
-  /** Whether the caller manages a standup this person is on (workspace admins manage everyone). */
-  const managerOf = async (p: Principal, userName: string): Promise<boolean> => {
-    if (p.kind === 'admin') return true;
-    for (const s of await repo.listStandupsForUser(userName)) if (canManage(p, s.id)) return true;
-    return false;
-  };
-
-  const actorFor = (p: Principal, target: string, manager: boolean): Actor => ({
-    userName: p.user?.userName ?? 'operator',
-    displayName: p.user?.name ?? 'Operator',
-    self: p.user?.userName === target,
-    manager,
-  });
-
-  const view = async (userName: string, displayName: string, zone: string) => {
-    const workingDays = await repo.getUserWorkingDays(userName);
-    const standups = await repo.listStandupsForUser(userName);
-    return {
-      userName,
-      displayName,
-      workingDays,
-      workingDaysLabel: describeWorkingDays(workingDays),
-      policies: standups.map((s) => ({ standupId: s.id, name: s.name, timeOffPolicy: s.timeOffPolicy })),
-      overrides: (await ctx.schedule!.listUpcoming(userName, zone)).map(overrideView),
-    };
-  };
-
-  const zoneFor = async (userName: string) => (await repo.listStandupsForUser(userName))[0]?.timezone ?? 'UTC';
+  const managerOf = (p: Principal, userName: string) => managesPerson(repo, p, userName);
+  const view = (userName: string, displayName: string) => scheduleView(repo, ctx.schedule!, userName, displayName);
 
   const datesFrom = (body: any, res: Response): string[] | null => {
     const raw: unknown[] = Array.isArray(body.dates) ? body.dates : body.date ? [body.date] : [];
@@ -92,7 +99,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
     if (!schedule(res)) return;
     const me = self(req, res);
     if (!me) return;
-    res.json(await view(me.userName, me.displayName, await zoneFor(me.userName)));
+    res.json(await view(me.userName, me.displayName));
   });
 
   api.patch('/me/schedule', async (req, res) => {
@@ -106,7 +113,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 400, 'invalid', result.message, 'workingDays');
       return;
     }
-    res.json(await view(me.userName, me.displayName, await zoneFor(me.userName)));
+    res.json(await view(me.userName, me.displayName));
   });
 
   api.post('/me/overrides', async (req, res) => {
@@ -138,16 +145,14 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 403, 'forbidden', 'Only admins and this person’s managers can do that.');
       return null;
     }
-    const roster = await repo.listStandupsForUser(userName);
-    const displayName = roster.length ? (await repo.listParticipants(roster[0]!.id)).find((x) => x.userName === userName)?.displayName ?? userName : userName;
-    return { userName, displayName, actor: actorFor(p, userName, true) };
+    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p, userName, true) };
   };
 
   api.get('/people/:userName/schedule', async (req, res) => {
     if (!schedule(res)) return;
     const t = await target(req, res);
     if (!t) return;
-    res.json(await view(t.userName, t.displayName, await zoneFor(t.userName)));
+    res.json(await view(t.userName, t.displayName));
   });
 
   api.patch('/people/:userName/schedule', async (req, res) => {
@@ -160,7 +165,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 400, 'invalid', result.message, 'workingDays');
       return;
     }
-    res.json(await view(t.userName, t.displayName, await zoneFor(t.userName)));
+    res.json(await view(t.userName, t.displayName));
   });
 
   api.post('/people/:userName/overrides', async (req, res) => {
@@ -221,7 +226,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
-function overrideView(o: { id: number; userName: string; displayName: string; date: string; working: boolean; reason: string; status: string; setByDisplayName: string; channel: string; decidedByDisplayName: string | null; decisionNote: string | null; createdAt: string }) {
+export function overrideView(o: { id: number; userName: string; displayName: string; date: string; working: boolean; reason: string; status: string; setByDisplayName: string; channel: string; decidedByDisplayName: string | null; decisionNote: string | null; createdAt: string }) {
   return {
     id: o.id,
     userName: o.userName,

@@ -2,13 +2,14 @@
  * What an MCP token may do. `read` covers every read tool; the write scopes
  * are only meaningful on personal tokens, which act as their owner.
  */
-export const MCP_SCOPES = ['read', 'blockers:write', 'submit'] as const;
+export const MCP_SCOPES = ['read', 'blockers:write', 'submit', 'schedule'] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
 
 export const MCP_SCOPE_HELP: Record<McpScope, string> = {
   read: 'List standups, runs, blockers, the team and insights the owner can see.',
   'blockers:write': 'Acknowledge, update and resolve blockers as the owner.',
   submit: 'Submit or edit the owner\'s own standup answers.',
+  schedule: 'Set the owner\'s week and days off, do the same for people the owner manages, and decide time-off requests.',
 };
 
 /** Parse a comma or space separated list, dropping unknowns and duplicates. */

@@ -90,4 +90,7 @@ Webhooks receive two more events: `schedule_change` (person, summary, who,
 channel) and `time_off_request` (person, dates, working, reason, request ids).
 The JSON API exposes the same controls under `/me/schedule`, `/me/overrides`,
 `/people/:userName/schedule`, `/people/:userName/overrides` and `/requests`
-— see [JSON API](./api).
+— see [JSON API](./api). MCP tokens with the `schedule` scope get
+`set_working_days`, `set_days_off`, `cancel_day_off` and
+`decide_time_off_request`; `get_schedule` and `list_time_off_requests` come with
+`read`. Tools act as the token's owner under the same policy.
