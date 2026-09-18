@@ -174,7 +174,7 @@ AsyncUp has no AI of its own. Instead it speaks the [Model Context Protocol](htt
 | `GET` | `/mcp/activity?limit=50` | Newest first: `tool`, `argsSummary`, `ok`, `at`, `token` |
 | `POST` | `/verify/mcp` | Verification shape: fails while the server is off or no token exists |
 
-Scopes: `read` (list_standups, list_runs, get_run, list_blockers, get_team, get_insights), `blockers:write` (acknowledge_blocker, update_blocker, resolve_blocker), `submit` (submit_answers, today's run only). Tools see exactly what their owner sees in this API; moods stay anonymous where the standup says so. Tokens expire 90 days after their last use and are stored hashed. The endpoint answers `503 mcp_disabled` while switched off and `401` for a missing, unknown, revoked or expired token.
+Scopes: `read` (list_standups, list_runs, get_run, list_blockers, get_team, get_insights), `blockers:write` (acknowledge_blocker, update_blocker, resolve_blocker), `submit` (submit_answers, today's run only), `schedule` (set_working_days, set_days_off, cancel_day_off, decide_time_off_request; `get_schedule` and `list_time_off_requests` are read tools — see [Personal schedules](./schedules)). Tools see exactly what their owner sees in this API; moods stay anonymous where the standup says so. Tokens expire 90 days after their last use and are stored hashed. The endpoint answers `503 mcp_disabled` while switched off and `401` for a missing, unknown, revoked or expired token.
 
 Client config, as returned on creation:
 

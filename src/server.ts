@@ -156,6 +156,7 @@ export function createServer(deps: ServerDeps): Express {
     settings,
     blockers: deps.blockers,
     service: deps.service ?? null,
+    schedule: deps.schedule ?? null,
     tenantId: deps.tenantId ?? 'default',
     version: APP_VERSION,
     now,

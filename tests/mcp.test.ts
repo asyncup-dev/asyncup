@@ -12,7 +12,7 @@ const CSRF = { 'x-requested-with': 'asyncup', 'content-type': 'application/json'
 let close: (() => void) | null = null;
 const clients: Client[] = [];
 
-async function startServer(opts: { withoutService?: boolean; enabled?: boolean } = {}) {
+async function startServer(opts: { withoutService?: boolean; withoutSchedule?: boolean; enabled?: boolean } = {}) {
   const stack = await makeStack();
   const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT);
   const app = createServer({
@@ -23,6 +23,7 @@ async function startServer(opts: { withoutService?: boolean; enabled?: boolean }
     repo: stack.repo,
     settings: stack.settings,
     ...(opts.withoutService ? {} : { service: stack.service }),
+    ...(opts.withoutSchedule ? {} : { schedule: stack.schedule }),
     dashboardToken: OPERATOR,
     skipVerification: true,
     secretKey: SECRET,
@@ -80,7 +81,7 @@ const ALICE = { userName: 'users/alice', displayName: 'Alice' };
 /** Session names come from the cookie's sub, so token owners carry the lower-case form. */
 const ALICE_SESSION = { userName: 'users/alice', displayName: 'alice' };
 const BOB = { userName: 'users/bob', displayName: 'Bob' };
-const FULL = ['read', 'blockers:write', 'submit'];
+const FULL = ['read', 'blockers:write', 'submit', 'schedule'];
 
 describe('mcp: endpoint gate', () => {
   it('is off by default and answers 503 until an admin enables it', async () => {
@@ -224,7 +225,7 @@ describe('mcp: tools', () => {
 
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: FULL })).secret);
     expect(((await alice.listTools()).tools.map((t) => t.name)).sort()).toEqual(
-      ['acknowledge_blocker', 'get_insights', 'get_run', 'get_team', 'list_blockers', 'list_runs', 'list_standups', 'resolve_blocker', 'submit_answers', 'update_blocker'].sort(),
+      ['acknowledge_blocker', 'cancel_day_off', 'decide_time_off_request', 'get_insights', 'get_run', 'get_schedule', 'get_team', 'list_blockers', 'list_runs', 'list_standups', 'list_time_off_requests', 'resolve_blocker', 'set_days_off', 'set_working_days', 'submit_answers', 'update_blocker'].sort(),
     );
     const standups = (await call(alice, 'list_standups')).json.standups;
     expect(standups).toHaveLength(1);
@@ -246,7 +247,7 @@ describe('mcp: tools', () => {
     expect((await call(alice, 'list_standups')).json.standups[0].permissions.manage).toBe(true);
 
     const root = await connect((await mint(cookieFor('root', true), { name: 'r' })).secret);
-    expect((await root.listTools()).tools).toHaveLength(6);
+    expect((await root.listTools()).tools).toHaveLength(8);
     expect((await call(root, 'get_team')).json.people).toHaveLength(3);
   });
 
@@ -347,5 +348,62 @@ describe('mcp: tools', () => {
     const c = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: FULL })).secret);
     expect((await c.listTools()).tools.map((t) => t.name)).not.toContain('submit_answers');
     expect((await c.listTools()).tools.map((t) => t.name)).toContain('acknowledge_blocker');
+  });
+});
+
+describe('schedule tools', () => {
+  it('manages the owner’s own schedule, a managed person’s, and pending requests', async () => {
+    const { mint, cookieFor, connect, call, repo } = await startServer();
+    const s = await seedStandup(repo);
+    await repo.addAdmin(s.id, BOB.userName, BOB.displayName);
+    const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['read', 'schedule'] })).secret);
+    const bob = await connect((await mint(cookieFor('bob'), { name: 'b', scopes: ['read', 'schedule'] })).secret);
+
+    // own week and days off
+    expect((await call(alice, 'set_working_days', { workingDays: 'mon-thu' })).json).toMatchObject({ schedule: { workingDays: 'mon,tue,wed,thu', workingDaysLabel: 'Mon–Thu' } });
+    expect((await call(alice, 'set_working_days', { workingDays: 'nope' })).error).toContain("isn't a day");
+    expect((await call(alice, 'set_days_off', { from: '2026-06-22', to: '2026-06-23', reason: 'comp off' })).json).toMatchObject({ status: 'active' });
+    expect((await call(alice, 'set_days_off', { dates: ['2026-06-13'], working: true })).json.status).toBe('active');
+    expect((await call(alice, 'get_schedule')).json.overrides.map((o: any) => [o.date, o.label])).toEqual([['2026-06-13', 'Working'], ['2026-06-22', 'Day off'], ['2026-06-23', 'Day off']]);
+    expect((await call(alice, 'cancel_day_off', { date: '2026-06-23' })).json.message).toContain('usual week');
+    expect((await call(alice, 'cancel_day_off', { date: '2026-06-23' })).error).toContain('Nothing is set');
+    expect((await call(alice, 'set_days_off', {})).error).toBe('Give dates, or from and to.');
+    expect((await call(alice, 'set_days_off', { from: '2026-06-23', to: '2026-06-22' })).error).toBe('from must be on or before to.');
+    expect((await call(alice, 'set_days_off', { from: '2026-06-01', to: '2026-07-31' })).error).toBe('At most 31 days at a time.');
+    expect((await call(alice, 'set_days_off', { dates: ['2026-06-01'] })).error).toBe('Past days can only be changed by a manager.');
+
+    // other people: only their managers
+    expect((await call(alice, 'get_schedule', { userName: 'users/bob' })).error).toContain('Only admins and this person’s managers');
+    expect((await call(bob, 'get_schedule', { userName: 'users/alice' })).json).toMatchObject({ displayName: 'Alice', workingDays: 'mon,tue,wed,thu' });
+    expect((await call(bob, 'set_working_days', { userName: 'users/alice', workingDays: 'reset' })).json.schedule.workingDays).toBeNull();
+    expect((await call(bob, 'set_days_off', { userName: 'users/alice', dates: ['2026-06-01'], reason: 'sick' })).json.status).toBe('active');
+    expect((await call(bob, 'cancel_day_off', { userName: 'users/alice', date: '2026-06-01' })).json.message).toContain("Alice's usual week");
+
+    // approval flow through the tools
+    await repo.updateStandup(s.id, { timeOffPolicy: 'approval' });
+    expect((await call(alice, 'set_days_off', { dates: ['2026-06-24'], reason: 'dentist' })).json.status).toBe('pending');
+    expect((await call(alice, 'list_time_off_requests')).error).toBe('Only admins and managers can do that.');
+    const pending = (await call(bob, 'list_time_off_requests')).json.requests;
+    expect(pending).toEqual([expect.objectContaining({ userName: 'users/alice', date: '2026-06-24', status: 'pending' })]);
+    expect((await call(alice, 'decide_time_off_request', { ids: [pending[0].id], approve: true })).error).toBe('Only admins and managers can do that.');
+    expect((await call(bob, 'decide_time_off_request', { ids: [pending[0].id], approve: false, note: 'not that day' })).json.message).toContain('Declined');
+    expect((await call(bob, 'decide_time_off_request', { ids: [pending[0].id], approve: true })).error).toContain('already decided');
+    expect((await repo.getOverride('users/alice', '2026-06-24'))!).toMatchObject({ status: 'declined', decisionNote: 'not that day' });
+
+    // an admin's personal token and the operator's service token
+    const root = await connect((await mint(cookieFor('root', true), { name: 'r', scopes: ['read', 'schedule'] })).secret);
+    expect((await call(root, 'list_time_off_requests')).json.requests).toEqual([]);
+    const service = await connect((await mint(null, { name: 'ci', kind: 'service', scopes: ['read', 'schedule'] })).secret);
+    expect((await call(service, 'get_schedule')).error).toContain('need a personal token');
+    expect((await call(service, 'get_schedule', { userName: 'users/alice' })).json.userName).toBe('users/alice');
+  });
+
+  it('refuses every schedule tool when the host has no schedule service', async () => {
+    const { mint, cookieFor, connect, call, repo } = await startServer({ withoutSchedule: true });
+    await seedStandup(repo);
+    const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['read', 'schedule'] })).secret);
+    for (const [name, args] of [['get_schedule', {}], ['list_time_off_requests', {}], ['set_working_days', { workingDays: 'mon' }], ['set_days_off', { dates: ['2026-06-22'] }], ['cancel_day_off', { date: '2026-06-22' }], ['decide_time_off_request', { ids: [1], approve: true }]] as const) {
+      expect((await call(alice, name, args as Record<string, unknown>)).error).toBe('Personal schedules are not available on this install.');
+    }
   });
 });
