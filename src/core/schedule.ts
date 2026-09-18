@@ -26,6 +26,18 @@ const LONG: Record<string, Weekday> = {
 };
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
+/** "mon - thu" arrives as three tokens; fold a lone dash into the range it joins. */
+function joinRanges(tokens: string[]): string[] {
+  const out: string[] = [];
+  for (const token of tokens) {
+    const last = out[out.length - 1];
+    if (token === '-' && last !== undefined) out[out.length - 1] = `${last}-`;
+    else if (last !== undefined && last.endsWith('-')) out[out.length - 1] = `${last}${token}`;
+    else out.push(token);
+  }
+  return out;
+}
+
 export function weekdayOf(date: string): Weekday {
   return WEEKDAY_BY_LUXON[DateTime.fromISO(date).weekday]!;
 }
@@ -35,12 +47,12 @@ export function weekdayOf(date: string): Weekday {
  * (null = follow the standup) or a message saying what was wrong.
  */
 export function parseWorkingDays(value: string): { ok: true; value: string | null } | { ok: false; message: string } {
-  const v = value.trim().toLowerCase().replace(/\s*-\s*/g, '-');
+  const v = value.trim().toLowerCase();
   if (['reset', 'standup', 'default', 'follow'].includes(v)) return { ok: true, value: null };
   if (['adhoc', 'ad-hoc'].includes(v)) return { ok: true, value: ADHOC };
   if (v === 'weekdays') return { ok: true, value: 'mon,tue,wed,thu,fri' };
   const picked = new Set<Weekday>();
-  for (const token of v.split(/[\s,]+/).filter(Boolean)) {
+  for (const token of joinRanges(v.split(/[\s,]+/).filter(Boolean))) {
     const [from, to] = token.split('-');
     const a = LONG[from!];
     const b = to === undefined ? a : LONG[to];

@@ -3,7 +3,7 @@ import type { BlockerService } from '../../core/blocker-service.js';
 import type { CommandHandler, Mention } from '../../core/commands.js';
 import type { PollService } from '../../core/poll-service.js';
 import type { StandupService } from '../../core/standup-service.js';
-import { AWAY_LABEL, describeDates, parseDateSpec, type ScheduleService } from '../../core/schedule.js';
+import { describeDates, parseDateSpec, type ScheduleService } from '../../core/schedule.js';
 import type { Repo } from '../../db/repo.js';
 import {
   isBlockerQuestion,

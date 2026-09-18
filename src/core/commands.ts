@@ -5,7 +5,7 @@ import { runProgress } from './progress.js';
 import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, LIMITS, parseDays } from './validation.js';
 import type { BlockerService } from './blocker-service.js';
 import type { PollService } from './poll-service.js';
-import { parseDateSpec, describeDates, type Actor, type ScheduleService } from './schedule.js';
+import { parseDateSpec, type Actor, type ScheduleService } from './schedule.js';
 import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
 import { trendsText } from './insights.js';
