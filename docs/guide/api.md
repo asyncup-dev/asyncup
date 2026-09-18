@@ -93,7 +93,7 @@ Admins and that standup's managers only (`403 forbidden` otherwise).
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| `PATCH` | `/standups/:id` | Any subset of `name`, `promptTime`, `deadlineTime`, `timezone`, `reminderMinutesBefore`, `escalateAfterDays`, `days` (list or `"mon,tue"`), `webhookUrl` (`null` disables), `questions` (list), `moodEnabled`, `moodAnonymous`, `digestEnabled`, `escalateUserName` (`null` disables). Same rules as the chat commands; `400 invalid` names the `field`. |
+| `PATCH` | `/standups/:id` | Any subset of `name`, `promptTime`, `deadlineTime`, `timezone`, `reminderMinutesBefore`, `escalateAfterDays`, `days` (list or `"mon,tue"`), `timeOffPolicy` (`self` \| `approval` \| `managers`, see [Personal schedules](./schedules)), `webhookUrl` (`null` disables), `questions` (list), `moodEnabled`, `moodAnonymous`, `digestEnabled`, `escalateUserName` (`null` disables). Same rules as the chat commands; `400 invalid` names the `field`. |
 | `POST` | `/standups/:id/run-now` | `{ "result": "started" \| "already_open" \| "already_closed" \| "no_participants" }` |
 | `POST` | `/standups/:id/nudge` | Reminds everyone still expected today; `409 no_open_run` otherwise |
 | `POST` | `/standups/:id/archive`, `/unarchive` | Stops or resumes prompts; history stays |
@@ -123,7 +123,18 @@ Moods are withheld per person when the standup keeps them anonymous; only the te
 
 ### Team
 
-`GET /people` — admins and managers. Everyone on a roster the caller can see, with `email` (when known), `timezone`, `onVacation` and their `standups` (`mandatory`, `admin`).
+`GET /people` — admins and managers. Everyone on a roster the caller can see, with `email` (when known), `timezone`, `onVacation`, `workingDays` / `workingDaysLabel` and their `standups` (`mandatory`, `admin`).
+
+Schedules of others — admins, and managers of a standup the person is on:
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/people/:userName/schedule` | Same shape as `/me/schedule` |
+| `PATCH` | `/people/:userName/schedule` | `{ workingDays }` — the person is DM'd |
+| `POST` | `/people/:userName/overrides` | Same body as `/me/overrides`; managers may set past dates and are never subject to the policy — the person is DM'd |
+| `DELETE` | `/people/:userName/overrides/:date` | Withdraw |
+| `GET` | `/requests` | Pending time-off requests — all of them for admins, those of people in managed standups for managers |
+| `POST` | `/requests/:ids/approve` · `/requests/:ids/decline` | `:ids` comma-separated (one request can span several dates); `{ note? }` on decline goes to the person; `409 refused` once decided or when the caller doesn't manage the person |
 
 ### Me
 
@@ -132,6 +143,10 @@ Moods are withheld per person when the standup keeps them anonymous; only the te
 | `GET` | `/me/standups` | `linked: false` until the account has a Chat identity; otherwise `timezone` (own override or `null`), `chat.dmUrl` (deep link to the bot's DM once one exists) and each standup with `today` = `submitted`, `waiting`, `closed` or `null` plus `progress` (`{ submitted, expected }` while a run exists) |
 | `GET` | `/me/submissions?limit=10` | My recent answers |
 | `PATCH` | `/me` | `{ timezone?: string \| null, onVacation?: boolean }`; `409 not_linked` without a Chat identity |
+| `GET` | `/me/schedule` | My personal week (`workingDays`, `workingDaysLabel`), the `policies` of my standups and upcoming `overrides` (each with `status`, `setBy`, `channel`, `decidedBy`) |
+| `PATCH` | `/me/schedule` | `{ workingDays: "mon-thu" \| "adhoc" \| "reset" }` — the same words the DM `days` command takes; `400 invalid` otherwise |
+| `POST` | `/me/overrides` | `{ date }`, `{ dates: [] }` or `{ from, to }` (ISO, ≤ 31 days), `working?: boolean`, `reason?` — a day off or an extra working day; `403 refused` when the standup's time-off policy says so, with the reason |
+| `DELETE` | `/me/overrides/:date` | Withdraw an entry |
 | `POST` | `/me/skip` | `{ standupId }` — skip today's run, as the DM `skip` command does; `409 no_open_run` before it opens or after it closes, `409 already_submitted` once answered |
 
 ### Workspace settings

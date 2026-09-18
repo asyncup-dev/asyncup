@@ -1,4 +1,5 @@
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from './types.js';
+import type { TimeOffRequest } from './schedule.js';
 
 /** A space the app has been added to. */
 export interface SpaceInfo {
@@ -49,6 +50,9 @@ export interface ChatAdapter {
    * DMed when someone is tagged on a blocker or nudged about one.
    */
   sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void>;
+
+  /** DM a manager a time-off request with Approve / Decline. */
+  sendTimeOffRequest(managerUserName: string, request: TimeOffRequest): Promise<void>;
 
   /**
    * Whether the platform can DM this user right now (e.g. the Chat app is

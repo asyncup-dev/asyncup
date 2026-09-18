@@ -1,3 +1,5 @@
+import { AWAY_LABEL, describeWorkingDays } from '../core/schedule.js';
+import type { RunParticipant } from '../core/types.js';
 import type { DateTime } from 'luxon';
 import { runProgress } from '../core/progress.js';
 import { MOOD_SCORE, type Blocker, type Standup, type Submission } from '../core/types.js';
@@ -12,6 +14,12 @@ import { findVisibleStandup, visibleStandups } from './shared.js';
 
 export function person(p: { userName: string; displayName: string }) {
   return { userName: p.userName, displayName: p.displayName };
+}
+
+/** An away participant with the reason the run recorded (older runs only know skipped vs vacation). */
+function awayView(rp: RunParticipant) {
+  const reason = rp.awayReason ?? (rp.skippedAt ? 'skipped' : 'vacation');
+  return { ...person(rp), reason, reasonLabel: AWAY_LABEL[reason] };
 }
 
 /** Team mood for a run, rounded to one decimal; null when nobody picked one. */
@@ -116,7 +124,7 @@ export async function todayView(repo: Repo, standup: Standup, now: DateTime) {
       return { ...person(rp), submittedAt: s.submittedAt, late: s.late, mood: standup.moodAnonymous ? null : s.mood };
     }),
     waiting: progress.pending.map((rp) => ({ ...person(rp), mandatory: rp.mandatory, remindedAt: rp.remindedAt })),
-    away: progress.away.map((rp) => ({ ...person(rp), reason: rp.skippedAt ? 'skipped' : 'vacation' })),
+    away: progress.away.map(awayView),
     teamMood: standup.moodAnonymous ? averageMood(submissions) : null,
   };
 }
@@ -153,6 +161,8 @@ export async function peopleView(repo: Repo, p: Principal) {
       email: string | null;
       timezone: string | null;
       onVacation: boolean;
+      workingDays: string | null;
+      workingDaysLabel: string;
       standups: { id: number; name: string; mandatory: boolean; admin: boolean }[];
     }
   >();
@@ -164,6 +174,8 @@ export async function peopleView(repo: Repo, p: Principal) {
       email: emails.get(row.userName) ?? null,
       timezone: row.timezone,
       onVacation: false,
+      workingDays: row.workingDays,
+      workingDaysLabel: describeWorkingDays(row.workingDays),
       standups: [],
     };
     entry.onVacation = entry.onVacation || row.onVacation;

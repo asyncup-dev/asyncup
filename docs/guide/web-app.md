@@ -45,6 +45,8 @@ Admins see the whole workspace. **Managers** — people who administer at least
 one standup — see and manage their own standups, blockers, reports and team
 without Workspace-admin rights. Everyone else gets the personal page.
 
+Personal weeks, days off and time-off approvals live under **Team → Edit schedule**, **My page → My schedule** and **Team → Requests** — see [Personal schedules](./schedules).
+
 ## Security notes
 
 - Browser sessions are signed cookies (`SECRET_KEY`); state-changing API calls

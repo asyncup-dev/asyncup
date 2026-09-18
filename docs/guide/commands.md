@@ -24,6 +24,8 @@ in the space.
 | `remove @user…` | Remove participants |
 | `mandatory @user…` / `optional @user…` | Count toward the wrap-up report, or not |
 | `vacation @user…` / `back @user…` | Mark people away — no prompts, not counted as missing |
+| `off @user <date\|range> [reason]` / `working @user <date>` | Mark someone away or working on given days; `off @user cancel <date>` undoes ([Personal schedules](./schedules)) |
+| `days @user mon-thu\|adhoc\|reset` | Someone's personal week |
 | `admin @user…` / `unadmin @user…` | Manage who can change configuration |
 | `time HH:MM` | Prompt time — interpreted in each participant's own timezone (participants set theirs by DMing `timezone <IANA>`; default is the standup timezone) |
 | `deadline HH:MM` | When the run closes and the wrap-up posts — standup timezone |
@@ -88,6 +90,9 @@ Anyone can DM the bot directly:
 | Message | Effect |
 | --- | --- |
 | `vacation` (or `ooo`) | Pause prompts for yourself across all your standups |
+| `off <date\|range> [reason]` / `working <date>` | A day off (e.g. `off tomorrow comp off`) or an extra working day |
+| `off list` / `off cancel <date>` | Upcoming entries / withdraw one |
+| `days mon-thu\|adhoc\|reset` | Your own week ([Personal schedules](./schedules)) |
 | `back` | Resume prompts |
 | `timezone <IANA>` | Get prompts at the standup's prompt time in *your* timezone (all your standups) |
 | `timezone reset` | Follow each standup's timezone again (`timezone` alone shows the current setting) |

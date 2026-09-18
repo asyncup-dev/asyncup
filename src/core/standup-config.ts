@@ -1,5 +1,5 @@
 import type { Repo } from '../db/repo.js';
-import type { Standup } from './types.js';
+import { TIME_OFF_POLICIES, type Standup, type TimeOffPolicy } from './types.js';
 import { HTTPS_URL_RE, LIMITS, isEscalateDays, isReminderMinutes, isValidTime, isValidZone, parseDays } from './validation.js';
 
 /**
@@ -23,6 +23,8 @@ export interface StandupConfigInput {
   moodEnabled?: unknown;
   moodAnonymous?: unknown;
   digestEnabled?: unknown;
+  /** self | approval | managers */
+  timeOffPolicy?: unknown;
   /** Participant userName, or empty/null to switch escalation off. */
   escalateUserName?: unknown;
 }
@@ -42,6 +44,7 @@ export type StandupConfigFields = Partial<
     | 'moodEnabled'
     | 'moodAnonymous'
     | 'digestEnabled'
+    | 'timeOffPolicy'
     | 'escalateUserName'
     | 'escalateDisplayName'
   >
@@ -95,6 +98,11 @@ export async function validateStandupConfig(
       return fail('escalateAfterDays', `Escalation days must be ${LIMITS.escalateDaysMin}–${LIMITS.escalateDaysMax}.`);
     }
     fields.escalateAfterDays = days;
+  }
+  if (has('timeOffPolicy')) {
+    const policy = String(input.timeOffPolicy);
+    if (!(TIME_OFF_POLICIES as readonly string[]).includes(policy)) return fail('timeOffPolicy', 'Time-off policy must be self, approval or managers.');
+    fields.timeOffPolicy = policy as TimeOffPolicy;
   }
   if (has('days')) {
     const raw = Array.isArray(input.days) ? input.days.join(',') : String(input.days);

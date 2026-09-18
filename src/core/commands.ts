@@ -5,6 +5,7 @@ import { runProgress } from './progress.js';
 import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, LIMITS, parseDays } from './validation.js';
 import type { BlockerService } from './blocker-service.js';
 import type { PollService } from './poll-service.js';
+import { parseDateSpec, describeDates, type Actor, type ScheduleService } from './schedule.js';
 import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
 import { trendsText } from './insights.js';
@@ -41,6 +42,8 @@ const HELP_ALL = `*AsyncUp commands* (mention me in this space — prefix with \
 \`add @user…\` / \`remove @user…\` — manage participants
 \`mandatory @user…\` / \`optional @user…\` — who counts toward the report
 \`vacation @user…\` / \`back @user…\` — mark people away (they can also DM me \`vacation\`/\`back\`)
+\`off @user <date|range> [reason]\` / \`working @user <date>\` — mark someone away or working on given days (\`off @user cancel <date>\` undoes)
+\`days @user mon-thu|adhoc|reset\` — someone's personal week
 \`admin @user…\` / \`unadmin @user…\` — who may change configuration
 \`time HH:MM\` — prompt time (participant's local time)
 \`deadline HH:MM\` — close time (standup timezone)
@@ -72,6 +75,7 @@ export class CommandHandler {
     private blockerService: BlockerService | null = null,
     private adapter: ChatAdapter | null = null,
     private pollService: PollService | null = null,
+    private schedule: ScheduleService | null = null,
   ) {}
 
   /** The scheduler is constructed after the handler; attach it once built. */
@@ -153,7 +157,11 @@ export class CommandHandler {
       case 'timezone':
         return this.setTimezone(standup, arg);
       case 'days':
-        return this.setDays(standup, arg);
+        return ctx.mentions.length > 0 ? this.personalWeek(standup, ctx, rest) : this.setDays(standup, arg);
+      case 'off':
+        return this.override(standup, ctx, rest, false);
+      case 'working':
+        return this.override(standup, ctx, rest, true);
       case 'questions':
         return this.questions(standup, rest);
       case 'mood':
@@ -179,6 +187,42 @@ export class CommandHandler {
       default:
         return `Unknown command \`${verb}\`. Try \`help\`.`;
     }
+  }
+
+  /** Words left once the @mentions are taken out of the command text. */
+  private withoutMentions(rest: string[], mentions: Mention[]): string {
+    let text = rest.join(' ');
+    for (const m of mentions) text = text.split(`@${m.displayName}`).join(' ').split(m.displayName).join(' ');
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  private actorFor(ctx: CommandContext, target: Mention): Actor {
+    return { userName: ctx.sender.userName, displayName: ctx.sender.displayName, self: target.userName === ctx.sender.userName, manager: true };
+  }
+
+  private async personalWeek(standup: Standup, ctx: CommandContext, rest: string[]): Promise<string> {
+    if (!this.schedule) return 'Personal schedules are not available on this install.';
+    const target = ctx.mentions[0]!;
+    const value = this.withoutMentions(rest, ctx.mentions);
+    const result = await this.schedule.setWorkingDays(target, value, this.actorFor(ctx, target), 'chat');
+    return result.message;
+  }
+
+  private async override(standup: Standup, ctx: CommandContext, rest: string[], working: boolean): Promise<string> {
+    if (!this.schedule) return 'Personal schedules are not available on this install.';
+    const target = ctx.mentions[0];
+    if (!target) return `Mention the person, e.g. \`${working ? 'working' : 'off'} @Asha tomorrow${working ? '' : ' comp off'}\`.`;
+    const text = this.withoutMentions(rest, ctx.mentions);
+    const now = this.now().setZone(standup.timezone);
+    if (/^cancel\b/i.test(text)) {
+      const spec = parseDateSpec(text.replace(/^cancel\s*/i, ''), now);
+      if (!spec.ok) return spec.message;
+      return (await this.schedule.cancelOverride(target, spec.dates[0]!, this.actorFor(ctx, target))).message;
+    }
+    const spec = parseDateSpec(text, now);
+    if (!spec.ok) return spec.message;
+    const result = await this.schedule.setOverride({ target, dates: spec.dates, working, reason: spec.rest, actor: this.actorFor(ctx, target), channel: 'chat' });
+    return result.message;
   }
 
   private async requireAdmin(standup: Standup, sender: Mention): Promise<string | null> {
