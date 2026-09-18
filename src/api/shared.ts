@@ -145,6 +145,7 @@ export async function summarise(repo: Repo, s: Standup, now: DateTime, manage: b
     questions: standupQuestions(s),
     mood: { enabled: s.moodEnabled, anonymous: s.moodAnonymous },
     digestEnabled: s.digestEnabled,
+    timeOffPolicy: s.timeOffPolicy,
     escalation: {
       afterDays: s.escalateAfterDays,
       contact: s.escalateUserName ? { userName: s.escalateUserName, displayName: s.escalateDisplayName } : null,

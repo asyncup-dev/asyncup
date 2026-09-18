@@ -417,6 +417,20 @@ a:hover {
 
 /* Dialogs */
 .scrim { position: fixed; inset: 0; background: rgba(16, 24, 40, 0.45); display: grid; place-items: center; z-index: 10; padding: var(--space-4); }
+.scrim.right { display: block; }
+.drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(440px, 100%); background: var(--bg-surface); box-shadow: -8px 0 32px rgba(16, 24, 40, 0.18); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.drawer-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-5) var(--space-5) var(--space-4) var(--space-6); border-bottom: 1px solid var(--border-default); }
+.drawer-body { overflow: auto; padding: var(--space-5) var(--space-6); display: grid; gap: var(--space-5); align-content: start; }
+.drawer-foot { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border-default); }
+.choice-list { display: grid; gap: var(--space-3); }
+.choice-row { display: flex; gap: var(--space-3); align-items: flex-start; }
+.choice-row input { margin-top: 3px; }
+.override-list { display: grid; border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.override-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); }
+.override-row + .override-row { border-top: 1px solid var(--border-default); }
+.override-row .grow { flex: 1; min-width: 0; }
+.request { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
+.request + .request { border-top: 1px solid var(--border-default); }
 .dialog { width: min(440px, 100%); padding: var(--space-5); display: grid; gap: var(--space-4); box-shadow: var(--shadow-modal); }
 
 /* Settings */

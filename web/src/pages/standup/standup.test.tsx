@@ -146,7 +146,7 @@ describe('standup overview', () => {
     expect(screen.getByText('😄 09:41')).toBeInTheDocument();
     expect(screen.getByText('😕 10:47 · late')).toBeInTheDocument();
     expect(screen.getByText('reminded')).toBeInTheDocument();
-    expect(screen.getByText('on vacation')).toBeInTheDocument();
+    expect(screen.getByText('vacation')).toBeInTheDocument();
     expect(await screen.findByText('Tue 15 Sept')).toBeInTheDocument();
     expect(screen.getByText('1 missing')).toHaveClass('badge-warning');
     expect(screen.getByText('Complete')).toHaveClass('badge-success');

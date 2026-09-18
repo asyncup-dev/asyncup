@@ -4,6 +4,8 @@ import { api, MOOD_EMOJI } from '../lib/api';
 import { useMe } from '../lib/auth';
 import { closesIn, daysLabel, longDate, shortDate, zoneAbbr } from '../lib/format';
 import { timezoneOptions } from '../lib/setup';
+import { ScheduleDrawer } from '../components/schedule-drawer';
+import { DAY_LABEL, DAYS, dateSpan, isoToday, STATUS_TONE, useAddOverride, useSchedule, weekToDays } from '../lib/schedule';
 
 export interface MyStandup {
   id: number;
@@ -66,6 +68,9 @@ export function MePage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const schedule = useSchedule('me', !!mine.data?.linked);
+  const addOverride = useAddOverride('me');
   const name = me.data?.user?.name?.split(' ')[0] ?? 'there';
   const d = mine.data;
   if (mine.isError) return <div className="alert">Could not load your standups: {mine.error.message}</div>;
@@ -183,6 +188,45 @@ export function MePage() {
           </section>
         </div>
         <div className="col">
+          {d.linked ? (
+            <section className="card">
+              <div className="card-head">
+                <span className="t-h3 grow">My schedule</span>
+                <button type="button" className="btn btn-ghost" style={{ height: 28 }} onClick={() => setEditing(true)}>Edit</button>
+              </div>
+              <div className="card-body">
+                {schedule.isError ? <div className="alert">Could not load your schedule: {schedule.error.message}</div> : null}
+                {schedule.data ? (
+                  <>
+                    <div>
+                      <div className="t-medium">Working days · {schedule.data.workingDaysLabel === 'Follows the standup' ? 'Standup days' : schedule.data.workingDaysLabel}</div>
+                      {schedule.data.workingDays && schedule.data.workingDays !== 'adhoc' ? (
+                        <div className="days" style={{ marginTop: 6 }} aria-label="My working days">
+                          {DAYS.map((day) => <span key={day} className="day" aria-pressed={weekToDays(schedule.data!.workingDays).includes(day)} style={{ height: 24, padding: '0 9px', display: 'inline-flex', alignItems: 'center' }}>{DAY_LABEL[day]}</span>)}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="row">
+                      <span className="t-medium grow">Days off</span>
+                      <button type="button" className="btn" style={{ height: 28 }} disabled={addOverride.isPending} onClick={() => void (async () => { try { setError(null); const r = await addOverride.mutateAsync({ date: isoToday(), working: false, reason: '' }); setNotice(r.message); } catch (err) { setError(err instanceof Error ? err.message : 'That did not work.'); } })()}>Off today</button>
+                      <button type="button" className="btn" style={{ height: 28 }} disabled={addOverride.isPending} onClick={() => void (async () => { try { setError(null); const r = await addOverride.mutateAsync({ date: isoToday(1), working: false, reason: '' }); setNotice(r.message); } catch (err) { setError(err instanceof Error ? err.message : 'That did not work.'); } })()}>Off tomorrow</button>
+                    </div>
+                    {schedule.data.overrides.filter((o) => o.status !== 'withdrawn').length === 0 ? <span className="t-small muted">Nothing coming up — your usual week applies.</span> : null}
+                    {schedule.data.overrides.filter((o) => o.status !== 'withdrawn').map((o) => (
+                      <div key={o.id} className="person-row">
+                        <span className="name">
+                          <div>{dateSpan([o.date])}</div>
+                          <div className="t-caption">{[o.reason, o.status === 'pending' ? 'awaiting a manager' : o.decidedBy ? `${o.status} by ${o.decidedBy}` : null].filter(Boolean).join(' · ')}</div>
+                        </span>
+                        <span className={`badge ${o.status === 'active' ? (o.working ? 'badge-success' : 'badge-warning') : STATUS_TONE[o.status]}`}>{o.status === 'active' ? o.label : o.status}</span>
+                      </div>
+                    ))}
+                    <div className="t-caption">Also from Chat: DM me “off tomorrow”, “off 22 sep to 24 sep sick”, “working sat” or “days mon-thu”.</div>
+                  </>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
           <section className="card">
             <div className="card-head"><span className="t-h3 grow">My settings</span></div>
             <div className="card-body">
@@ -213,6 +257,7 @@ export function MePage() {
           </section>
         </div>
       </div>
+      {editing ? <ScheduleDrawer target="me" title="My schedule" onClose={() => setEditing(false)} /> : null}
     </>
   );
 }
