@@ -27,36 +27,35 @@ function humanDate(isoDate: string): string {
   return DateTime.fromISO(isoDate).toFormat('ccc, dd LLL yyyy');
 }
 
-function promptButtons(runId: number, fillLabel: string) {
+type Param = { key: string; value: string };
+
+/**
+ * Apps built as Workspace add-ons must address clicks to their events URL and
+ * carry the action name as a parameter; the interaction-event format treats
+ * `function` as an opaque string, so the same shape serves both.
+ */
+export function clickAction(fn: string, parameters: Param[], endpoint: string | null, interaction?: 'OPEN_DIALOG') {
+  return {
+    function: endpoint ?? fn,
+    ...(interaction ? { interaction } : {}),
+    parameters: endpoint ? [{ key: 'fn', value: fn }, ...parameters] : parameters,
+  };
+}
+
+function promptButtons(runId: number, fillLabel: string, endpoint: string | null) {
+  const param = [{ key: 'runId', value: String(runId) }];
   return {
     buttonList: {
       buttons: [
-        {
-          text: fillLabel,
-          onClick: {
-            action: {
-              function: OPEN_DIALOG_FN,
-              interaction: 'OPEN_DIALOG',
-              parameters: [{ key: 'runId', value: String(runId) }],
-            },
-          },
-        },
-        {
-          text: '🏖️ Skip today',
-          onClick: {
-            action: {
-              function: SKIP_TODAY_FN,
-              parameters: [{ key: 'runId', value: String(runId) }],
-            },
-          },
-        },
+        { text: fillLabel, onClick: { action: clickAction(OPEN_DIALOG_FN, param, endpoint, 'OPEN_DIALOG') } },
+        { text: '🏖️ Skip today', onClick: { action: clickAction(SKIP_TODAY_FN, param, endpoint) } },
       ],
     },
   };
 }
 
 /** DM card asking the participant to fill in today's standup. */
-export function promptMessage(standup: Standup, run: Run) {
+export function promptMessage(standup: Standup, run: Run, endpoint: string | null = null) {
   return {
     cardsV2: [
       {
@@ -71,7 +70,7 @@ export function promptMessage(standup: Standup, run: Run) {
                     text: `Good morning! Time for your async standup — it takes a minute. Due by <b>${standup.deadlineTime} ${standup.timezone}</b>. You can re-open the form to edit until the deadline.`,
                   },
                 },
-                promptButtons(run.id, 'Fill standup'),
+                promptButtons(run.id, 'Fill standup', endpoint),
               ],
             },
           ],
@@ -82,7 +81,7 @@ export function promptMessage(standup: Standup, run: Run) {
 }
 
 /** DM card nudging a participant who has not submitted yet. */
-export function reminderMessage(standup: Standup, run: Run) {
+export function reminderMessage(standup: Standup, run: Run, endpoint: string | null = null) {
   return {
     cardsV2: [
       {
@@ -96,7 +95,7 @@ export function reminderMessage(standup: Standup, run: Run) {
                     text: `⏰ Reminder: your <b>${standup.name}</b> for ${humanDate(run.date)} is still open — it closes at <b>${standup.deadlineTime} ${standup.timezone}</b>.`,
                   },
                 },
-                promptButtons(run.id, 'Fill standup now'),
+                promptButtons(run.id, 'Fill standup now', endpoint),
               ],
             },
           ],
@@ -115,6 +114,7 @@ export function standupDialog(
   questions: string[],
   moodEnabled: boolean,
   prefill: string[],
+  endpoint: string | null = null,
 ) {
   const widgets: any[] = questions.map((question, i) => ({
     textInput: {
@@ -140,15 +140,7 @@ export function standupDialog(
   widgets.push({
     buttonList: {
       buttons: [
-        {
-          text: 'Submit',
-          onClick: {
-            action: {
-              function: SUBMIT_DIALOG_FN,
-              parameters: [{ key: 'runId', value: String(runId) }],
-            },
-          },
-        },
+        { text: 'Submit', onClick: { action: clickAction(SUBMIT_DIALOG_FN, [{ key: 'runId', value: String(runId) }], endpoint) } },
       ],
     },
   });
@@ -162,7 +154,7 @@ export function standupDialog(
 }
 
 /** Interactive DM card for someone tagged on (or nudged about) a blocker. */
-export function blockerCard(standup: Standup, blocker: Blocker, note: string) {
+export function blockerCard(standup: Standup, blocker: Blocker, note: string, endpoint: string | null = null) {
   const param = [{ key: 'blockerId', value: String(blocker.id) }];
   return {
     cardsV2: [
@@ -183,14 +175,14 @@ export function blockerCard(standup: Standup, blocker: Blocker, note: string) {
                 {
                   buttonList: {
                     buttons: [
-                      { text: '✋ Acknowledge', onClick: { action: { function: ACK_BLOCKER_FN, parameters: param } } },
+                      { text: '✋ Acknowledge', onClick: { action: clickAction(ACK_BLOCKER_FN, param, endpoint) } },
                       {
                         text: '📝 Add update',
                         onClick: {
-                          action: { function: OPEN_BLOCKER_UPDATE_FN, interaction: 'OPEN_DIALOG', parameters: param },
+                          action: clickAction(OPEN_BLOCKER_UPDATE_FN, param, endpoint, 'OPEN_DIALOG'),
                         },
                       },
-                      { text: '✅ Resolve', onClick: { action: { function: RESOLVE_BLOCKER_FN, parameters: param } } },
+                      { text: '✅ Resolve', onClick: { action: clickAction(RESOLVE_BLOCKER_FN, param, endpoint) } },
                     ],
                   },
                 },
@@ -204,7 +196,7 @@ export function blockerCard(standup: Standup, blocker: Blocker, note: string) {
 }
 
 /** Modal dialog for posting a blocker update. */
-export function blockerUpdateDialog(blockerId: number) {
+export function blockerUpdateDialog(blockerId: number, endpoint: string | null = null) {
   return {
     actionResponse: {
       type: 'DIALOG',
@@ -227,10 +219,7 @@ export function blockerUpdateDialog(blockerId: number) {
                         {
                           text: 'Post update',
                           onClick: {
-                            action: {
-                              function: SUBMIT_BLOCKER_UPDATE_FN,
-                              parameters: [{ key: 'blockerId', value: String(blockerId) }],
-                            },
+                            action: clickAction(SUBMIT_BLOCKER_UPDATE_FN, [{ key: 'blockerId', value: String(blockerId) }], endpoint),
                           },
                         },
                       ],
@@ -247,7 +236,7 @@ export function blockerUpdateDialog(blockerId: number) {
 }
 
 /** Interactive poll card — one vote button per option, live tallies. */
-export function pollMessage(poll: Poll, tallies: number[], closed = false) {
+export function pollMessage(poll: Poll, tallies: number[], closed = false, endpoint: string | null = null) {
   const total = tallies.reduce((a, b) => a + b, 0);
   return {
     cardsV2: [
@@ -272,13 +261,14 @@ export function pollMessage(poll: Poll, tallies: number[], closed = false) {
                           button: {
                             text: 'Vote',
                             onClick: {
-                              action: {
-                                function: VOTE_POLL_FN,
-                                parameters: [
+                              action: clickAction(
+                                VOTE_POLL_FN,
+                                [
                                   { key: 'pollId', value: String(poll.id) },
                                   { key: 'optionIndex', value: String(i) },
                                 ],
-                              },
+                                endpoint,
+                              ),
                             },
                           },
                         }),

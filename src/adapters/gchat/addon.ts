@@ -7,6 +7,11 @@
  * https://developers.google.com/workspace/add-ons/chat/build#actions
  */
 
+/** The app's own events URL, if it is among the configured audiences — add-on card clicks must be addressed to it. */
+export function chatEndpointUrl(chatAudience: string): string | null {
+  return chatAudience.split(/[\s,]+/).find((a) => /^https:\/\//.test(a)) ?? null;
+}
+
 export function isAddonEvent(body: any): boolean {
   return !!body && typeof body === 'object' && !!body.chat && typeof body.chat === 'object';
 }

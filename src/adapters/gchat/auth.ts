@@ -1,6 +1,13 @@
 import { OAuth2Client } from 'google-auth-library';
 
 const CHAT_ISSUER = 'chat@system.gserviceaccount.com';
+/** Apps built as Workspace add-ons send standard Google ID tokens instead of Chat's self-signed ones. */
+const ADDON_ISSUERS = ['accounts.google.com', 'https://accounts.google.com'];
+
+/** The per-project service account that signs add-on requests. */
+export function addonServiceAccount(projectNumber: string): string {
+  return `service-${projectNumber}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com`;
+}
 const CERT_URL = `https://www.googleapis.com/service_accounts/v1/metadata/x509/${CHAT_ISSUER}`;
 const CERT_TTL_MS = 60 * 60 * 1000;
 
@@ -76,6 +83,7 @@ export class ChatRequestVerifier {
     if (!token) return { ok: false, reason: 'missing or malformed Authorization header' };
 
     const claims = decodeClaims(token);
+    if (claims.iss && ADDON_ISSUERS.includes(claims.iss)) return this.verifyAddonToken(token, claims);
     const certs = await this.getCerts();
     let lastError = 'unknown error';
     for (const audience of this.audiences) {
@@ -87,6 +95,35 @@ export class ChatRequestVerifier {
       }
     }
     return classifyFailure(claims, this.audiences, lastError);
+  }
+
+  /**
+   * Add-on tokens: audience is the app's events URL, signed with Google's
+   * public certs, and the email claim names the project's add-on service
+   * account — which is derived from the project number in the audience list.
+   * https://developers.google.com/workspace/add-ons/chat/convert
+   */
+  private async verifyAddonToken(token: string, claims: TokenClaims): Promise<VerifyResult> {
+    const context = { aud: claims.aud, iss: claims.iss };
+    const projectNumber = this.audiences.find((a) => /^\d+$/.test(a));
+    const urls = this.audiences.filter((a) => !/^\d+$/.test(a));
+    if (!projectNumber || urls.length === 0) {
+      return {
+        ok: false,
+        reason: 'add-on tokens need both the project number and the /chat/events URL in the audience list',
+        ...context,
+      };
+    }
+    try {
+      const payload = (await this.client.verifyIdToken({ idToken: token, audience: urls })).getPayload();
+      const expected = addonServiceAccount(projectNumber);
+      if (payload?.email !== expected || !payload.email_verified) {
+        return { ok: false, reason: `add-on service account mismatch: token email="${payload?.email ?? ''}", expected ${expected}`, ...context };
+      }
+      return { ok: true, aud: claims.aud };
+    } catch (err) {
+      return { ok: false, reason: `signature or expiry invalid: ${err instanceof Error ? err.message : String(err)}`, ...context };
+    }
   }
 
   private async getCerts(): Promise<Record<string, string>> {

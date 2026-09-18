@@ -59,9 +59,11 @@ and use the service's own identity via Application Default Credentials.)
 > detects which one Google is using per request and answers accordingly, so
 > both work. The add-on path needs the same distribution steps below.
 
-Save. The app status should become **LIVE**. Paste the **project number** into the
-app's **Project number** field (Settings › Google Chat) so it matches the
-Authentication Audience you set here.
+Save. The app status should become **LIVE**. In the app's Settings › Google Chat,
+enter **both** the project number and your `https://<your-host>/chat/events` URL,
+space-separated. Interaction-event apps sign requests for the project number;
+add-on apps sign them for the URL and identify themselves with the project's
+add-on service account, which AsyncUp derives from the number.
 
 ## 5. Get the bot to your team
 

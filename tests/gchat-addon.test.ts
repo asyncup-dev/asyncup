@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { fromAddonEvent, isAddonEvent, toAddonResponse } from '../src/adapters/gchat/addon.js';
+import { chatEndpointUrl, fromAddonEvent, isAddonEvent, toAddonResponse } from '../src/adapters/gchat/addon.js';
 
 const USER = { name: 'users/alice', displayName: 'Alice', email: 'alice@example.com', type: 'HUMAN' };
 const SPACE = { name: 'spaces/team', type: 'ROOM', spaceType: 'SPACE' };
@@ -119,5 +119,14 @@ describe('toAddonResponse', () => {
       action: { navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }] },
     });
     expect(toAddonResponse({ actionResponse: { type: 'DIALOG' } }, event)).toEqual({ action: {} });
+  });
+});
+
+describe('chatEndpointUrl', () => {
+  it('picks the https audience out of the list, or nothing', () => {
+    expect(chatEndpointUrl('742900314218 https://standup.example.com/chat/events')).toBe('https://standup.example.com/chat/events');
+    expect(chatEndpointUrl('https://a.example/chat/events,742900314218')).toBe('https://a.example/chat/events');
+    expect(chatEndpointUrl('742900314218')).toBeNull();
+    expect(chatEndpointUrl('')).toBeNull();
   });
 });
