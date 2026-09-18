@@ -1,3 +1,4 @@
+import { describeDates, type TimeOffRequest } from '../../core/schedule.js';
 import { DateTime } from 'luxon';
 import { moodEmoji as moodEmojiFor } from '../../core/insights.js';
 import {
@@ -22,6 +23,9 @@ export const RESOLVE_BLOCKER_FN = 'resolveBlocker';
 export const OPEN_BLOCKER_UPDATE_FN = 'openBlockerUpdate';
 export const SUBMIT_BLOCKER_UPDATE_FN = 'submitBlockerUpdate';
 export const VOTE_POLL_FN = 'votePoll';
+export const APPROVE_REQUEST_FN = 'approveTimeOff';
+export const DECLINE_REQUEST_FN = 'declineTimeOff';
+export const SUBMIT_DECLINE_FN = 'submitDeclineTimeOff';
 
 function humanDate(isoDate: string): string {
   return DateTime.fromISO(isoDate).toFormat('ccc, dd LLL yyyy');
@@ -355,4 +359,70 @@ export function summaryText(summary: RunSummary): string {
     lines.push(`⚠️ ${summary.openBlockers} open blocker${summary.openBlockers === 1 ? '' : 's'}`);
   }
   return lines.join('\n');
+}
+
+/** DM card for a manager: a time-off (or extra working day) request with Approve / Decline. */
+export function timeOffRequestCard(request: TimeOffRequest, endpoint: string | null = null) {
+  const params = [{ key: 'requestIds', value: request.ids.join(',') }];
+  const when = describeDates(request.dates);
+  const days = request.dates.length;
+  return {
+    cardsV2: [
+      {
+        cardId: `time-off-${request.ids[0]}`,
+        card: {
+          header: {
+            title: `${request.working ? 'Working day' : 'Time-off'} request · ${request.standup.name}`,
+            subtitle: `${request.person.displayName} · ${when} · ${days} day${days === 1 ? '' : 's'} ${request.working ? 'working' : 'off'}`,
+          },
+          sections: [
+            {
+              widgets: [
+                {
+                  textParagraph: {
+                    text: `${request.reason ? `“${request.reason}” ` : ''}Approve and ${request.person.displayName} is ${request.working ? 'prompted as usual' : 'marked away for those runs — no prompt, not counted as missing'}. Decline and they are asked to talk to you. Unanswered by the run's deadline, it lapses and they count as expected.`,
+                  },
+                },
+                {
+                  buttonList: {
+                    buttons: [
+                      { text: 'Approve', onClick: { action: clickAction(APPROVE_REQUEST_FN, params, endpoint) } },
+                      { text: 'Decline', onClick: { action: clickAction(DECLINE_REQUEST_FN, params, endpoint, 'OPEN_DIALOG') } },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+/** Dialog asking the manager for a one-line reason before declining. */
+export function declineDialog(requestIds: string, endpoint: string | null = null) {
+  return {
+    actionResponse: {
+      type: 'DIALOG',
+      dialogAction: {
+        dialog: {
+          body: {
+            sections: [
+              {
+                widgets: [
+                  { textInput: { name: 'note', label: 'Why not? (sent to the person)', type: 'MULTIPLE_LINE' } },
+                  {
+                    buttonList: {
+                      buttons: [{ text: 'Decline request', onClick: { action: clickAction(SUBMIT_DECLINE_FN, [{ key: 'requestIds', value: requestIds }], endpoint) } }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
 }

@@ -24,6 +24,7 @@ const standup: Standup = {
   moodEnabled: true,
   moodAnonymous: false,
   digestEnabled: false,
+  timeOffPolicy: 'self',
   escalateUserName: null,
   escalateDisplayName: null,
   escalateAfterDays: 0,

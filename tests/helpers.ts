@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import { ScheduleService } from '../src/core/schedule.js';
 import { FakeAdapter } from '../src/adapters/fake/adapter.js';
 import { BlockerService } from '../src/core/blocker-service.js';
 import { CommandHandler } from '../src/core/commands.js';
@@ -58,6 +59,7 @@ export async function makeStack(
     ? new WebhookNotifier(() => {}, opts.webhookFetch, 5_000, (id) => deriveWebhookSecret('test-secret-key', id))
     : null;
   const service = new StandupService(repo, adapter, clock.now, webhooks);
+  const scheduleRef: { current: ScheduleService | undefined } = { current: undefined };
   const blockers = new BlockerService(repo, adapter, clock.now);
   const scheduler = new Scheduler(
     repo,
@@ -68,14 +70,19 @@ export async function makeStack(
     {
       ooo: async () => opts.ooo ?? null,
       directory: async () => opts.directory ?? null,
+      get schedule() {
+        return scheduleRef.current;
+      },
     },
     webhooks,
   );
   const polls = new PollService(repo, adapter, clock.now);
-  const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter, polls);
+  const schedule = new ScheduleService(repo, adapter, clock.now, webhooks, () => {});
+  scheduleRef.current = schedule;
+  const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter, polls, schedule);
   commands.attachRunner(scheduler);
 
-  return { repo, adapter, service, blockers, polls, settings, scheduler, commands, clock };
+  return { repo, adapter, service, blockers, polls, settings, scheduler, commands, clock, schedule };
 }
 
 export async function seedStandup(repo: Repo, opts: { deadlineTime?: string; spaceName?: string } = {}) {

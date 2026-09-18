@@ -40,6 +40,7 @@ const ROW_DEFAULTS = {
   moodEnabled: true,
   moodAnonymous: false,
   digestEnabled: false,
+  timeOffPolicy: 'self',
   escalateUserName: null,
   escalateDisplayName: null,
   escalateAfterDays: 2,

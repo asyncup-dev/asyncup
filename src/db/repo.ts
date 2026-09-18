@@ -2,21 +2,26 @@ import { PostgresDriver, SqliteDriver, type Driver } from './driver.js';
 import type {
   Admin,
   Answer,
+  AwayReason,
   Blocker,
   BlockerTag,
   BlockerUpdate,
+  McpActivity,
+  McpToken,
   Mood,
+  OverrideStatus,
   Participant,
   Poll,
   PollVote,
   Run,
   RunParticipant,
   RunStatus,
+  ScheduleChange,
+  ScheduleChannel,
+  ScheduleOverride,
   ScimUser,
   Standup,
   Submission,
-  McpActivity,
-  McpToken,
 } from '../core/types.js';
 
 /**
@@ -284,6 +289,43 @@ CREATE TABLE mcp_activity (
 );
 CREATE INDEX idx_mcp_activity_at ON mcp_activity(at);
 `,
+  // 12 — personal schedules: weekly pattern per participant, per-date
+  //      overrides (off / working, with approval state), the reason a run
+  //      participant is away, the standup's time-off policy, and a change log
+  //      for the managers' digest
+  `
+ALTER TABLE participants ADD COLUMN working_days TEXT;
+ALTER TABLE run_participants ADD COLUMN away_reason TEXT;
+ALTER TABLE standups ADD COLUMN time_off_policy TEXT NOT NULL DEFAULT 'self';
+CREATE TABLE schedule_overrides (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  date TEXT NOT NULL,
+  working INTEGER NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  set_by_user_name TEXT NOT NULL,
+  set_by_display_name TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  decided_by_display_name TEXT,
+  decision_note TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (user_name, date)
+);
+CREATE INDEX idx_schedule_overrides_date ON schedule_overrides(date);
+CREATE TABLE schedule_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  by_display_name TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  at TEXT NOT NULL,
+  digested_at TEXT
+);
+`,
 ];
 
 /**
@@ -501,6 +543,40 @@ CREATE TABLE mcp_activity (
 );
 CREATE INDEX idx_mcp_activity_at ON mcp_activity(at);
 `,
+  // 12 — personal schedules (mirrors the SQLite migration)
+  `
+ALTER TABLE participants ADD COLUMN working_days TEXT;
+ALTER TABLE run_participants ADD COLUMN away_reason TEXT;
+ALTER TABLE standups ADD COLUMN time_off_policy TEXT NOT NULL DEFAULT 'self';
+CREATE TABLE schedule_overrides (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  date TEXT NOT NULL,
+  working INTEGER NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  set_by_user_name TEXT NOT NULL,
+  set_by_display_name TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  decided_by_display_name TEXT,
+  decision_note TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (user_name, date)
+);
+CREATE INDEX idx_schedule_overrides_date ON schedule_overrides(date);
+CREATE TABLE schedule_changes (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  by_display_name TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  at TEXT NOT NULL,
+  digested_at TEXT
+);
+`,
 ];
 
 function toMcpToken(row: any): McpToken {
@@ -536,6 +612,7 @@ function toStandup(row: any): Standup {
     moodEnabled: !!row.mood_enabled,
     moodAnonymous: !!row.mood_anonymous,
     digestEnabled: !!row.digest_enabled,
+    timeOffPolicy: (row.time_off_policy ?? 'self') as Standup['timeOffPolicy'],
     escalateUserName: row.escalate_user_name ?? null,
     escalateDisplayName: row.escalate_display_name ?? null,
     escalateAfterDays: row.escalate_after_days,
@@ -552,6 +629,7 @@ function toParticipant(row: any): Participant {
     timezone: row.timezone ?? null,
     mandatory: !!row.mandatory,
     onVacation: !!row.on_vacation,
+    workingDays: row.working_days ?? null,
     active: !!row.active,
   };
 }
@@ -566,6 +644,25 @@ function toRun(row: any): Run {
   };
 }
 
+function toOverride(row: any): ScheduleOverride {
+  return {
+    id: row.id,
+    userName: row.user_name,
+    displayName: row.display_name,
+    date: row.date,
+    working: !!row.working,
+    reason: row.reason,
+    status: row.status,
+    setByUserName: row.set_by_user_name,
+    setByDisplayName: row.set_by_display_name,
+    channel: row.channel,
+    decidedByDisplayName: row.decided_by_display_name ?? null,
+    decisionNote: row.decision_note ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function toRunParticipant(row: any): RunParticipant {
   return {
     runId: row.run_id,
@@ -574,6 +671,7 @@ function toRunParticipant(row: any): RunParticipant {
     timezone: row.timezone ?? null,
     mandatory: !!row.mandatory,
     onVacation: !!row.on_vacation,
+    awayReason: (row.away_reason ?? null) as RunParticipant['awayReason'],
     promptedAt: row.prompted_at ?? null,
     remindedAt: row.reminded_at ?? null,
     skippedAt: row.skipped_at ?? null,
@@ -769,6 +867,7 @@ export class Repo {
         | 'moodEnabled'
         | 'moodAnonymous'
         | 'digestEnabled'
+        | 'timeOffPolicy'
         | 'escalateUserName'
         | 'escalateDisplayName'
         | 'escalateAfterDays'
@@ -788,6 +887,7 @@ export class Repo {
       moodEnabled: 'mood_enabled',
       moodAnonymous: 'mood_anonymous',
       digestEnabled: 'digest_enabled',
+      timeOffPolicy: 'time_off_policy',
       escalateUserName: 'escalate_user_name',
       escalateDisplayName: 'escalate_display_name',
       escalateAfterDays: 'escalate_after_days',
@@ -856,6 +956,135 @@ export class Repo {
       [timezone, userName],
     );
     return result.changes;
+  }
+
+
+  /** Personal week for every standup the user is part of (null = follow the standup). */
+  async setWorkingDaysForUser(userName: string, workingDays: string | null): Promise<number> {
+    const result = await this.db.run(
+      'UPDATE participants SET working_days = ? WHERE user_name = ? AND active = 1',
+      [workingDays, userName],
+    );
+    return result.changes;
+  }
+
+  async getUserWorkingDays(userName: string): Promise<string | null> {
+    const row = await this.db.get(
+      'SELECT working_days FROM participants WHERE user_name = ? AND active = 1 AND working_days IS NOT NULL LIMIT 1',
+      [userName],
+    );
+    return row?.working_days ?? null;
+  }
+
+  // --- schedule overrides ---
+
+  async upsertOverride(input: {
+    userName: string;
+    displayName: string;
+    date: string;
+    working: boolean;
+    reason: string;
+    status: OverrideStatus;
+    setByUserName: string;
+    setByDisplayName: string;
+    channel: ScheduleChannel;
+    at: string;
+  }): Promise<ScheduleOverride> {
+    await this.db.run(
+      `INSERT INTO schedule_overrides (user_name, display_name, date, working, reason, status, set_by_user_name, set_by_display_name, channel, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (user_name, date)
+       DO UPDATE SET display_name = excluded.display_name, working = excluded.working, reason = excluded.reason, status = excluded.status,
+         set_by_user_name = excluded.set_by_user_name, set_by_display_name = excluded.set_by_display_name, channel = excluded.channel,
+         decided_by_display_name = NULL, decision_note = NULL, updated_at = excluded.updated_at`,
+      [input.userName, input.displayName, input.date, input.working ? 1 : 0, input.reason, input.status, input.setByUserName, input.setByDisplayName, input.channel, input.at, input.at],
+    );
+    return (await this.getOverride(input.userName, input.date))!;
+  }
+
+  async getOverride(userName: string, date: string): Promise<ScheduleOverride | null> {
+    const row = await this.db.get('SELECT * FROM schedule_overrides WHERE user_name = ? AND date = ?', [userName, date]);
+    return row ? toOverride(row) : null;
+  }
+
+  async getOverrideById(id: number): Promise<ScheduleOverride | null> {
+    const row = await this.db.get('SELECT * FROM schedule_overrides WHERE id = ?', [id]);
+    return row ? toOverride(row) : null;
+  }
+
+  /** A person's overrides from a date on, newest date last; every status. */
+  async listOverridesForUser(userName: string, fromDate: string): Promise<ScheduleOverride[]> {
+    const rows = await this.db.all(
+      'SELECT * FROM schedule_overrides WHERE user_name = ? AND date >= ? ORDER BY date',
+      [userName, fromDate],
+    );
+    return rows.map(toOverride);
+  }
+
+  /** Active overrides on one date, keyed by user — what a run consults when it opens. */
+  async listActiveOverridesOn(date: string): Promise<Map<string, ScheduleOverride>> {
+    const rows = await this.db.all(`SELECT * FROM schedule_overrides WHERE date = ? AND status = 'active'`, [date]);
+    return new Map(rows.map((r: any) => [r.user_name, toOverride(r)]));
+  }
+
+  /** Requests waiting for a decision, oldest first, optionally for some people only. */
+  async listPendingOverrides(userNames?: string[]): Promise<ScheduleOverride[]> {
+    if (userNames && userNames.length === 0) return [];
+    const where = userNames ? ` AND user_name IN (${userNames.map(() => '?').join(', ')})` : '';
+    const rows = await this.db.all(`SELECT * FROM schedule_overrides WHERE status = 'pending'${where} ORDER BY date, id`, userNames ?? []);
+    return rows.map(toOverride);
+  }
+
+  async setOverrideStatus(
+    id: number,
+    status: OverrideStatus,
+    at: string,
+    decision: { byDisplayName: string; note: string | null } | null = null,
+  ): Promise<void> {
+    await this.db.run(
+      'UPDATE schedule_overrides SET status = ?, decided_by_display_name = ?, decision_note = ?, updated_at = ? WHERE id = ?',
+      [status, decision?.byDisplayName ?? null, decision?.note ?? null, at, id],
+    );
+  }
+
+  /** Pending requests whose date has passed lapse to expired; returns them so people can be told. */
+  async expirePendingOverrides(upToDate: string, at: string): Promise<ScheduleOverride[]> {
+    const rows = await this.db.all(`SELECT * FROM schedule_overrides WHERE status = 'pending' AND date <= ?`, [upToDate]);
+    if (rows.length) {
+      await this.db.run(`UPDATE schedule_overrides SET status = 'expired', updated_at = ? WHERE status = 'pending' AND date <= ?`, [at, upToDate]);
+    }
+    return rows.map(toOverride);
+  }
+
+  /** Marks someone away on an open run for a schedule reason, or restores them. */
+  async setRunAway(runId: number, userName: string, reason: AwayReason | null): Promise<void> {
+    await this.db.run(
+      'UPDATE run_participants SET on_vacation = ?, away_reason = ? WHERE run_id = ? AND user_name = ?',
+      [reason ? 1 : 0, reason, runId, userName],
+    );
+  }
+
+  // --- schedule change log (digested to managers) ---
+
+  async logScheduleChange(input: { userName: string; displayName: string; summary: string; byDisplayName: string; channel: ScheduleChannel; at: string }): Promise<void> {
+    await this.db.run(
+      'INSERT INTO schedule_changes (user_name, display_name, summary, by_display_name, channel, at) VALUES (?, ?, ?, ?, ?, ?)',
+      [input.userName, input.displayName, input.summary, input.byDisplayName, input.channel, input.at],
+    );
+  }
+
+  async listUndigestedChanges(userNames: string[]): Promise<ScheduleChange[]> {
+    if (userNames.length === 0) return [];
+    const rows = await this.db.all(
+      `SELECT * FROM schedule_changes WHERE digested_at IS NULL AND user_name IN (${userNames.map(() => '?').join(', ')}) ORDER BY at`,
+      userNames,
+    );
+    return rows.map((r: any) => ({ id: r.id, userName: r.user_name, displayName: r.display_name, summary: r.summary, byDisplayName: r.by_display_name, channel: r.channel, at: r.at }));
+  }
+
+  async markChangesDigested(ids: number[], at: string): Promise<void> {
+    if (ids.length === 0) return;
+    await this.db.run(`UPDATE schedule_changes SET digested_at = ? WHERE id IN (${ids.map(() => '?').join(', ')})`, [at, ...ids]);
   }
 
   async getUserTimezone(userName: string): Promise<string | null> {
@@ -956,9 +1185,9 @@ export class Repo {
       );
       for (const p of await this.listParticipants(standupId)) {
         await this.db.run(
-          `INSERT INTO run_participants (run_id, user_name, display_name, timezone, mandatory, on_vacation)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [id, p.userName, p.displayName, p.timezone, p.mandatory ? 1 : 0, p.onVacation ? 1 : 0],
+          `INSERT INTO run_participants (run_id, user_name, display_name, timezone, mandatory, on_vacation, away_reason)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [id, p.userName, p.displayName, p.timezone, p.mandatory ? 1 : 0, p.onVacation ? 1 : 0, p.onVacation ? 'vacation' : null],
         );
       }
       return id;
@@ -1032,7 +1261,7 @@ export class Repo {
 
   /** Marks the run-level snapshot only (e.g. calendar OOO for a single day). */
   async markRunVacation(runId: number, userName: string): Promise<void> {
-    await this.db.run('UPDATE run_participants SET on_vacation = 1 WHERE run_id = ? AND user_name = ?', [
+    await this.db.run(`UPDATE run_participants SET on_vacation = 1, away_reason = 'calendar_ooo' WHERE run_id = ? AND user_name = ?`, [
       runId,
       userName,
     ]);
@@ -1040,7 +1269,7 @@ export class Repo {
 
   async markSkipped(runId: number, userName: string, at: string): Promise<boolean> {
     const result = await this.db.run(
-      'UPDATE run_participants SET skipped_at = ? WHERE run_id = ? AND user_name = ?',
+      `UPDATE run_participants SET skipped_at = ?, away_reason = 'skipped' WHERE run_id = ? AND user_name = ?`,
       [at, runId, userName],
     );
     return result.changes > 0;

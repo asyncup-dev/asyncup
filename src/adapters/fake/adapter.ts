@@ -1,13 +1,15 @@
 import type { ChatAdapter, SpaceInfo, SpaceMember } from '../../core/adapter.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
+import type { TimeOffRequest } from '../../core/schedule.js';
 
 interface SentDm {
-  kind: 'prompt' | 'reminder' | 'text' | 'blockerCard';
+  kind: 'prompt' | 'reminder' | 'text' | 'blockerCard' | 'timeOffRequest';
   userName: string;
   standupId?: number;
   runId?: number;
   blockerId?: number;
   text?: string;
+  request?: TimeOffRequest;
 }
 
 interface PostedMessage {
@@ -99,6 +101,11 @@ export class FakeAdapter implements ChatAdapter {
   async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
     this.dms.push({ kind: 'blockerCard', userName, standupId: standup.id, blockerId: blocker.id, text: note });
     this.log?.(`DM blocker card #${blocker.id} → ${userName} (${note})`);
+  }
+
+  async sendTimeOffRequest(managerUserName: string, request: TimeOffRequest): Promise<void> {
+    this.log?.(`time-off request to ${managerUserName}: ${request.person.displayName} ${request.dates.join(',')}`);
+    this.dms.push({ kind: 'timeOffRequest', userName: managerUserName, standupId: request.standup.id, request });
   }
 
   async canDm(userName: string): Promise<boolean> {

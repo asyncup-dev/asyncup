@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { OooChecker } from './ooo.js';
+import type { ScheduleService } from './schedule.js';
 import { directoryKey, type UserDirectory } from './directory.js';
 import type { Repo } from '../db/repo.js';
 import type { StandupService } from './standup-service.js';
@@ -29,6 +30,8 @@ function timeOn(date: string, time: string, zone: string): DateTime {
  */
 export interface SchedulerProviders {
   ooo?: () => Promise<OooChecker | null>;
+  /** Personal weeks and dated overrides; absent in older wiring. */
+  schedule?: ScheduleService;
   directory?: () => Promise<UserDirectory | null>;
 }
 
@@ -97,6 +100,7 @@ export class Scheduler {
       if (!due) return;
       run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
       this.log(`opened run ${run.id} for "${standup.name}" ${today}`);
+      await this.providers.schedule?.applyToNewRun(standup, run);
       await this.applyCalendarOoo(standup, run);
       try {
         await this.adapter.postThreadParent(standup, run);
@@ -156,6 +160,7 @@ export class Scheduler {
       if (roster.filter((p) => !p.onVacation).length === 0) return 'no_participants';
       run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
       this.log(`opened run ${run.id} for "${standup.name}" ${today} (run now)`);
+      await this.providers.schedule?.applyToNewRun(standup, run);
       await this.applyCalendarOoo(standup, run);
       try {
         await this.adapter.postThreadParent(standup, run);
@@ -212,6 +217,11 @@ export class Scheduler {
   private async closeRun(standup: Standup, run: Run): Promise<void> {
     await this.repo.closeRun(run.id);
     this.log(`closed run ${run.id} for "${standup.name}" ${run.date}`);
+    try {
+      await this.providers.schedule?.onRunClosed(standup, run);
+    } catch (err) {
+      this.log(`schedule wrap-up failed for run ${run.id}: ${err}`);
+    }
     try {
       const summary = await this.service.buildSummary(run.id);
       await this.webhooks?.wrapUp(standup, run.date, summary);

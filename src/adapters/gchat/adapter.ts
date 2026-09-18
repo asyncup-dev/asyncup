@@ -2,10 +2,12 @@ import { auth as chatAuth, chat, type chat_v1 } from '@googleapis/chat';
 import type { ChatAdapter, SpaceInfo, SpaceMember } from '../../core/adapter.js';
 import type { SettingsService } from '../../core/settings.js';
 import { chatEndpointUrl } from './addon.js';
+import type { TimeOffRequest } from '../../core/schedule.js';
 import type { Repo } from '../../db/repo.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import {
   blockerCard,
+  timeOffRequestCard,
   pollMessage,
   promptMessage,
   reminderMessage,
@@ -100,6 +102,11 @@ export class GoogleChatAdapter implements ChatAdapter {
   async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
     await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note, await this.endpoint()) });
+  }
+
+  async sendTimeOffRequest(managerUserName: string, request: TimeOffRequest): Promise<void> {
+    const dm = await this.ensureDmSpace(managerUserName);
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: timeOffRequestCard(request, await this.endpoint()) });
   }
 
   async canDm(userName: string): Promise<boolean> {
