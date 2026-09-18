@@ -41,6 +41,22 @@ describe('cards', () => {
     expect(json).toContain('{"key":"runId","value":"7"}');
   });
 
+  it('addresses clicks to the events URL and carries the action name as a parameter for add-on builds', () => {
+    const url = 'https://standup.example.com/chat/events';
+    const buttons = (promptMessage(standup, run, url) as any).cardsV2[0].card.sections.at(-1).widgets.at(-1).buttonList.buttons;
+    expect(buttons[0].onClick.action).toEqual({
+      function: url,
+      interaction: 'OPEN_DIALOG',
+      parameters: [
+        { key: 'fn', value: 'openStandupDialog' },
+        { key: 'runId', value: '7' },
+      ],
+    });
+    expect(buttons[1].onClick.action).toEqual({ function: url, parameters: [{ key: 'fn', value: 'skipToday' }, { key: 'runId', value: '7' }] });
+    const submit = (standupDialog(7, QUESTIONS, false, [], url) as any).actionResponse.dialogAction.dialog.body.sections[0].widgets.at(-1).buttonList.buttons[0];
+    expect(submit.onClick.action).toEqual({ function: url, parameters: [{ key: 'fn', value: 'submitStandup' }, { key: 'runId', value: '7' }] });
+  });
+
   it('dialog is built from the question list with prefill values', () => {
     const dialog: any = standupDialog(7, QUESTIONS, true, ['From last time', '', '']);
     const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;

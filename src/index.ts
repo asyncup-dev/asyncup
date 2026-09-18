@@ -12,6 +12,7 @@ import { CommandHandler } from './core/commands.js';
 import { PollService } from './core/poll-service.js';
 import { Scheduler, type SchedulerProviders } from './core/scheduler.js';
 import { SettingsService } from './core/settings.js';
+import { chatEndpointUrl } from './adapters/gchat/addon.js';
 import { StandupService } from './core/standup-service.js';
 import { deriveWebhookSecret } from './core/crypto.js';
 import { WebhookNotifier } from './core/webhooks.js';
@@ -43,7 +44,9 @@ const service = new StandupService(repo, adapter, undefined, webhooks);
 const blockerService = new BlockerService(repo, adapter);
 const pollService = new PollService(repo, adapter);
 const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter, pollService);
-const router = new EventRouter(commands, service, blockerService, repo, config.tenantId, pollService);
+const router = new EventRouter(commands, service, blockerService, repo, config.tenantId, pollService, async () =>
+  chatEndpointUrl((await settings.get()).chatAudience),
+);
 
 // Integrations are resolved from settings per use, so settings changes
 // apply immediately — no restart.

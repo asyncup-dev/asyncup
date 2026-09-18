@@ -38,6 +38,8 @@ export class EventRouter {
     private repo: Repo,
     private tenantId: string,
     private polls: PollService | null = null,
+    /** The app's events URL when known — add-on builds address card clicks to it. */
+    private endpoint: () => Promise<string | null> = async () => null,
   ) {}
 
   async handle(event: any): Promise<object> {
@@ -145,7 +147,8 @@ export class EventRouter {
   }
 
   private async onCardClicked(event: any): Promise<object> {
-    const fn = event.common?.invokedFunction;
+    // Add-on builds carry the action name as a parameter (the function is the URL).
+    const fn = getParameter(event, 'fn') ?? event.common?.invokedFunction;
     const runId = Number(getParameter(event, 'runId'));
     const user = eventUser(event);
 
@@ -155,7 +158,7 @@ export class EventRouter {
       if (!run) return dialogError('This standup prompt is no longer valid.');
       const standup = (await this.repo.getStandupById(run.standupId))!;
       const prefill = await this.service.getPrefill(standup, run, user.userName);
-      return standupDialog(runId, standupQuestions(standup), standup.moodEnabled, prefill);
+      return standupDialog(runId, standupQuestions(standup), standup.moodEnabled, prefill, await this.endpoint());
     }
 
     if (fn === SUBMIT_DIALOG_FN) {
@@ -185,7 +188,7 @@ export class EventRouter {
         return { actionResponse: { type: 'NEW_MESSAGE' }, text: messages[result.status] };
       }
       // Replace the clicked card with fresh tallies — no extra API call needed.
-      return { actionResponse: { type: 'UPDATE_MESSAGE' }, ...pollMessage(result.poll, result.tallies) };
+      return { actionResponse: { type: 'UPDATE_MESSAGE' }, ...pollMessage(result.poll, result.tallies, false, await this.endpoint()) };
     }
 
     const blockerId = Number(getParameter(event, 'blockerId'));
@@ -203,7 +206,7 @@ export class EventRouter {
 
     if (fn === OPEN_BLOCKER_UPDATE_FN) {
       if (!Number.isInteger(blockerId)) return dialogError('This blocker card is no longer valid.');
-      return blockerUpdateDialog(blockerId);
+      return blockerUpdateDialog(blockerId, await this.endpoint());
     }
 
     if (fn === SUBMIT_BLOCKER_UPDATE_FN) {

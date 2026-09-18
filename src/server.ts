@@ -4,6 +4,7 @@ import express, { type Express, type Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { DateTime } from 'luxon';
 import { errorResponse, type EventRouter } from './adapters/gchat/events.js';
+import { fromAddonEvent, isAddonEvent, toAddonResponse } from './adapters/gchat/addon.js';
 import { ChatRequestVerifier } from './adapters/gchat/auth.js';
 import { tokenEquals } from './core/crypto.js';
 import { bearerToken } from './core/http.js';
@@ -61,6 +62,8 @@ export interface ServerDeps {
   webDist?: string;
   now?: () => DateTime;
 }
+
+const CHAT_EVENT_TYPES = new Set(['MESSAGE', 'ADDED_TO_SPACE', 'REMOVED_FROM_SPACE', 'CARD_CLICKED', 'UNKNOWN']);
 
 /** Collapse control chars (incl. newlines) and cap length before logging untrusted text — prevents log forging. */
 function logSafe(value: unknown): string {
@@ -183,12 +186,17 @@ export function createServer(deps: ServerDeps): Express {
   });
 
   app.post('/chat/events', async (req, res) => {
-    const eventType = req.body?.type ?? 'unknown';
-    console.log(`[chat] POST /chat/events type=${logSafe(eventType)}`);
+    // Apps built as Workspace add-ons get a different envelope both ways.
+    const addon = isAddonEvent(req.body);
+    const event = addon ? fromAddonEvent(req.body) : req.body;
+    const reply = (body: object) => res.json(addon ? toAddonResponse(body, event) : body);
+    // Log a known type name or "unknown" — never the request's own text.
+    const eventType = CHAT_EVENT_TYPES.has(event?.type) ? (event.type as string) : 'unknown';
+    console.log(`[chat] POST /chat/events type=${eventType}${addon ? ' format=add-on' : ''}`);
     const verifier = await getVerifier();
     if (verifier === 'unconfigured') {
       // Fail closed: without an audience, any request could impersonate Chat.
-      res.json({
+      reply({
         text: '⚠️ AsyncUp is not connected to Google Chat yet — an admin must finish setup in the web app first.',
       });
       return;
@@ -205,10 +213,10 @@ export function createServer(deps: ServerDeps): Express {
     // Setup's "waiting for the first event" gate reads this.
     await recordChatEvent(repo, now(), true);
     try {
-      res.json(await router.handle(req.body));
+      reply(await router.handle(event));
     } catch (err) {
       console.error('[server] event handling failed:', err);
-      res.json(errorResponse(req.body));
+      reply(errorResponse(event));
     }
   });
 

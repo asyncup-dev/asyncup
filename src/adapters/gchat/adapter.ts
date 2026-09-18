@@ -1,6 +1,7 @@
 import { auth as chatAuth, chat, type chat_v1 } from '@googleapis/chat';
 import type { ChatAdapter, SpaceInfo, SpaceMember } from '../../core/adapter.js';
 import type { SettingsService } from '../../core/settings.js';
+import { chatEndpointUrl } from './addon.js';
 import type { Repo } from '../../db/repo.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import {
@@ -33,6 +34,10 @@ export class GoogleChatAdapter implements ChatAdapter {
     });
   }
 
+  private async endpoint(): Promise<string | null> {
+    return chatEndpointUrl((await this.settings.get()).chatAudience);
+  }
+
   /** Auth comes from the pasted service-account JSON, falling back to ADC. */
   private async getClient(): Promise<chat_v1.Chat> {
     if (this.client) return this.client;
@@ -47,12 +52,12 @@ export class GoogleChatAdapter implements ChatAdapter {
 
   async sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
-    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: promptMessage(standup, run) });
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: promptMessage(standup, run, await this.endpoint()) });
   }
 
   async sendReminder(userName: string, standup: Standup, run: Run): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
-    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: reminderMessage(standup, run) });
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: reminderMessage(standup, run, await this.endpoint()) });
   }
 
   async postThreadParent(standup: Standup, run: Run): Promise<void> {
@@ -94,7 +99,7 @@ export class GoogleChatAdapter implements ChatAdapter {
 
   async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
-    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note) });
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note, await this.endpoint()) });
   }
 
   async canDm(userName: string): Promise<boolean> {
@@ -109,7 +114,7 @@ export class GoogleChatAdapter implements ChatAdapter {
   async postPoll(standup: Standup, poll: Poll, tallies: number[]): Promise<string | null> {
     const res = await (await this.getClient()).spaces.messages.create({
       parent: standup.spaceName,
-      requestBody: pollMessage(poll, tallies),
+      requestBody: pollMessage(poll, tallies, false, await this.endpoint()),
     });
     return res.data.name ?? null;
   }

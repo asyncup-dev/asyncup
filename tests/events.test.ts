@@ -40,6 +40,32 @@ describe('errorResponse', () => {
 });
 
 describe('EventRouter', () => {
+  it('reads the action name from the fn parameter when the function is the events URL, and builds dialogs for that URL', async () => {
+    const stack = await makeStack();
+    const url = 'https://standup.example.com/chat/events';
+    const router = new EventRouter(stack.commands, stack.service, stack.blockers, stack.repo, TENANT, null, async () => url);
+    const standup = await seedStandup(stack.repo);
+    stack.clock.set('2026-06-10T09:31');
+    await stack.scheduler.tick();
+    const run = (await stack.repo.getRun(standup.id, '2026-06-10'))!;
+    const dialog: any = await router.handle({
+      type: 'CARD_CLICKED',
+      common: { invokedFunction: url, parameters: { fn: 'openStandupDialog', runId: String(run.id) } },
+      user: { name: 'users/alice', displayName: 'Alice' },
+      space: { name: 'spaces/dm-alice', spaceType: 'DIRECT_MESSAGE' },
+    });
+    const submit = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets.at(-1).buttonList.buttons[0];
+    expect(submit.onClick.action.function).toBe(url);
+    expect(submit.onClick.action.parameters[0]).toEqual({ key: 'fn', value: 'submitStandup' });
+    const skipped: any = await router.handle({
+      type: 'CARD_CLICKED',
+      common: { invokedFunction: url, parameters: { fn: 'skipToday', runId: String(run.id) } },
+      user: { name: 'users/alice', displayName: 'Alice' },
+      space: { name: 'spaces/dm-alice', spaceType: 'DIRECT_MESSAGE' },
+    });
+    expect(skipped.text).toContain('Skipped');
+  });
+
   it('routes space messages to the command handler with sender and mentions', async () => {
     const { router, repo } = await makeRouter();
     const reply: any = await router.handle({

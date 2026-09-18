@@ -132,6 +132,15 @@ async function makeAdapter() {
 }
 
 describe('GoogleChatAdapter', () => {
+  it('addresses card clicks to the events URL once the audience names it', async () => {
+    const { gchat, calls, settings } = await makeAdapter();
+    await settings.update({ chatAudience: '742900314218 https://standup.example.com/chat/events' });
+    await gchat.sendStandupPrompt('users/alice', standup, run);
+    const action = calls.at(-1)!.params.requestBody.cardsV2[0].card.sections.at(-1).widgets.at(-1).buttonList.buttons[0].onClick.action;
+    expect(action.function).toBe('https://standup.example.com/chat/events');
+    expect(action.parameters[0]).toEqual({ key: 'fn', value: 'openStandupDialog' });
+  });
+
   it('DMs the prompt and reminder, looking the DM space up once and caching it', async () => {
     const { gchat, calls, repo } = await makeAdapter();
     await gchat.sendStandupPrompt('users/alice', standup, run);
