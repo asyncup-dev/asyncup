@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { MOOD_EMOJI } from '../../lib/api';
+import { AWAY_LABEL, MOOD_EMOJI } from '../../lib/api';
 import { useMe } from '../../lib/auth';
 import { ago, clock, closesIn, daysLabel, names, pct, shortDate, zoneAbbr } from '../../lib/format';
 import { useBlockerAction, useOpenBlockers, useRuns, useStandup, useToday } from '../../lib/standups';
@@ -97,7 +97,7 @@ export function OverviewPage() {
                         <div key={p.userName} className="person-row muted">
                           <span className="avatar avatar-sm" aria-hidden="true">{p.displayName[0]}</span>
                           <span className="name">{p.displayName}</span>
-                          <span className="t-caption">{p.reason === 'vacation' ? 'on vacation' : 'skipped'}</span>
+                          <span className="t-caption">{(p.reasonLabel ?? AWAY_LABEL[p.reason] ?? p.reason).toLowerCase()}</span>
                         </div>
                       ))}
                       {t.waiting.length + t.away.length === 0 ? <span className="t-small muted">Everyone is in</span> : null}

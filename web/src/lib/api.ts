@@ -135,13 +135,18 @@ export interface Person {
   displayName: string;
 }
 
+export type AwayReason = 'skipped' | 'vacation' | 'calendar_ooo' | 'day_off' | 'off_day';
+export const AWAY_LABEL: Record<AwayReason, string> = { vacation: 'Vacation', calendar_ooo: 'Calendar out of office', day_off: 'Day off', off_day: 'Not a working day', skipped: 'Skipped' };
+
+export type TimeOffPolicy = 'self' | 'approval' | 'managers';
+
 export interface TodayRun {
   date: string;
   status: 'open' | 'closed' | null;
   expected: number;
   submitted: { userName: string; displayName: string; submittedAt: string; late: boolean; mood: string | null }[];
   waiting: { userName: string; displayName: string; mandatory: boolean; remindedAt: string | null }[];
-  away: { userName: string; displayName: string; reason: 'skipped' | 'vacation' }[];
+  away: { userName: string; displayName: string; reason: AwayReason; reasonLabel?: string }[];
   teamMood: number | null;
 }
 
@@ -151,6 +156,7 @@ export interface StandupDetail extends StandupSummary {
   questions: string[];
   mood: { enabled: boolean; anonymous: boolean };
   digestEnabled: boolean;
+  timeOffPolicy: TimeOffPolicy;
   escalation: { afterDays: number; contact: Person | null };
   webhook: { configured: boolean };
   participants: (Person & { mandatory: boolean; timezone: string | null; onVacation: boolean })[];
