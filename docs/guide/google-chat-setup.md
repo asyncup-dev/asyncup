@@ -53,9 +53,11 @@ and use the service's own identity via Application Default Credentials.)
 | Authentication Audience | **Project Number** (recommended — this is what AsyncUp verifies) |
 | Visibility | the people/Google Group who'll use it (see below) |
 
-> Today's console may default to **"Build this Chat app as a Google Workspace
-> add-on."** That's fine — HTTP-endpoint Chat apps work either way. Just note the
-> add-on path needs the same distribution steps below.
+> Today's console defaults to **"Build this Chat app as a Google Workspace
+> add-on."** Leave it ticked (clearing it is permanent). Add-on apps send a
+> different event format and expect a different response envelope; AsyncUp
+> detects which one Google is using per request and answers accordingly, so
+> both work. The add-on path needs the same distribution steps below.
 
 Save. The app status should become **LIVE**. Paste the **project number** into the
 app's **Project number** field (Settings › Google Chat) so it matches the
@@ -111,5 +113,6 @@ leave the admin email empty, everything else works unchanged.
 
 - **"No DM space with users/…"** in logs → that user doesn't have the app installed; see step 5.
 - **401 on events** → the value in Settings → Google Chat must be the project *number*, not the project ID.
+- **"AsyncUp not responding" in Chat, Google's log says "Can't handle the app's response", and nothing reaches the server** → something in front of the server answered instead. Cloudflare's Bot Fight Mode is the usual culprit: it challenges Google's `Google-gsuiteaddons` requests to `/chat/events` and cannot be bypassed with a WAF rule on the Free plan, so turn it off for the zone (or use Super Bot Fight Mode's allow rules on Pro). Any bot challenge, login page or HTML error in front of `/chat/events` has the same effect.
 - **No prompts arriving** → check `docker compose logs`; the scheduler logs every run open/close. Verify the standup `status`, days, and timezone.
 - **Replies not threading** → the bot posts with `threadKey`, which threads correctly even if the parent message failed; check the space's history settings.

@@ -97,6 +97,40 @@ describe('server', () => {
     expect(body.text).toContain('Crew');
   });
 
+  it('accepts add-on event objects and answers with add-on actions', async () => {
+    const { url, repo } = await startServer();
+    const post = (body: object) =>
+      fetch(`${url}/chat/events`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    // A space message in the add-on envelope runs the command and replies in-thread.
+    const res = await post({
+      commonEventObject: { hostApp: 'CHAT' },
+      chat: {
+        user: { name: 'users/admin', displayName: 'Admin', email: 'admin@example.com' },
+        space: { name: 'spaces/team', spaceType: 'SPACE' },
+        messagePayload: { message: { argumentText: ' setup Crew', thread: { name: 'spaces/team/threads/1' } } },
+      },
+    });
+    expect(await res.json()).toEqual({
+      hostAppDataAction: {
+        chatDataAction: { createMessageAction: { message: { text: expect.stringContaining('Crew'), thread: { name: 'spaces/team/threads/1' } } } },
+      },
+    });
+    expect(await repo.listStandupsBySpace(TENANT, 'spaces/team')).toHaveLength(1);
+    expect(await repo.getUserEmail('users/admin')).toBe('admin@example.com');
+
+    // A dialog submit for a run that does not exist comes back as a dialog notification.
+    const dialog = await post({
+      commonEventObject: { invokedFunction: 'submitStandup', parameters: { runId: '999' } },
+      chat: {
+        user: { name: 'users/alice', displayName: 'Alice' },
+        space: { name: 'spaces/dm', spaceType: 'DIRECT_MESSAGE' },
+        buttonClickedPayload: { isDialogEvent: true, dialogEventType: 'SUBMIT_DIALOG' },
+      },
+    });
+    expect(await dialog.json()).toEqual({ action: { notification: { text: expect.stringContaining('no longer valid') } } });
+  });
+
   it('refuses to process events while verification is unconfigured (fail closed)', async () => {
     const { url, repo } = await startServer({ verify: true }); // no chatAudience set
     const res = await fetch(`${url}/chat/events`, {
