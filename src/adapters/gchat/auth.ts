@@ -4,6 +4,13 @@ const CHAT_ISSUER = 'chat@system.gserviceaccount.com';
 const CERT_URL = `https://www.googleapis.com/service_accounts/v1/metadata/x509/${CHAT_ISSUER}`;
 const CERT_TTL_MS = 60 * 60 * 1000;
 
+/** The x509 metadata endpoint is public — no Google credential is needed (or available) to read it. */
+export async function fetchChatCerts(url: string = CERT_URL): Promise<Record<string, string>> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`fetching Chat signing certs failed: HTTP ${res.status}`);
+  return (await res.json()) as Record<string, string>;
+}
+
 export type VerifyResult = { ok: true; aud?: string } | { ok: false; reason: string; aud?: string; iss?: string };
 
 interface TokenClaims {
@@ -57,8 +64,9 @@ export class ChatRequestVerifier {
 
   constructor(
     audiences: string | string[],
-    /** Overridable for tests. */
+    /** Overridable for tests. Only its JWT/cert verification is used — it holds no credentials. */
     private client: OAuth2Client = new OAuth2Client(),
+    private fetchCerts: (url: string) => Promise<Record<string, string>> = fetchChatCerts,
   ) {
     this.audiences = (Array.isArray(audiences) ? audiences : [audiences]).map((a) => a.trim()).filter(Boolean);
   }
@@ -83,8 +91,7 @@ export class ChatRequestVerifier {
 
   private async getCerts(): Promise<Record<string, string>> {
     if (!this.certs || Date.now() - this.certsFetchedAt > CERT_TTL_MS) {
-      const res = await this.client.request<Record<string, string>>({ url: CERT_URL });
-      this.certs = res.data;
+      this.certs = await this.fetchCerts(CERT_URL);
       this.certsFetchedAt = Date.now();
     }
     return this.certs;
