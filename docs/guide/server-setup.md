@@ -1,8 +1,10 @@
-# Setup guide — every scenario
+# 1. Host
 
-From a 5-person team on a $5 box to a locked-down production deployment.
-Pick your path with the matrix, follow the walkthrough, finish with the
-production checklist.
+Step 1 of the [setup path](./getting-started): get AsyncUp running on a public
+HTTPS URL. From a 5-person team on a $5 box to a locked-down production
+deployment. Pick your path with the matrix, follow the walkthrough, finish
+with the production checklist. Upgrades and backups are on
+[Operations](./operations).
 
 ## Which setup should I pick?
 
@@ -93,6 +95,10 @@ curl -fsSL https://get.docker.com | sh
 Caddy obtains and renews **Let's Encrypt certificates automatically** — you
 never touch TLS. Three files in `/opt/asyncup`:
 
+```bash
+mkdir -p /opt/asyncup && cd /opt/asyncup
+```
+
 **`compose.yml`**
 
 ```yaml
@@ -133,39 +139,42 @@ standup.example.com {
 }
 ```
 
-**`.env`** — two generated secrets:
+**`.env`** — two generated secrets. This file lives in `/opt/asyncup`, next to
+`compose.yml`, not in a clone of the repository. Create it with:
 
+```bash
+printf 'OPERATOR_TOKEN=%s\nSECRET_KEY=%s\n' "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > .env
+chmod 600 .env
+cat .env    # copy OPERATOR_TOKEN: you sign in with it
 ```
-DASHBOARD_TOKEN=<openssl rand -hex 24>
-SECRET_KEY=<openssl rand -hex 32>
-```
+
+ Keep a copy of `SECRET_KEY` somewhere safe and separate from
+database backups: it encrypts the secrets stored in the database, and a lost
+key means pasting them all again. (`DASHBOARD_TOKEN` is the older name for
+`OPERATOR_TOKEN` and still works.)
 
 Start and verify:
 
 ```bash
 docker compose up -d
-curl https://standup.example.com/healthz     # → {"ok":true}
+curl https://standup.example.com/healthz       # → {"ok":true}  (the app answered and reached its database)
+curl https://standup.example.com/health/chat   # → {"audience":"unset",…}  until step 2 is done
 ```
 
 The first HTTPS request can take ~30s while the certificate issues. If it
 doesn't: `docker compose logs caddy` — usual culprits are DNS not pointing
 here yet, or a *provider-level* firewall blocking 80/443 in addition to ufw.
 
-Open **`https://standup.example.com/app`** and sign in with `DASHBOARD_TOKEN`,
-follow the first-run checklist, then [Google Chat setup](./google-chat-setup).
+Open **`https://standup.example.com/app`** and sign in with the operator token.
+A fresh install opens the guided setup; keep that tab, and continue with
+[step 2: Google Cloud and the Chat app](./google-chat-setup).
 
-### A5. Updates & backups
+### A5. Updates and backups
 
-```bash
-# update (schema migrates automatically)
-cd /opt/asyncup && docker compose pull && docker compose up -d
-
-# nightly backup (cron): one file is the whole database
-docker compose cp asyncup:/data/standup.db ./standup-backup-$(date +%F).db
-```
-
-Stored secrets are encrypted — keep `SECRET_KEY` (your `.env`) backed up
-*separately* from database backups. Restore = put the file back, `up -d`.
+Upgrades, backups and restores have their own page, because doing them in the
+right order matters: [Operations](./operations). In short, back up with the app
+stopped (or with SQLite's `VACUUM INTO`), never by copying `standup.db` out of
+a running container, which can miss recent writes.
 
 ---
 
@@ -192,16 +201,24 @@ private CA, so it connects out of the box. Want strict verification? Set
 
 ### B2. Bundled Postgres on the same machine
 
-Use the repo's compose file, which ships an optional Postgres 18 service:
+Use the repo's compose file, which ships an optional Postgres 18 service. Clone
+it into its own directory (not the Path A one), then create `.env` in it:
 
 ```bash
-git clone https://github.com/asyncup-dev/asyncup /opt/asyncup && cd /opt/asyncup
-cp .env.example .env    # set DASHBOARD_TOKEN, SECRET_KEY, POSTGRES_PASSWORD
+git clone https://github.com/asyncup-dev/asyncup /opt/asyncup-pg && cd /opt/asyncup-pg
+cp .env.example .env    # set OPERATOR_TOKEN, SECRET_KEY, POSTGRES_PASSWORD
 # and: DATABASE_URL=postgres://asyncup:<password>@postgres:5432/asyncup
 docker compose --profile postgres up -d
 ```
 
-(Add the Caddy service from Path A for HTTPS.) Sizing: 2 GB RAM is
+Use a password without special characters, or URL-encode it inside
+`DATABASE_URL` (`@` becomes `%40`, `/` becomes `%2F`, and so on);
+`POSTGRES_PASSWORD` itself stays as typed.
+
+That compose file publishes port `8080` on every interface, and Docker's port
+publishing bypasses `ufw`. Change `"8080:8080"` to `"127.0.0.1:8080:8080"` in
+your copy, then add the Caddy service from Path A for HTTPS. (Or use Path A's
+compose file with `DATABASE_URL` added.) Sizing: 2 GB RAM is
 comfortable for app + Postgres. Backups become your job:
 
 ```bash
@@ -221,16 +238,18 @@ zero between standups.
 2. Deploy `ghcr.io/asyncup-dev/asyncup:latest` to **Cloud Run**:
    min instances 0, **max instances 1** (important — see the
    [checklist](#production-checklist)), port 8080, env vars:
-   `DATABASE_URL`, `DASHBOARD_TOKEN`, `SECRET_KEY`.
+   `DATABASE_URL`, `OPERATOR_TOKEN`, `SECRET_KEY`.
 3. The in-process scheduler only runs while an instance is alive, so drive
    it externally: a **Cloud Scheduler** job (free tier covers it) hitting
    `POST https://<your-run-url>/tick` every minute with header
-   `Authorization: Bearer <tick token>` (generate the token under Settings ›
-   Settings → Access tokens).
+   `Authorization: Bearer <tick token>` (generate the token under
+   **Settings › API & tokens**).
 4. Cloud Run gives you HTTPS out of the box; map a custom domain in its
    settings if you want one.
-5. Bonus: skip the service-account key entirely — give the Cloud Run service
-   account Chat API access and leave the key field empty (ADC).
+5. Optional: skip the service-account key and let AsyncUp use the Cloud Run
+   service's own identity (Application Default Credentials) for Chat API
+   calls. Group rosters, Directory lookups and Calendar out-of-office still
+   need a pasted key, so most installs paste one anyway.
 
 Webhook events wake the instance on demand; `/tick` wakes it for prompts,
 reminders, and deadlines. Ticks are idempotent — missed or overlapping ticks
@@ -244,7 +263,9 @@ No public IP needed: a **Cloudflare Tunnel** makes an outbound-only
 connection and gives your domain HTTPS for free.
 
 1. Domain on Cloudflare (free plan) → Zero Trust → Tunnels → create a tunnel,
-   route `standup.example.com` → `http://asyncup:8080`.
+   route `standup.example.com` → `http://asyncup:8080`. Cloudflare shows the
+   tunnel's token when you create it; put it in `.env` as `TUNNEL_TOKEN=…`,
+   beside `OPERATOR_TOKEN` and `SECRET_KEY`.
 2. On the Pi/box (arm64 and amd64 both work):
 
 ```yaml
@@ -280,17 +301,18 @@ Whatever path you chose:
       would double-send prompts. On K8s: `replicas: 1` + `Recreate` strategy;
       on Cloud Run: max instances 1. (HA isn't needed — a restart loses
       nothing, and ticks catch up.)
-- [ ] HTTPS in front of `/chat/events`; GCP **project number** set in
-      Settings › Google Chat so webhooks are cryptographically verified
-- [ ] `DASHBOARD_TOKEN` + `SECRET_KEY` set; `SECRET_KEY` backed up somewhere
+- [ ] HTTPS in front of `/chat/events`; the audience (project number and the
+      `https://HOST/chat/events` URL) saved in Settings › Google Chat, so
+      events are cryptographically verified
+- [ ] `OPERATOR_TOKEN` + `SECRET_KEY` set; `SECRET_KEY` backed up somewhere
       that is *not* the database backup
 - [ ] Tick token generated if `/tick` is internet-reachable
-- [ ] Backups: nightly SQLite file copy *or* managed-Postgres automated
-      backups; do one restore drill
+- [ ] Backups: nightly SQLite snapshot *or* managed-Postgres automated
+      backups; do one restore drill ([Operations](./operations#backups))
 - [ ] Monitoring: point any uptime monitor at `GET /healthz` (it pings the
       database); alert on non-200
-- [ ] Updates: `docker compose pull && up -d` periodically — or pin a digest
-      and bump deliberately; watch the repo's releases
+- [ ] Updates: follow the [upgrade procedure](./operations#upgrade) — or pin
+      a digest and bump deliberately; watch the repo's releases
 - [ ] Logs: `docker compose logs` is plain stdout — ship it wherever your
       logs go, or rely on `docker logs` retention
 

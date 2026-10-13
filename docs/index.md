@@ -13,8 +13,8 @@ hero:
       text: Get started →
       link: /guide/getting-started
     - theme: alt
-      text: The Handbook
-      link: /guide/handbook
+      text: Setup path
+      link: /guide/getting-started#the-setup-path
     - theme: alt
       text: View on GitHub
       link: https://github.com/asyncup-dev/asyncup
@@ -28,16 +28,22 @@ features:
     details: Every answer lands as one card per person under the day's thread. The wrap-up posts the count and exactly who's missing.
   - icon: 🏖️
     title: Away-aware
-    details: Skip-today button, vacation mode, and automatic Google Calendar OOO sync — away people are never nagged or counted as missing.
+    details: Skip today with a one-line reason posted to the thread (and undo), vacation mode, personal weeks and days off, and Google Calendar OOO sync — away people are never nagged or counted as missing.
   - icon: ⚠️
     title: Blockers that follow up
     details: Blockers open from answers and can be worked as items — tag teammates, acknowledge, post updates, resolve — with daily nudges and stale-blocker escalation.
   - icon: 📊
     title: Insights built in
     details: Trend charts (participation, mood, blockers), weekly digests, anonymous team-mood mode, CSV export, polls, and signed outbound webhooks.
+  - icon: 👥
+    title: Rosters that keep up
+    details: A People grid for who's on, who's required and which days each person works — or follow a Google Group so joiners and leavers sync themselves.
   - icon: 🖥️
     title: Consoles with SSO
     details: Workspace admins sign into the console; everyone else gets a personal page. Google sign-in or SAML, SCIM provisioning — all in the MIT core.
+  - icon: 🤖
+    title: MCP for your own assistants
+    details: Claude Code and other MCP clients can read standups, answer or skip, work blockers, and nudge the team — scoped tokens, no model inside AsyncUp.
   - icon: 🪶
     title: Lightweight forever
     details: One ~300 MB container on 1 vCPU / 512 MB. Embedded SQLite by default — or bring your own PostgreSQL with one env var.
@@ -69,7 +75,7 @@ import { withBase } from 'vitepress'
     <div class="au-step">
       <span class="num">3</span>
       <h3>The wrap-up holds the line</h3>
-      <p>At the deadline: who submitted, who didn't, open blockers, team mood — plus an optional AI TL;DR and a weekly digest with trends.</p>
+      <p>At the deadline: who submitted, who didn't, who's away and why, open blockers, team mood — plus a weekly digest with trends.</p>
     </div>
   </div>
 </div>
@@ -117,14 +123,14 @@ import { withBase } from 'vitepress'
 |---|---|---|
 | Cost | $0 forever — MIT licensed | Per user, per month |
 | Your standup history | In **your** SQLite file or Postgres | On their servers |
-| AI features | Bring your own key, opt-in per standup | Their model, their terms |
+| AI | None inside; your own assistants connect over MCP with scoped tokens | Their model, their terms |
 | Infrastructure | One small container, scale-to-zero friendly | — |
 | Customization | Questions, schedules, escalation, the web app — and the source code | What the plan allows |
 
 </div>
 
 <div class="au-cta">
-  <h2>Up and running in 15 minutes</h2>
-  <a class="button" :href="withBase('/guide/getting-started')">Read the guide</a>
+  <h2>Up and running in an afternoon</h2>
+  <a class="button" :href="withBase('/guide/getting-started')">Follow the setup path</a>
   <span class="alt"><code>docker compose up -d</code> — amd64 &amp; arm64 images on GHCR</span>
 </div>

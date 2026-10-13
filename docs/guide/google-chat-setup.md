@@ -1,149 +1,140 @@
-# Google Chat setup
+# 2. Google Cloud and the Chat app
 
-One-time setup to connect the bot to your Google Workspace. You need to be a
-Workspace admin (for domain-wide install) and have a Google Cloud project.
+Step 2 of the [setup path](./getting-started). You need AsyncUp running at
+`https://HOST` ([step 1](./server-setup)) and a Google Cloud account in your
+Workspace. The guided setup at `https://HOST/app/setup` shows the same steps
+with copy buttons and a live check at each gate; this page explains them.
 
-## 1. Create a GCP project and enable the Chat API
+## Before you start: allow Chat apps
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project (e.g. `asyncup`).
-2. Note the **project number** (Cloud overview → Project info) — you'll paste it into AsyncUp's setup.
-3. Enable the API: **APIs & Services → Library → Google Chat API → Enable**.
+A Workspace admin must allow people to install Chat apps, or you can't message
+the app to verify it (section 3) or add it to a space (step 3). In the Admin
+console: **Apps → Google Workspace → Google Chat → Chat apps → Allow users to
+install Chat apps: On** ([Google's help](https://support.google.com/a/answer/7651360)).
+Allowing installs doesn't install anything for anyone.
 
-## 2. Create a service account
+## 1. Create a Cloud project
 
-1. **IAM & Admin → Service Accounts → Create service account** (e.g. `asyncup`).
-   No project roles are needed — Chat API access comes from the app configuration.
-2. Open the account → **Keys → Add key → JSON** and download the key file.
-   You'll paste its contents into AsyncUp's setup in step 3 — no file mounting.
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/projectcreate)
+   and create a project, e.g. `asyncup`. Billing is not required.
+2. Enable the APIs, under **APIs & Services → Library**:
+   - **Google Chat API** — required.
+   - **Admin SDK API** — needed for [group rosters and Directory lookups](./directory).
+     Enabling it now costs nothing and saves a trip back.
+3. Configure the **OAuth consent screen** as **Internal** (**APIs & Services →
+   OAuth consent screen**; newer consoles call it *Google Auth Platform*). The
+   Chat app can't be configured until this exists, and an internal app needs no
+   Google review.
+4. Note the **project number** from **Cloud overview → Project info**. It's the
+   digits, not the project ID.
 
-## 3. Deploy the bot and connect it
+In the guided setup, paste the project number on **Create a Google Cloud
+project** and press **Verify**.
 
-```bash
-cp .env.example .env
-# set DASHBOARD_TOKEN (any long random string)
-# set SECRET_KEY      (openssl rand -hex 32)
-docker compose up -d
-```
+## 2. Create a service account and key
 
-Expose it over **public HTTPS** behind your reverse proxy
-(Caddy/nginx/Traefik) or, for a quick test, a tunnel like
-`cloudflared tunnel --url http://localhost:8080`.
-Your event URL is `https://<your-host>/chat/events`.
+1. **IAM & Admin → Service accounts → Create service account**, e.g. `asyncup`.
+   It needs **no project roles**: Chat access comes from the Chat app
+   configuration.
+2. Open the account → **Keys → Add key → Create new key → JSON**. A file
+   downloads.
+3. In the guided setup's **Service account** step, paste the whole file and
+   press **Save and verify key**. The key is encrypted at rest with
+   `SECRET_KEY`.
 
-Then open `https://<your-host>/app`, sign in with `DASHBOARD_TOKEN` →
-**Settings → Google Chat** and paste:
+The check calls Google Chat as the app, so before the Chat app is configured
+(section 3) it may say **Google rejected the key**. That's expected: the key is
+saved anyway, and **Continue** works. Come back after section 3 and press
+**Verify stored key**; it should pass then.
 
-- the **project number** from step 1
-- the **service-account key JSON** from step 2 (stored encrypted)
+Keep the service account's email (`asyncup@<project>.iam.gserviceaccount.com`):
+[step 5 of the setup path](./directory) gives it an admin role.
 
-Changes apply immediately — no restart. (On Cloud Run you can skip the key
-and use the service's own identity via Application Default Credentials.)
+Leave the **Directory & Calendar access** switch on that page **off**. All it
+does is set a *Workspace admin to act as*, which moves Directory lookups to
+domain-wide delegation; the [admin role](./directory#admin-role) from step 5
+of the setup path does the same job without delegation. Calendar out-of-office doesn't
+use that switch at all ([Calendar out-of-office](./directory#calendar-ooo)).
+If you press **Save access settings** with the switch off, it also turns
+Calendar out-of-office off; switch it back on under **Settings › General**
+when you set it up.
 
-## 4. Configure the Chat app
+## 3. Configure the Chat app
 
-**APIs & Services → Google Chat API → Configuration** tab:
+Open **APIs & Services → Google Chat API → Configuration** (the guided setup
+links straight to it). Use these values; the guided setup's **Configure the
+Chat app** step shows them with your real host filled in:
 
 | Field | Value |
 | --- | --- |
-| App name | `AsyncUp` (or your pick) |
-| Avatar URL | `https://asyncup-dev.github.io/logo-256.png` (the AsyncUp logo, or any 256×256 PNG) |
-| Description | `Async daily standups` |
-| Functionality | ✅ Receive 1:1 messages, ✅ Join spaces and group conversations |
-| Connection settings | **HTTP endpoint URL** → `https://<your-host>/chat/events` |
-| Authentication Audience | **Project Number** (recommended — this is what AsyncUp verifies) |
-| Visibility | the people/Google Group who'll use it (see below) |
+| App name | `AsyncUp` (up to 25 characters) |
+| Avatar URL | `https://HOST/app/logo-256.png`, or any square HTTPS PNG/JPEG of 256×256 or more |
+| Description | `Async daily standups for your team` (up to 40 characters) |
+| Build this Chat app as a Google Workspace add-on | Leave ticked, the console default. Unticking it is permanent |
+| Enable interactive features | On |
+| Functionality | Tick **Join spaces and group conversations**. Direct messages work regardless |
+| Connection settings | **HTTP endpoint URL**: `https://HOST/chat/events` |
+| Authentication Audience | **HTTP endpoint URL** |
+| Commands, link previews | Leave empty / off. AsyncUp uses @mentions |
+| Visibility | Everyone in your domain, or specific people and Google Groups ([step 4](./distribution)) |
 
-> Today's console defaults to **"Build this Chat app as a Google Workspace
-> add-on."** Leave it ticked (clearing it is permanent). Add-on apps send a
-> different event format and expect a different response envelope; AsyncUp
-> detects which one Google is using per request and answers accordingly, so
-> both work. The add-on path needs the same distribution steps below.
+Save. The app status should become **LIVE**.
 
-Save. The app status should become **LIVE**. In the app's Settings › Google Chat,
-enter **both** the project number and your `https://<your-host>/chat/events` URL,
-space-separated. Interaction-event apps sign requests for the project number;
-add-on apps sign them for the URL and identify themselves with the project's
-add-on service account, which AsyncUp derives from the number.
+### The audience rule
 
-## 5. Get the bot to your team
+AsyncUp refuses every event until it knows which signature to expect, and it
+fails closed. What it needs depends on how the app is built:
 
-How users actually receive the bot — allowlist + self-add (small teams) vs a
-private Marketplace listing + admin install (org-wide, zero-touch) — is its own
-topic. **See [Installing AsyncUp for your team](./distribution).**
+| Chat app type | Google signs events for | Store in AsyncUp |
+| --- | --- | --- |
+| Workspace add-on (today's default) | The endpoint URL, signed by the project's add-on service account | **Both** the project number and `https://HOST/chat/events` |
+| Older interaction-event app | The project number | The project number |
 
-> The bot can only DM users it shares a DM space with. Admin install creates
-> that automatically; otherwise each user must add the app once themselves.
+With both values stored, either kind verifies. The guided setup stores the
+project number in its first step and the URL with **Save audience** on the
+Chat app step. In **Settings › Google Chat**, the **Project number** row
+changes only the number and keeps the URL.
 
-## 6. Create your first standup
+### Check the connection
 
-1. Create (or open) the space where reports should land.
-2. Add the bot to the space (`+ Add people & apps`).
-3. Mention it:
+On the guided setup's Chat app step:
 
-```
-@AsyncUp setup Engineering
-@AsyncUp add @Alice @Bob
-@AsyncUp status
-```
+1. Press **Save audience**. It stores `https://HOST/chat/events` next to the
+   project number. Without it, an add-on app's events are refused with `401`.
+   The button disappears once the URL is stored.
+2. Press **Start listening**, then send any message to AsyncUp in Google Chat
+   (find it with **+ → Find apps**). The step turns to **Verified** when the
+   first signed event arrives, and **Continue** unlocks.
 
-Prompts go out at the configured time the next working day. 🎉
+If nothing arrives, see [Troubleshooting](#troubleshooting).
 
-## Optional: Calendar OOO sync {#calendar-ooo}
+## Next
 
-To auto-mark people as away when their Google Calendar has an *Out of office*
-event, the service account needs **domain-wide delegation**:
+[Step 3: guided setup and first test](./first-standup) — create a standup in
+a private space and watch a whole run before inviting anyone.
 
-1. **IAM & Admin → Service Accounts → your account** → copy the **OAuth 2 Client ID** (a long number).
-2. [admin.google.com](https://admin.google.com) → **Security → Access and data control → API controls → Domain-wide delegation → Add new**:
-   - Client ID: the number from step 1
-   - Scopes (comma-separated):
-     `https://www.googleapis.com/auth/calendar.events.readonly, https://www.googleapis.com/auth/admin.directory.user.readonly`
-3. Enable the **Google Calendar API** and **Admin SDK API** in your GCP project.
-4. In the app, **Settings › General** → tick *Calendar out-of-office* and
-   set the **Workspace admin email**.
+## Optional: group rosters {#roster-group}
 
-With the admin email set, AsyncUp resolves each person's email through the
-Directory API (Directory reads must impersonate an admin), so OOO sync works
-even for people who never interacted with the bot. Without it, emails are
-learned the first time each person uses the bot. People who are OOO are
-listed as 🏖️ away — never as missing.
+Moved to [Directory and group rosters](./directory), with the admin role the
+service account needs.
 
-The `admin.directory.user.readonly` scope is read-only. If you skip it and
-leave the admin email empty, everything else works unchanged.
+## Optional: Calendar out-of-office {#calendar-ooo}
 
-## Optional: rosters from a Google Group {#roster-group}
-
-A standup can follow a Google Group instead of people picked from its space.
-Everyone in the group, including members of nested groups, is on the standup.
-Joiners get the default setup: prompted, counted when they miss it, and
-following the standup's days. Leavers drop off, and their history stays.
-People you take off by hand stay off, and people you add by hand stay on.
-
-Pick **Everyone in a Google Group** under the standup's **Settings › People**,
-or when you create the standup, and enter the group's email address. The
-roster syncs straight away, then hourly, and again in the hour before each
-run. **Sync now** shows who was added, who was removed, and who was skipped
-and why: people outside your Workspace, suspended accounts, and accounts that
-aren't active.
-
-AsyncUp reads groups as its service account, with an admin role and no
-domain-wide delegation, as Google recommends:
-
-1. In the Google Cloud project that holds the service account, enable the
-   **Admin SDK API**.
-2. In the Admin console, go to **Account › Admin roles › Create new role**.
-   Give it only **Admin API privileges › Groups › Read** and **Users › Read**.
-3. Open the new role, click **Assign service accounts**, and enter the service
-   account's email. Use the service account, not a person: AsyncUp calls Google
-   as the service account.
-
-A new role can take up to about 15 minutes to apply. Until then, a sync says
-it can't read the group, and names the role to grant.
+Moved to [Directory and group rosters](./directory#calendar-ooo).
 
 ## Troubleshooting
 
-- **"No DM space with users/…"** in logs → that user doesn't have the app installed; see step 5.
-- **401 on events** → the value in Settings → Google Chat must be the project *number*, not the project ID.
-- **"AsyncUp not responding" in Chat, Google's log says "Can't handle the app's response", and nothing reaches the server** → something in front of the server answered instead. Cloudflare's Bot Fight Mode is the usual culprit: it challenges Google's `Google-gsuiteaddons` requests to `/chat/events` and cannot be bypassed with a WAF rule on the Free plan, so turn it off for the zone (or use Super Bot Fight Mode's allow rules on Pro). Any bot challenge, login page or HTML error in front of `/chat/events` has the same effect.
-- **No prompts arriving** → check `docker compose logs`; the scheduler logs every run open/close. Verify the standup `status`, days, and timezone.
-- **Replies not threading** → the bot posts with `threadKey`, which threads correctly even if the parent message failed; check the space's history settings.
+| Symptom | Cause and fix |
+| --- | --- |
+| `401` on events, or the guided setup never verifies | The audience is wrong. Store the project **number** (not the ID) **and**, for an add-on app, `https://HOST/chat/events`. `docker compose logs asyncup` names the exact mismatch |
+| "AsyncUp not responding" in Chat, and nothing reaches the server | Something in front of the server answered instead. Cloudflare's Bot Fight Mode is the usual culprit: it challenges Google's `Google-gsuiteaddons` requests and can't be bypassed with a WAF rule on the Free plan, so turn it off for the zone. Any bot challenge, login page or HTML error in front of `/chat/events` has the same effect |
+| "AsyncUp not responding", and the server logs the event | The app answered with something Chat refused. Check the logs for an error, and that you run a current image |
+| "Could not load dialog. Either the app is not responding or the response is invalid" | Same as above for a dialog. Upgrade to a current image ([Operations](./operations#upgrade)) |
+| "No DM space with users/…" in logs | That person can't receive the bot's DMs yet. See [Roll out to your team](./distribution) |
+| No prompts arriving | `docker compose logs asyncup` logs every run opening and closing. Check the standup's days, timezone and deadline with `status` |
+| Replies not threading | The bot posts with a `threadKey`, which threads even if the parent failed. Check the space's history settings |
+
+A `POST` with an empty JSON body to `https://HOST/chat/events` proves the app
+is reachable: before an audience is stored it answers `200` with a "not
+connected to Google Chat yet" message, and afterwards `401`, rejecting the
+unsigned request. A plain `GET` returns `404`; the route is `POST` only.
