@@ -42,6 +42,7 @@ export interface ApiDeps {
   schedule?: ScheduleService | null;
   roster?: RosterSync | null;
   webhooks: WebhookNotifier;
+  webhookSecret?: ((standupId: number) => string) | null;
   chatClientFactory: ChatClientFactory;
   samlBroker: (config: SamlConfig) => SamlBroker;
   externalFetch: typeof fetch;
@@ -64,6 +65,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
     schedule: deps.schedule ?? null,
     roster: deps.roster ?? null,
     webhooks: deps.webhooks,
+    webhookSecret: deps.webhookSecret ?? null,
     chatClientFactory: deps.chatClientFactory,
     samlBroker: deps.samlBroker,
     externalFetch: deps.externalFetch,

@@ -42,7 +42,7 @@ export interface ServerDeps {
   dashboardToken: string;
   /** Skip Chat webhook verification (fake adapter / local development). */
   skipVerification?: boolean;
-  /** Per-standup webhook signing secret (shown to admins in the standup's settings). */
+  /** Per-standup webhook signing secret (shown to managers in the standup's webhook settings). */
   webhookSecret?: (standupId: number) => string;
   /** Signs sessions; empty disables Google sign-in. */
   secretKey?: string;
@@ -142,6 +142,7 @@ export function createServer(deps: ServerDeps): Express {
     schedule: deps.schedule ?? null,
     roster: deps.roster ?? null,
     webhooks: new WebhookNotifier(undefined, deps.externalFetch, undefined, deps.webhookSecret),
+    webhookSecret: deps.webhookSecret ?? null,
     chatClientFactory: deps.chatClientFactory ?? createChatClient,
     samlBroker: deps.samlBroker ?? ((config) => new NodeSamlBroker(config)),
     externalFetch: deps.externalFetch ?? fetch,

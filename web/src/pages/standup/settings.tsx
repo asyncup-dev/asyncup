@@ -4,7 +4,9 @@ import { ConfirmDialog } from '../../components/confirm-dialog';
 import { PeopleMatrix, type MatrixChange, type MatrixRow } from '../../components/people-matrix';
 import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
-import type { Person } from '../../lib/api';
+import { useMutation } from '@tanstack/react-query';
+import { CopyRow } from '../../components/copy-row';
+import { api, type Person } from '../../lib/api';
 import { ago } from '../../lib/format';
 import { useMe } from '../../lib/auth';
 import { useArchive, useDeleteStandup, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
@@ -30,6 +32,7 @@ export function StandupSettingsPage() {
   const pRemove = useParticipantRemove();
   const pAdd = useParticipantAdd();
   const verifyWebhook = useVerifyMutation('webhook');
+  const secret = useMutation({ mutationFn: () => api<{ secret: string }>(`/standups/${id}/webhook/secret`) });
   const s = standup.data;
   const [schedule, setSchedule] = useState<{ promptTime: string; deadlineTime: string; timezone: string; days: string[]; reminderMinutesBefore: string } | null>(null);
   const [questions, setQuestions] = useState<string[] | null>(null);
@@ -213,6 +216,14 @@ export function StandupSettingsPage() {
               <button type="button" className="btn" style={{ height: 28 }} disabled={webhook === null || patch.isPending} onClick={() => void save({ webhookUrl: webhook?.trim() || null }, 'Webhook').then(() => setWebhook(null))}>Save</button>
               {s.webhook.configured ? <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={verifyWebhook.isPending} onClick={() => verifyWebhook.mutate({ standupId: id })}>Send test</button> : null}
               {verifyWebhook.data || verifyWebhook.isPending || verifyWebhook.isError ? <div style={{ flexBasis: '100%' }}><VerifyStatus state={fromMutation(verifyWebhook)} /></div> : null}
+              <div style={{ flexBasis: '100%' }}>
+                {secret.data ? (
+                  <CopyRow label="Signing secret" hint="HMAC-SHA256 key for X-AsyncUp-Signature. Changes only when SECRET_KEY does." value={secret.data.secret} />
+                ) : (
+                  <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={secret.isPending} onClick={() => secret.mutate()}>Show signing secret</button>
+                )}
+                {secret.isError ? <div className="alert" role="alert">{secret.error.message}</div> : null}
+              </div>
             </SettingsRow>
             <SettingsRow label="Weekly digest" hint="Posted to the space at the end of the week.">
               <label className="row t-small"><input type="checkbox" checked={s.digestEnabled} onChange={(e) => void save({ digestEnabled: e.target.checked }, 'Digest')} /> {s.digestEnabled ? 'On' : 'Off'}</label>

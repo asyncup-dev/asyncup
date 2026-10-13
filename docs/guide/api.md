@@ -123,6 +123,7 @@ Admins and that standup's managers only (`403 forbidden` otherwise).
 | `POST` | `/standups/:id/participants` | `{ userName: "users/…", displayName, mandatory? }` → `201` with `reachable` (can the bot DM them) |
 | `PATCH` | `/standups/:id/participants/:userName` | `{ mandatory?, onVacation?, admin? }`; `409 last_admin` guards the last admin. `:userName` is the Chat resource name URL-encoded (`users%2F123`) |
 | `DELETE` | `/standups/:id/participants/:userName` | `204`. On a group roster the person is kept off: later syncs don't add them back |
+| `GET` | `/standups/:id/webhook/secret` | `{ secret }`: the key the standup's webhooks are signed with ([webhooks](./configuration#outbound-webhooks)). Admins and the standup's managers; `503 unavailable` when the server has no signing key |
 | `GET` | `/standups/:id/members` | Members of the standup's Chat space, as roster candidates; `502 chat_unavailable` carries Google's reason |
 | `POST` | `/standups/:id/roster/sync` | Sync a group roster now → `{ added: [names], removed: [names], skipped: [{ email, reason }], syncedAt }`. `409 no_roster_group` when the standup doesn't follow a group, `502 roster_unavailable` when Google refuses (the message names the admin role to grant), `503` when the server has no group support |
 | `GET` | `/standups/:id/export.csv?days=90` | CSV download |

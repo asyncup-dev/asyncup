@@ -88,6 +88,7 @@ export const ROUTES: RouteSpec[] = [
     responses: { 200: 'csv' },
     errors: [404],
   },
+  { method: 'get', path: '/standups/:id/webhook/secret', summary: 'The key this standup’s webhooks are signed with', tag: 'Standups', access: 'manager', params: standupId, responses: { 200: S.WebhookSecret }, errors: [403, 404, 503] },
   { method: 'get', path: '/standups/:id/members', summary: 'Members of the standup’s Chat space, as roster candidates', tag: 'Roster', access: 'manager', params: standupId, responses: { 200: S.SpaceMembers }, errors: [404, 502] },
   { method: 'post', path: '/standups/:id/roster/sync', summary: 'Sync the roster with its Google Group now', tag: 'Roster', access: 'manager', params: standupId, responses: { 200: S.RosterSynced }, errors: [404, 409, 502, 503] },
   { method: 'post', path: '/standups/:id/participants', summary: 'Add someone to the roster', tag: 'Roster', access: 'manager', params: standupId, body: S.AddParticipant, responses: { 201: S.AddedParticipant }, errors: [400, 404] },
