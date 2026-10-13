@@ -4,7 +4,7 @@ import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
 import { useMe } from '../../lib/auth';
 import { ago, clock } from '../../lib/format';
-import { clientSnippet, useCreateMcpToken, useMcpActivity, useMcpTokens, usePatchSettings, useRevokeMcpToken, useSettings, useVerifyMutation } from '../../lib/settings';
+import { clientSnippet, useCreateMcpToken, useMcpActivity, useMcpTokens, usePatchSettings, useRevokeMcpToken, useSettings, useVerifyMutation, type McpScope } from '../../lib/settings';
 import { copyText } from '../../lib/setup';
 import { fieldError, SettingsHeader } from './layout';
 
@@ -25,7 +25,7 @@ export function McpSettings() {
   const revoke = useRevokeMcpToken();
   const me = useMe();
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<{ name: string; kind: 'personal' | 'service'; scopes: string[] } | null>(null);
+  const [form, setForm] = useState<{ name: string; kind: 'personal' | 'service'; scopes: McpScope[] } | null>(null);
   const [minted, setMinted] = useState<{ name: string; secret: string; url: string } | null>(null);
   const [client, setClient] = useState<(typeof CLIENTS)[number][0]>('claude-desktop');
   const [copied, setCopied] = useState(false);
@@ -42,7 +42,7 @@ export function McpSettings() {
       setError(fieldError(err));
     }
   };
-  const toggleScope = (scope: string) => {
+  const toggleScope = (scope: McpScope) => {
     const next = s.mcp.defaultScopes.includes(scope) ? s.mcp.defaultScopes.filter((x) => x !== scope) : [...s.mcp.defaultScopes, scope];
     void save({ mcpDefaultScopes: next.join(',') });
   };
@@ -68,7 +68,7 @@ export function McpSettings() {
         </SettingsRow>
       </SectionCard>
       <SectionCard title="Default scopes" hint="What a new token gets when no scopes are chosen. Read-only by default; a token can always be narrower.">
-        {Object.entries(s.mcp.scopes).map(([scope, help]) => (
+        {(Object.entries(s.mcp.scopes) as [McpScope, string][]).map(([scope, help]) => (
           <SettingsRow key={scope} label={scope} hint={help}>
             <label className="row t-small"><input type="checkbox" checked={s.mcp.defaultScopes.includes(scope)} onChange={() => toggleScope(scope)} /> {s.mcp.defaultScopes.includes(scope) ? 'Default' : 'Off'}</label>
           </SettingsRow>
@@ -87,7 +87,7 @@ export function McpSettings() {
               </div>
               <span className="t-medium">Scopes</span>
               <div className="chip-tabs">
-                {Object.keys(s.mcp.scopes).map((scope) => (
+                {(Object.keys(s.mcp.scopes) as McpScope[]).map((scope) => (
                   <button key={scope} type="button" className="chip-tab" aria-pressed={form.scopes.includes(scope)} disabled={form.kind === 'service' && scope !== 'read'} onClick={() => setForm({ ...form, scopes: form.scopes.includes(scope) ? form.scopes.filter((x) => x !== scope) : [...form.scopes, scope] })}>{scope}</button>
                 ))}
               </div>

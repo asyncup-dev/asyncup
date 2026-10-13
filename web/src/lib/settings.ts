@@ -1,41 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CreatedMcpToken, McpActivityEntry, McpScope, McpToken } from '../../../src/api/spec/schemas.ts';
 import { api, type Settings, type Verification } from './api';
 
-export interface McpTokenView {
-  id: number;
-  name: string;
-  kind: 'personal' | 'service';
-  owner: { userName: string; displayName: string | null } | null;
-  scopes: string[];
-  createdAt: string;
-  lastUsedAt: string | null;
-  expiresAt: string;
-  revokedAt: string | null;
-}
-
-export interface McpActivityRow {
-  id: number;
-  token: { id: number; name: string };
-  tool: string;
-  argsSummary: string;
-  ok: boolean;
-  at: string;
-}
-
-export type SettingsView = Settings & {
-  tokens: { tick: { set: boolean }; export: { set: boolean }; scim: { set: boolean } };
-  mcp: { enabled: boolean; defaultScopes: string[]; endpoint: string; scopes: Record<string, string> };
-};
+export type { McpActivityEntry as McpActivityRow, McpScope, McpToken as McpTokenView } from '../../../src/api/spec/schemas.ts';
 
 export function useSettings() {
-  return useQuery({ queryKey: ['settings'], queryFn: () => api<SettingsView>('/settings') });
+  return useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/settings') });
 }
 
 /** PATCH /settings; the API's `{ error: { message, field } }` becomes the thrown ApiError. */
 export function usePatchSettings() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (patch: Record<string, unknown>) => api<SettingsView>('/settings', { method: 'PATCH', body: patch }),
+    mutationFn: (patch: Record<string, unknown>) => api<Settings>('/settings', { method: 'PATCH', body: patch }),
     onSuccess: (data) => {
       client.setQueryData(['settings'], data);
       void client.invalidateQueries({ queryKey: ['setup-progress'] });
@@ -58,17 +35,17 @@ export function useMachineToken() {
 }
 
 export function useMcpTokens() {
-  return useQuery({ queryKey: ['mcp-tokens'], queryFn: () => api<{ tokens: McpTokenView[] }>('/mcp/tokens'), select: (d) => d.tokens });
+  return useQuery({ queryKey: ['mcp-tokens'], queryFn: () => api<{ tokens: McpToken[] }>('/mcp/tokens'), select: (d) => d.tokens });
 }
 
 export function useMcpActivity(limit = 8) {
-  return useQuery({ queryKey: ['mcp-activity', limit], queryFn: () => api<{ activity: McpActivityRow[] }>(`/mcp/activity?limit=${limit}`), select: (d) => d.activity });
+  return useQuery({ queryKey: ['mcp-activity', limit], queryFn: () => api<{ activity: McpActivityEntry[] }>(`/mcp/activity?limit=${limit}`), select: (d) => d.activity });
 }
 
 export function useCreateMcpToken() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; kind: 'personal' | 'service'; scopes: string[] }) => api<McpTokenView & { secret: string; config: { url: string; headers: Record<string, string> } }>('/mcp/tokens', { method: 'POST', body }),
+    mutationFn: (body: { name: string; kind: 'personal' | 'service'; scopes: McpScope[] }) => api<CreatedMcpToken>('/mcp/tokens', { method: 'POST', body }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['mcp-tokens'] }),
   });
 }

@@ -1,16 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type BlockerView, type Person, type StandupDetail } from './api';
 
-export interface PersonRow {
-  userName: string;
-  displayName: string;
-  email: string | null;
-  timezone: string | null;
-  onVacation: boolean;
-  workingDays: string | null;
-  workingDaysLabel: string;
-  standups: { id: number; name: string; mandatory: boolean; admin: boolean }[];
-}
+import type { TeamMember as PersonRow } from '../../../src/api/spec/schemas.ts';
+
+export type { PersonRow };
 
 export function usePeople() {
   return useQuery({ queryKey: ['people'], queryFn: () => api<{ people: PersonRow[] }>('/people'), select: (d) => d.people });
