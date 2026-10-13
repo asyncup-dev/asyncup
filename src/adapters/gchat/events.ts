@@ -242,8 +242,9 @@ export class EventRouter {
       }
       // Cards sent before skips needed a reason skip straight from the button; redraw them so the next click asks why.
       if (!event.isDialogEvent) return card({ kind: 'open' })();
-      const cleaned = cleanSkipNote(getFormValue(event, 'reason'));
-      if ('error' in cleaned) return dialogError(cleaned.error);
+      const typed = getFormValue(event, 'reason');
+      const cleaned = cleanSkipNote(typed);
+      if ('error' in cleaned) return skipDialog(runId, await this.endpoint(), { error: cleaned.error, reason: typed });
       const result = await this.service.skipToday(runId, user.userName, cleaned.note);
       if (result === 'already_submitted') return dialogError('You already answered today. Edit your answers instead.');
       if (result === 'not_found') return dialogError('This standup prompt is no longer valid.');
@@ -339,20 +340,15 @@ export class EventRouter {
     const standup = (await this.repo.getStandupById(run.standupId))!;
     const questions = standupQuestions(standup);
 
-    const answers: Answer[] = [];
-    for (let i = 0; i < questions.length; i++) {
-      const question = questions[i]!;
-      const value = getFormValue(event, `q${i}`).trim();
-      if (!value) return dialogError(`Please answer: "${question}"${isBlockerQuestion(question) ? ' (write "none" if you have no blockers)' : ''}`);
-      answers.push({ question, answer: value });
+    const values = questions.map((_, i) => getFormValue(event, `q${i}`).trim());
+    const picked = getFormValue(event, 'mood');
+    const missing = questions.filter((_, i) => !values[i]).map((q) => `"${q}"${isBlockerQuestion(q) ? ' (write "none" if you have no blockers)' : ''}`);
+    if (standup.moodEnabled && !MOODS.includes(picked as Mood)) missing.push('your mood');
+    if (missing.length) {
+      return standupDialog(runId, questions, standup.moodEnabled, values, await this.endpoint(), { error: `Every field is required. Still empty: ${missing.join(', ')}.`, mood: picked });
     }
-
-    let mood: Mood | null = null;
-    if (standup.moodEnabled) {
-      const value = getFormValue(event, 'mood') as Mood;
-      if (!MOODS.includes(value)) return dialogError('Please pick your mood from the dropdown.');
-      mood = value;
-    }
+    const answers: Answer[] = questions.map((question, i) => ({ question, answer: values[i]! }));
+    const mood: Mood | null = standup.moodEnabled ? (picked as Mood) : null;
 
     const result = await this.service.submit(runId, user.userName, user.displayName, { answers, mood });
 

@@ -151,24 +151,28 @@ export function standupDialog(
   moodEnabled: boolean,
   prefill: string[],
   endpoint: string | null = null,
+  again: { error?: string; mood?: string } = {},
 ) {
-  const widgets: any[] = questions.map((question, i) => ({
-    textInput: {
-      name: `q${i}`,
-      label: question,
-      type: 'MULTIPLE_LINE',
-      value: prefill[i] || undefined,
-      hintText: isBlockerQuestion(question) ? 'Write "none" if you have no blockers' : undefined,
-    },
-  }));
+  const widgets: any[] = [
+    ...(again.error ? [errorLine(again.error)] : []),
+    ...questions.map((question, i) => ({
+      textInput: {
+        name: `q${i}`,
+        label: `${question} (required)`,
+        type: 'MULTIPLE_LINE',
+        value: prefill[i] || undefined,
+        hintText: isBlockerQuestion(question) ? 'Write "none" if you have no blockers' : undefined,
+      },
+    })),
+  ];
 
   if (moodEnabled) {
     widgets.push({
       selectionInput: {
         name: 'mood',
-        label: 'How is your mood today?',
+        label: 'How is your mood today? (required)',
         type: 'DROPDOWN',
-        items: MOODS.map((m) => ({ text: MOOD_LABEL[m], value: m, selected: false })),
+        items: MOODS.map((m) => ({ text: MOOD_LABEL[m], value: m, selected: m === again.mood })),
       },
     });
   }
@@ -190,8 +194,16 @@ export function standupDialog(
   };
 }
 
+/**
+ * Chat can't hold Submit until fields are filled (that is Developer Preview),
+ * so a missing answer redraws the dialog with this line and the values kept.
+ */
+function errorLine(message: string) {
+  return { textParagraph: { text: `<font color="#d93025"><b>⚠️ ${html(message)}</b></font>` } };
+}
+
 /** Asks for a one-line reason before a skip; the reason goes to the day's thread. */
-export function skipDialog(runId: number, endpoint: string | null = null) {
+export function skipDialog(runId: number, endpoint: string | null = null, again: { error?: string; reason?: string } = {}) {
   return {
     actionResponse: {
       type: 'DIALOG',
@@ -201,10 +213,12 @@ export function skipDialog(runId: number, endpoint: string | null = null) {
             sections: [
               {
                 widgets: [
+                  ...(again.error ? [errorLine(again.error)] : []),
                   {
                     textInput: {
                       name: 'reason',
-                      label: 'Why are you skipping today?',
+                      label: 'Why are you skipping today? (required)',
+                      value: again.reason || undefined,
                       type: 'SINGLE_LINE',
                       hintText: `One line, up to ${LIMITS.skipNoteMax} characters. Your team sees it in today’s thread.`,
                     },

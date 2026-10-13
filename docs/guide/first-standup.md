@@ -59,7 +59,8 @@ You get a DM card from AsyncUp.
 2. **Undo it.** Press **Undo skip** (or DM the bot `unskip`). The thread reply
    disappears and the card offers **Fill standup** again.
 3. **Answer.** Press **Fill standup**. Every question and the mood are
-   required; answer the blockers question with "none" if you have none.
+   required; try submitting with one empty to see the form come back with a
+   red line naming it. Answer the blockers question with "none" if you have none.
    Submit, and your answers post as a card under today's thread.
 4. **Edit.** Your DM card now says *Submitted at …* with **Edit answers** until
    the deadline. Editing updates the posted card in place, marked *edited*.

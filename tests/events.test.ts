@@ -211,17 +211,16 @@ describe('EventRouter', () => {
     const standup = await seedStandup(repo);
     const run = await repo.createRun(standup.id, '2026-06-10', 'key');
 
-    const missing: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', mood: 'good' }));
-    expect(missing.actionResponse.dialogAction.actionStatus.statusCode).toBe('INVALID_ARGUMENT');
-
-    const badMood: any = await router.handle(
-      dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', q2: 'none', mood: 'ecstatic' }),
+    // an empty field redraws the form with what was typed and a line naming what is missing
+    const widgetsOf = (reply: any) => reply.actionResponse.dialogAction.dialog.body.sections[0].widgets;
+    const missing = widgetsOf(await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q2: ' ', mood: 'ecstatic' })));
+    expect(missing[0].textParagraph.text).toBe(
+      '<font color="#d93025"><b>⚠️ Every field is required. Still empty: "What will you do today?", "Any blockers?" (write "none" if you have no blockers), your mood.</b></font>',
     );
-    expect(badMood.actionResponse.dialogAction.actionStatus.statusCode).toBe('INVALID_ARGUMENT');
-
-    // blockers must be answered too, with "none" when there are none
-    const noBlockers: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', q2: ' ', mood: 'good' }));
-    expect(noBlockers.actionResponse.dialogAction.actionStatus.userFacingMessage).toBe('Please answer: "Any blockers?" (write "none" if you have no blockers)');
+    expect(missing[1].textInput.value).toBe('x');
+    expect(await repo.getSubmission(run.id, 'users/alice')).toBeNull();
+    const noMood = widgetsOf(await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', q2: 'none' })));
+    expect(noMood[0].textParagraph.text).toContain('Still empty: your mood.');
     const ok: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', q2: 'none', mood: 'good' }));
     expect(ok.actionResponse.dialogAction.actionStatus.statusCode).toBe('OK');
   });

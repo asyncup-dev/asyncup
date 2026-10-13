@@ -67,19 +67,28 @@ describe('cards', () => {
     const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;
     const inputs = widgets.filter((w: any) => w.textInput).map((w: any) => w.textInput);
     expect(inputs.map((i: any) => i.name)).toEqual(['q0', 'q1', 'q2']);
-    expect(inputs.map((i: any) => i.label)).toEqual(QUESTIONS);
+    expect(inputs.map((i: any) => i.label)).toEqual(QUESTIONS.map((q) => `${q} (required)`));
     expect(inputs[0].value).toBe('From last time');
     expect(inputs[1].value).toBeUndefined();
     const mood = widgets.find((w: any) => w.selectionInput)?.selectionInput;
     expect(mood.items).toHaveLength(5);
+    expect(mood.label).toBe('How is your mood today? (required)');
     expect(JSON.stringify(widgets)).toContain('"submitStandup"');
+  });
+
+  it('dialog can come back with an error line, the answers kept and the mood still picked', () => {
+    const dialog: any = standupDialog(7, QUESTIONS, true, ['Did X', 'Will <b>Y</b>', ''], null, { error: 'Still empty: "Any blockers?"', mood: 'good' });
+    const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;
+    expect(widgets[0].textParagraph.text).toBe('<font color="#d93025"><b>⚠️ Still empty: "Any blockers?"</b></font>');
+    expect(widgets[2].textInput.value).toBe('Will <b>Y</b>');
+    expect(widgets.find((w: any) => w.selectionInput).selectionInput.items.filter((i: any) => i.selected).map((i: any) => i.value)).toEqual(['good']);
   });
 
   it('dialog omits the mood dropdown when disabled and supports custom questions', () => {
     const dialog: any = standupDialog(7, ['What shipped?'], false, ['']);
     const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;
     expect(widgets.filter((w: any) => w.selectionInput)).toHaveLength(0);
-    expect(widgets[0].textInput.label).toBe('What shipped?');
+    expect(widgets[0].textInput.label).toBe('What shipped? (required)');
   });
 
   it('submission card renders answers, highlights blockers, flags late/edited', () => {

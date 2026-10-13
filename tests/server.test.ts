@@ -128,7 +128,7 @@ describe('server', () => {
         buttonClickedPayload: { isDialogEvent: true, dialogEventType: 'SUBMIT_DIALOG' },
       },
     });
-    expect(await dialog.json()).toEqual({ action: { notification: { text: expect.stringContaining('no longer valid') } } });
+    expect(await dialog.json()).toEqual({ action: { navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }], notification: { text: expect.stringContaining('no longer valid') } } });
   });
 
   it('refuses to process events while verification is unconfigured (fail closed)', async () => {
