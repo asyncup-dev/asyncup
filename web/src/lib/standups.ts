@@ -81,5 +81,6 @@ export const RUN_NOW_COPY: Record<string, string> = {
   started: 'Today’s run is open — everyone eligible was just prompted.',
   already_open: 'Today’s run is already open — anyone not yet prompted was just prompted.',
   already_closed: 'Today’s run already closed. The next one opens on schedule.',
+  past_deadline: 'Today’s deadline has passed, so a run would close as soon as it opened. Move the deadline under Settings to run it today.',
   no_participants: 'No one to prompt — add people first (or everyone is on vacation).',
 };

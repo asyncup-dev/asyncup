@@ -112,7 +112,7 @@ export const StandupDetail = named(
   }),
 );
 
-export const RunNowResult = named('RunNowResult', z.enum(['started', 'already_open', 'already_closed', 'no_participants']));
+export const RunNowResult = named('RunNowResult', z.enum(['started', 'already_open', 'already_closed', 'past_deadline', 'no_participants']));
 
 export const CreatedStandup = named(
   'CreatedStandup',

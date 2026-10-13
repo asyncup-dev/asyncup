@@ -299,9 +299,9 @@ describe('setup: sign-in, template, create and live', () => {
     expect(screen.getByText('People · 2 on this standup')).toBeInTheDocument();
     await user.click(screen.getByLabelText('Asha on this standup'));
     expect(screen.getByText('People · 1 on this standup')).toBeInTheDocument();
-    await user.click(screen.getByLabelText('Rohit counts if missing'));
-    expect(screen.getByLabelText('Rohit counts if missing')).not.toBeChecked();
-    await user.click(screen.getByLabelText('Rohit counts if missing'));
+    await user.click(screen.getByLabelText('Rohit required'));
+    expect(screen.getByLabelText('Rohit required')).not.toBeChecked();
+    await user.click(screen.getByLabelText('Rohit required'));
 
     await user.click(screen.getByRole('button', { name: 'Sat' }));
     await user.click(screen.getByRole('button', { name: 'Mon' }));

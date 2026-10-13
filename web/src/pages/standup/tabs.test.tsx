@@ -116,7 +116,7 @@ describe('standup settings tab', () => {
     expect(await screen.findByLabelText('Carol on this standup')).not.toBeChecked();
     expect(screen.getByLabelText('Carol works Mon')).toBeDisabled();
 
-    await user.click(screen.getByLabelText('Bob counts if missing'));
+    await user.click(screen.getByLabelText('Bob required'));
     await waitFor(() => expect(calls).toContain('PATCH /api/v1/standups/1/participants/users%2Fbob'));
     await user.click(screen.getByLabelText('Bob works Mon'));
     await waitFor(() => expect(weeks).toEqual([{ workingDays: 'mon,tue,sat' }]));
@@ -178,6 +178,13 @@ describe('standup settings tab', () => {
     await user.type(screen.getByLabelText('Roster group email'), 'devs@example.com');
     await user.click(within(screen.getByLabelText('Roster group email').parentElement!).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(patches).toContainEqual({ rosterGroup: 'devs@example.com' }));
+  });
+
+  it('offers the standup’s admins as escalation contacts, not only the people on it', async () => {
+    server({ 'GET /api/v1/standups/1': { body: { ...ENG, admins: [...ENG.admins, { userName: 'users/lead', displayName: 'Lead' }] } } });
+    renderApp('/standups/1/settings');
+    const select = await screen.findByLabelText('Escalation contact');
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['— off —', 'Alice', 'Bob', 'Lead']);
   });
 
   it('surfaces a rejected save', async () => {

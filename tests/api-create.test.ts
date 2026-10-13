@@ -192,6 +192,9 @@ describe('api: create standup', () => {
     const { create } = await startServer();
     const withContact = await (await create({ name: 'A', spaceName: 'spaces/a', participants: ROSTER, escalateUserName: 'users/rohit' })).json() as any;
     expect(withContact.escalation.contact).toEqual({ userName: 'users/rohit', displayName: 'Rohit' });
+    // or an admin who isn't on the roster
+    const toLead = await (await create({ name: 'B', spaceName: 'spaces/a', participants: ROSTER, admins: [{ userName: 'users/lead', displayName: 'Lead' }], escalateUserName: 'users/lead' })).json() as any;
+    expect(toLead.escalation.contact).toEqual({ userName: 'users/lead', displayName: 'Lead' });
     for (const escalateUserName of [null, '']) {
       const off = await (await create({ name: `Off ${escalateUserName}`, spaceName: 'spaces/a', participants: ROSTER, escalateUserName })).json() as any;
       expect(off.escalation.contact).toBeNull();

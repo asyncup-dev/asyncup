@@ -26,7 +26,7 @@ export function PeopleMatrix({ rows, standupDays, busy = false, onChange }: { ro
           <tr>
             <th>Person</th>
             <th>On standup</th>
-            <th>Counts if missing</th>
+            <th title="Required people are listed as missing when they don’t answer; the rest still get the prompt but never count as missing.">Required</th>
             {WEEK.map((d) => (
               <th key={d} className={standupDays.includes(d) ? 'center' : 'center muted'}>{DAY_LABEL[d]}</th>
             ))}
@@ -53,8 +53,8 @@ export function PeopleMatrix({ rows, standupDays, busy = false, onChange }: { ro
                 <td data-label="On standup">
                   <input type="checkbox" aria-label={`${row.displayName} on this standup`} checked={row.onStandup} disabled={busy} onChange={(e) => onChange(row, { onStandup: e.target.checked })} />
                 </td>
-                <td data-label="Counts if missing">
-                  <input type="checkbox" aria-label={`${row.displayName} counts if missing`} checked={row.onStandup && row.mandatory} disabled={busy || !row.onStandup} onChange={(e) => onChange(row, { mandatory: e.target.checked })} />
+                <td data-label="Required">
+                  <input type="checkbox" aria-label={`${row.displayName} required`} checked={row.onStandup && row.mandatory} disabled={busy || !row.onStandup} onChange={(e) => onChange(row, { mandatory: e.target.checked })} />
                 </td>
                 {WEEK.map((d) => {
                   const runs = standupDays.includes(d);
@@ -77,7 +77,7 @@ export function PeopleMatrix({ rows, standupDays, busy = false, onChange }: { ro
         </tbody>
       </table>
       <p className="t-caption" style={{ padding: 'var(--space-2) var(--space-4)' }}>
-        Unticked days mean no prompt, and the person is never counted missing that day. Greyed days are not standup days. A person’s days are their own week, so they apply to every standup they are on.
+        Required people are listed as missing when they don’t answer; the others still get the prompt. Unticked days mean no prompt, and the person is never counted missing that day. Greyed days are not standup days. A person’s days are their own week, so they apply to every standup they are on.
       </p>
     </div>
   );

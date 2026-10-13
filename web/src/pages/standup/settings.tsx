@@ -148,7 +148,7 @@ export function StandupSettingsPage() {
               {s.mood.enabled ? <label className="row t-small"><input type="checkbox" checked={s.mood.anonymous} onChange={(e) => void save({ moodAnonymous: e.target.checked }, 'Mood')} /> answers shown anonymously</label> : null}
             </SettingsRow>
           </SectionCard>
-          <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Tick who is prompted, who counts when they miss it, and which days each person works.">
+          <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Tick who is prompted, who is required to answer, and which days each person works.">
             <SettingsRow label="Roster" hint={followsGroup ? 'Follows a Google Group: joiners get the default setup, leavers drop off, and people you untick stay off.' : 'People you pick from the space’s members.'}>
               <select
                 className="input"
@@ -196,7 +196,9 @@ export function StandupSettingsPage() {
             <SettingsRow label="Escalate to">
               <select className="input" aria-label="Escalation contact" value={escalate.userName} onChange={(e) => setEscalate({ ...escalate, userName: e.target.value })}>
                 <option value="">— off —</option>
-                {s.participants.map((p) => <option key={p.userName} value={p.userName}>{p.displayName}</option>)}
+                {[...s.participants, ...s.admins.filter((a) => !s.participants.some((p) => p.userName === a.userName))].map((p) => (
+                  <option key={p.userName} value={p.userName}>{p.displayName}</option>
+                ))}
               </select>
             </SettingsRow>
           </SectionCard>
