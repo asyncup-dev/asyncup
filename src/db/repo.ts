@@ -1903,6 +1903,32 @@ export class Repo {
     });
   }
 
+  /**
+   * Removes one standup and everything that belongs to it, in one
+   * transaction. People's own weeks and days off are theirs, not the
+   * standup's, so they stay.
+   */
+  async deleteStandup(standupId: number): Promise<{ runs: number; submissions: number; blockers: number; polls: number }> {
+    const runs = 'SELECT id FROM runs WHERE standup_id = ?';
+    const blockers = 'SELECT id FROM blockers WHERE standup_id = ?';
+    const polls = 'SELECT id FROM polls WHERE standup_id = ?';
+    return this.db.transaction(async () => {
+      await this.db.run(`DELETE FROM blocker_tags WHERE blocker_id IN (${blockers})`, [standupId]);
+      await this.db.run(`DELETE FROM blocker_updates WHERE blocker_id IN (${blockers})`, [standupId]);
+      const b = await this.db.run('DELETE FROM blockers WHERE standup_id = ?', [standupId]);
+      await this.db.run(`DELETE FROM poll_votes WHERE poll_id IN (${polls})`, [standupId]);
+      const p = await this.db.run('DELETE FROM polls WHERE standup_id = ?', [standupId]);
+      const sub = await this.db.run(`DELETE FROM submissions WHERE run_id IN (${runs})`, [standupId]);
+      await this.db.run(`DELETE FROM run_participants WHERE run_id IN (${runs})`, [standupId]);
+      const r = await this.db.run('DELETE FROM runs WHERE standup_id = ?', [standupId]);
+      await this.db.run('DELETE FROM participants WHERE standup_id = ?', [standupId]);
+      await this.db.run('DELETE FROM standup_admins WHERE standup_id = ?', [standupId]);
+      await this.db.run('DELETE FROM schedule_change_digests WHERE standup_id = ?', [standupId]);
+      await this.db.run('DELETE FROM standups WHERE id = ?', [standupId]);
+      return { runs: r.changes, submissions: sub.changes, blockers: b.changes, polls: p.changes };
+    });
+  }
+
   // --- MCP tokens + activity ---
 
   async createMcpToken(input: {

@@ -77,6 +77,19 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
     });
   }
 
+  // Workspace admins only, archived first, with the name typed back: three
+  // deliberate steps, because this removes the standup's whole history.
+  api.delete('/standups/:id', async (req, res) => {
+    const standup = await loadStandup(ctx, req, res);
+    if (!standup) return;
+    if (principalOf(req).kind !== 'admin') return apiError(res, 403, 'forbidden', 'Only workspace admins can delete a standup.');
+    if (standup.active) return apiError(res, 409, 'active', 'Archive the standup first; only archived standups can be deleted.');
+    if (req.body?.confirm !== standup.name) {
+      return apiError(res, 400, 'invalid', `Send { "confirm": "${standup.name}" } to delete this standup and all its history.`, 'confirm');
+    }
+    res.json({ deleted: await repo.deleteStandup(standup.id) });
+  });
+
   api.post('/standups/:id/run-now', async (req, res) => {
     const standup = await loadStandup(ctx, req, res, { manage: true });
     if (!standup) return;

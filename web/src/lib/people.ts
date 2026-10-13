@@ -77,6 +77,15 @@ export function useStandupPatch(id: number) {
   });
 }
 
+/** Deletes an archived standup and all its history; workspace admins only. */
+export function useDeleteStandup(id: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api<{ deleted: { runs: number; submissions: number; blockers: number; polls: number } }>(`/standups/${id}`, { method: 'DELETE', body: { confirm: name } }),
+    onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ['standups'] }), client.invalidateQueries({ queryKey: ['setup-progress'] })]),
+  });
+}
+
 export function useArchive(id: number) {
   const client = useQueryClient();
   return useMutation({

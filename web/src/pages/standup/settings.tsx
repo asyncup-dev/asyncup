@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { PeopleMatrix, type MatrixChange, type MatrixRow } from '../../components/people-matrix';
@@ -5,7 +6,8 @@ import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
 import type { Person } from '../../lib/api';
 import { ago } from '../../lib/format';
-import { useArchive, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
+import { useMe } from '../../lib/auth';
+import { useArchive, useDeleteStandup, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
 import type { Weekday } from '../../lib/roster';
 import { useSetWeek } from '../../lib/schedule';
 import { useVerifyMutation } from '../../lib/settings';
@@ -21,6 +23,9 @@ export function StandupSettingsPage() {
   const standup = useStandup(id);
   const patch = useStandupPatch(id);
   const archive = useArchive(id);
+  const remove = useDeleteStandup(id);
+  const me = useMe();
+  const navigate = useNavigate();
   const pPatch = useParticipantPatch();
   const pRemove = useParticipantRemove();
   const pAdd = useParticipantAdd();
@@ -32,7 +37,7 @@ export function StandupSettingsPage() {
   const [webhook, setWebhook] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<'archive' | Person | null>(null);
+  const [confirm, setConfirm] = useState<'archive' | 'delete' | Person | null>(null);
   const setWeek = useSetWeek(id);
   const sync = useRosterSync(id);
   const [groupDraft, setGroupDraft] = useState<string | null>(null);
@@ -217,13 +222,41 @@ export function StandupSettingsPage() {
             <SettingsRow label={s.active ? 'Archive standup' : 'Unarchive standup'} hint={s.active ? 'Stops prompts. History stays readable.' : 'Prompts resume on the next scheduled day.'}>
               <button type="button" className={`btn ${s.active ? 'btn-danger' : ''}`} style={{ height: 28 }} onClick={() => (s.active ? setConfirm('archive') : void roster(() => archive.mutateAsync('unarchive')))}>{s.active ? 'Archive' : 'Unarchive'}</button>
             </SettingsRow>
-            <SettingsRow label="Delete standup" hint="Not available — archive instead; nothing is lost.">
-              <span className="badge">Not available</span>
+            <SettingsRow
+              label="Delete standup"
+              hint={
+                me.data?.kind !== 'admin'
+                  ? 'Only workspace admins can delete a standup. Archiving stops it and keeps its history.'
+                  : s.active
+                    ? 'Archive it first. Deleting removes every run, answer, blocker and poll for good.'
+                    : 'Removes every run, answer, blocker and poll for good. People’s own days and time off stay.'
+              }
+            >
+              <button type="button" className="btn btn-danger" style={{ height: 28 }} disabled={me.data?.kind !== 'admin' || s.active} onClick={() => setConfirm('delete')}>Delete</button>
             </SettingsRow>
           </SectionCard>
         </div>
       </div>
-      {confirm === 'archive' ? (
+      {confirm === 'delete' ? (
+        <ConfirmDialog
+          title={`Delete ${s.name}?`}
+          body="Every run, answer, blocker and poll of this standup is removed for good. Messages already posted in Chat stay there."
+          confirmLabel="Delete"
+          typed={s.name}
+          danger
+          onConfirm={async () => {
+            try {
+              setError(null);
+              await remove.mutateAsync(s.name);
+              await navigate({ to: '/standups' });
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'That did not delete.');
+              setConfirm(null);
+            }
+          }}
+          onCancel={() => setConfirm(null)}
+        />
+      ) : confirm === 'archive' ? (
         <ConfirmDialog title={`Archive ${s.name}?`} body="No more prompts or reports. History stays in the database and exports." confirmLabel="Archive" typed="ARCHIVE" danger onConfirm={() => roster(() => archive.mutateAsync('archive')).then(() => setConfirm(null))} onCancel={() => setConfirm(null)} />
       ) : confirm ? (
         <ConfirmDialog title={`Remove ${confirm.displayName}?`} body="They stop being prompted from the next run. Their past answers stay in the history." confirmLabel="Remove" danger onConfirm={() => roster(() => pRemove.mutateAsync({ standupId: id, userName: confirm.userName })).then(() => setConfirm(null))} onCancel={() => setConfirm(null)} />
