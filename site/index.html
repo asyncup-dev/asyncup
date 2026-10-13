@@ -32,14 +32,14 @@
     <section class="hero" id="product">
       <div class="badges">
         <span class="badge">Open source · MIT</span>
-        <span class="badge">Self-hosted in 15 minutes</span>
+        <span class="badge">Self-hosted · one container</span>
         <span class="badge">Google Chat today · Slack and Teams planned</span>
       </div>
       <h1>Daily standups that run themselves.<br>No meeting. No SaaS. Your data.</h1>
       <p class="lede">AsyncUp DMs every teammate a card each morning, collects answers into one tidy thread per day, names who’s missing at the deadline, and turns blockers into work you can actually track. Runs on a 512 MB box you own — forever free.</p>
       <div class="cta">
         <a class="btn btn-primary btn-lg" href="docs/guide/getting-started">Get started →</a>
-        <a class="btn btn-lg" href="docs/guide/handbook">Read the handbook</a>
+        <a class="btn btn-lg" href="docs/guide/getting-started#the-setup-path">See the setup path</a>
       </div>
       <pre class="cmd"><code>$ docker compose up -d</code></pre>
 
@@ -78,12 +78,12 @@
     <section class="features">
       <h2>Everything a standup bot should do. Nothing it shouldn’t.</h2>
       <div class="grid-3">
-        <article class="card"><h3>Away-aware</h3><p>Skip today, vacation mode and Google Calendar OOO sync. Away people are neither nagged nor counted.</p></article>
+        <article class="card"><h3>Away-aware</h3><p>Skip today with a one-line reason the team can see, vacation mode and Google Calendar OOO sync. Away people are neither nagged nor counted.</p></article>
         <article class="card"><h3>Blockers that follow up</h3><p>Tag teammates, acknowledge, post updates, resolve. Daily nudges until acknowledged; escalation when stale.</p></article>
-        <article class="card"><h3>Per-person timezones</h3><p>Prompts go out at 09:30 in each person’s own zone. Late submissions are flagged, not lost.</p></article>
+        <article class="card"><h3>People and schedules</h3><p>Prompts at 09:30 in each person’s own zone, personal weeks and days off, and rosters that follow a Google Group.</p></article>
         <article class="card"><h3>Insights built in</h3><p>Participation, mood and blocker trends. Weekly digest, CSV export, signed webhooks.</p></article>
         <article class="card"><h3>Enterprise SSO, no tax</h3><p>Google sign-in, SAML 2.0 and SCIM provisioning — all in the MIT core.</p></article>
-        <article class="card"><h3>MCP server</h3><p>Your team’s AI assistants can read standups and work blockers. No model runs inside AsyncUp.</p></article>
+        <article class="card"><h3>MCP server</h3><p>Claude Code and other assistants can read standups, answer or skip, work blockers and nudge the team, with scoped tokens. No model runs inside AsyncUp.</p></article>
       </div>
     </section>
 
@@ -92,11 +92,11 @@
       <p class="lede">One ~300 MB container. Embedded SQLite by default, or bring your own PostgreSQL with one variable. No telemetry, no account with us, no plan to upgrade to.</p>
       <dl class="numbers">
         <div><dt>$0</dt><dd>per month, forever</dd></div>
-        <div><dt>15 min</dt><dd>from zero to first standup</dd></div>
+        <div><dt>~1.5 h</dt><dd>from an empty server to a first standup</dd></div>
         <div><dt>1 vCPU</dt><dd>512 MB is plenty</dd></div>
         <div><dt>MIT</dt><dd>licence</dd></div>
       </dl>
-      <a class="btn btn-primary btn-lg" href="docs/guide/server-setup">Read the setup guide →</a>
+      <a class="btn btn-primary btn-lg" href="docs/guide/getting-started">Follow the setup path →</a>
     </section>
   </main>
 

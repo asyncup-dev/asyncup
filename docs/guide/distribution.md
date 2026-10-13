@@ -1,4 +1,4 @@
-# Installing AsyncUp for your team
+# 4. Roll out to your team
 
 AsyncUp is **fully self-hosted**, which means *you* (the operator) own all three
 moving parts, and they're inseparable:
@@ -18,9 +18,8 @@ way one listing could serve many orgs is if they all talked to the same server
 Chat app in your own Google project.** Your data and credentials never touch the
 maintainer or any other org.
 
-This page is only about step 3 — **how your team gets the bot.** For the GCP
-project + service-account setup, do [Google Chat setup](./google-chat-setup)
-first.
+This page is only about step 3 — **how your team gets the bot.** For the Cloud
+project, service account and Chat app, do [step 2](./google-chat-setup) first.
 
 ## The principle that should decide your path
 
@@ -52,9 +51,11 @@ No Marketplace listing needed.
    messages the bot once. That first interaction creates the DM space so AsyncUp
    can prompt them.
 
-That's it. The catch is step 3: anyone who never adds the bot won't be prompted,
-and you won't get an error — they're just quietly absent. Fine for a team you can
-nudge in a channel; not great for a mandatory company-wide standup.
+That's it. The catch is step 3: anyone who never adds the bot can't be prompted.
+AsyncUp warns when you add someone it can't DM yet (`add @user` in Chat says
+so), but a roster that [follows a Google Group](./directory) adds joiners
+without that check. Fine for a team you can nudge in a channel; not great for a
+mandatory company-wide standup.
 
 ## Path B — Private Marketplace listing + admin install (org-wide, zero-touch)
 
@@ -75,8 +76,10 @@ the *same* GCP project as your Chat app
 - **Store Listing** (all required to publish): name, short/long description,
   **category**, **pricing = Free**, icons (**32×32**, **128×128**), a **220×140**
   banner, **≥1 screenshot**, and **Terms of Service / Privacy Policy / Support**
-  URLs. *(AsyncUp ships ready-made icons, a banner, and a screenshot — see the
-  repo's `docs/public` assets — so this is mostly paste-and-upload.)*
+  URLs. The repo ships the logo as `docs/public/logo.svg` and
+  `docs/public/logo-256.png`; scale those for the icons, and take a screenshot
+  of your own console or a Chat thread. A private listing's legal URLs can point
+  at an internal page.
 - **Publish.**
 
 **2. Install it** ([docs](https://support.google.com/a/answer/6089179)):
@@ -87,20 +90,12 @@ to allowlist / Install**, scoped to the OU or group that should have AsyncUp.
 > Nobody has the bot until you complete the install/allowlist step in the Admin
 > console. This is the single most common place people get stuck.
 
-## Set the request audience to "Project Number"
+## The request audience
 
-In your Chat app's **Connection settings**, the **Authentication Audience** field
-has two modes
-([docs](https://developers.google.com/workspace/chat/verify-requests-from-chat)):
-
-- **Project Number** *(recommended)* — Google sends a JWT signed by
-  `chat@system.gserviceaccount.com` whose `aud` is your project **number**. This
-  is exactly what AsyncUp verifies. Paste that number into the app's
-  **Audience** field (Settings → Google Chat).
-- **HTTP endpoint URL** — Google instead sends an OIDC ID token whose `aud` is
-  your endpoint URL. AsyncUp will accept a URL here, but the
-  recommended, fully-supported mode is **Project Number** — use it unless you
-  have a specific reason not to.
+The Chat app's **Authentication Audience** and what AsyncUp stores must match.
+For an app built as a Workspace add-on (the console default), store both the
+project number and `https://HOST/chat/events`. See
+[the audience rule](./google-chat-setup#the-audience-rule).
 
 ## Who's responsible for what (Google side)
 
@@ -122,7 +117,7 @@ the point of self-hosting.
 and Calendar API usage is free within quota; an internal app skips paid
 verification. You already pay for Google Workspace (Chat is included). Your only
 real cost is the server that runs AsyncUp — see
-[Setup guide](./server-setup#system-requirements) (≈ $0 if you co-locate on
+[Deployment reference](./deployment#system-requirements) (≈ $0 if you co-locate on
 existing infra, ≈ $5/mo otherwise).
 
 ## "AsyncUp not responding" — checklist
@@ -136,10 +131,12 @@ your endpoint. Check, in order:
    (Path B).
 3. **Installed, not just published** — complete the Admin-console install (Path B).
 4. **Endpoint reachable over HTTPS** —
-   `curl -i -X POST -H 'content-type: application/json' -d '{}' https://<your-host>/chat/events`
+   `curl -i -X POST -H 'content-type: application/json' -d '{}' https://HOST/chat/events`
    should answer with JSON (a `401` is fine; it means the app is up and
    rejecting an unsigned probe — a plain GET returns 404, the route is
    POST-only). The app logs every arrival and the concrete 401 reason,
    so check `docker compose logs` to see whether Google's request even arrived.
-5. **Audience matches** — the project number in Settings › Google Chat = your project **number**, with
-   Authentication Audience = **Project Number** on the Google side.
+5. **Audience matches** — AsyncUp has your project **number** and, for an
+   add-on app, `https://HOST/chat/events` stored
+   ([the audience rule](./google-chat-setup#the-audience-rule)). The logs name
+   the exact mismatch.

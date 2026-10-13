@@ -1,13 +1,13 @@
-# Deployment
+# Deployment reference
 
 AsyncUp is one small container — by default with SQLite inside, so there are
 no external moving parts at all. Google Chat needs to reach it on a public
 HTTPS URL.
 
-> Looking for a walkthrough? The **[Setup guide](./server-setup)** covers
-> every scenario — VPS, Postgres, Cloud Run, homelab — with a decision
-> matrix and production checklist. This page is the building-blocks
-> reference.
+> Looking for a walkthrough? **[Step 1: Host](./server-setup)** covers every
+> scenario — VPS, Postgres, Cloud Run, homelab — with a decision matrix and
+> production checklist, and **[Operations](./operations)** covers upgrades and
+> backups. This page is the building-blocks reference.
 
 ## Database: embedded or bring your own
 
@@ -32,7 +32,7 @@ per person per day. CPU architecture: amd64 or arm64.
 | App + bundled Postgres | 1 vCPU, 768 MB RAM, 3 GB disk | **2 vCPU, 2 GB RAM**, 10 GB disk |
 | App with external/managed DB | 1 vCPU, 256 MB RAM | 1 vCPU, 512 MB RAM |
 
-Realistic sizing: the Node process uses ~100–150 MB RSS; the image is ~300 MB;
+Realistic sizing: the Bun process uses ~100–150 MB RSS; the image is ~300 MB;
 a year of standups for a 50-person team is well under 100 MB of data. The
 smallest VPS tier (or Cloud Run's 512 MB default) is comfortably enough —
 teams into the hundreds of users don't change this picture.
@@ -47,19 +47,20 @@ docker pull ghcr.io/asyncup-dev/asyncup:latest
 ```
 
 Tags: `latest` (main), `vX.Y.Z` + `X.Y` (releases), `sha-…` (every build) —
-pin a digest for reproducible deploys. Building from source stays a
+pin a digest for reproducible deploys. Every image carries the commit it was
+built from in the `org.opencontainers.image.revision` label. Building from source stays a
 one-liner (`docker build -t asyncup .`) if you prefer auditing what you run.
 
 ## Docker Compose (simplest)
 
 ```bash
-cp .env.example .env       # set DASHBOARD_TOKEN + SECRET_KEY
+cp .env.example .env       # set OPERATOR_TOKEN + SECRET_KEY
 docker compose up -d       # pulls the GHCR image by default
-# then finish setup in https://<host>/app (sign in with DASHBOARD_TOKEN)
+# then finish setup in https://HOST/app (sign in with the operator token)
 ```
 
 Put it behind any HTTPS reverse proxy (Caddy, nginx, Traefik) and point the
-Chat app at `https://<your-host>/chat/events`. The SQLite data lives in the
+Chat app at `https://HOST/chat/events`. The SQLite data lives in the
 `standup-data` volume.
 
 A 1-shared-CPU VPS or a free-tier VM is plenty — the bot is idle except for
@@ -97,8 +98,8 @@ Run it under systemd or any process manager.
 
 ## Production checklist
 
-- [ ] Guided setup finished at `/app/setup`: project number and service-account key verified, first signed Chat event received
+- [ ] Guided setup finished at `/app/setup`: project number and service-account key verified, the events URL saved as an audience, first signed Chat event received
 - [ ] HTTPS in front of `/chat/events` (Google only delivers to https)
 - [ ] Google or SAML sign-in configured, then the setup token switched off under *Settings › Sign-in & SSO*
 - [ ] Tick token generated if `/tick` is internet-reachable; `SECRET_KEY` backed up
-- [ ] `DB_PATH` on persistent storage, backed up (or `DATABASE_URL` pointing at managed Postgres)
+- [ ] `DB_PATH` on persistent storage, backed up (or `DATABASE_URL` pointing at managed Postgres) — [Operations](./operations#backups)

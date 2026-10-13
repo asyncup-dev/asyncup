@@ -31,7 +31,7 @@ Pick only the scopes the assistant needs:
 | --- | --- |
 | `read` | `get_me`, `list_standups`, `get_standup`, `get_my_standups`, `list_runs`, `get_run`, `list_blockers`, `get_team`, `get_insights`, `get_schedule`, `list_time_off_requests` |
 | `blockers:write` | `acknowledge_blocker`, `update_blocker`, `resolve_blocker` |
-| `submit` | `submit_answers`, `skip_today` |
+| `submit` | `submit_answers` (every answer required, and the mood when the standup asks for one), `skip_today` (takes a one-line `reason`, posted in the day's thread) |
 | `schedule` | `update_my_settings` (timezone, vacation), `set_working_days`, `set_days_off`, `cancel_day_off`, `decide_time_off_request` |
 | `manage` | `run_standup_now`, `nudge_standup` — only on standups you manage |
 

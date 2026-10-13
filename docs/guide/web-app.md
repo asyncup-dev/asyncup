@@ -1,6 +1,6 @@
 # Web app
 
-AsyncUp's console lives at **`https://<your-host>/app`**. It is a single-page
+AsyncUp's console lives at **`https://HOST/app`**. It is a single-page
 app served by the same process as the Chat bot and the JSON API, so there is
 nothing extra to deploy.
 
@@ -10,15 +10,18 @@ The sign-in page offers whichever methods are configured:
 
 | Method | Who lands where |
 | --- | --- |
-| **Sign in with Google** | Workspace admins get the console; everyone else gets their own page |
+| **Continue with Google** | Workspace admins get the console; everyone else gets their own page |
 | **Continue with SSO** (SAML) | Same split, with the admin role taken from the IdP group attribute |
-| **Operator token** (`DASHBOARD_TOKEN`) | The console, acting as the workspace operator. Kept in the browser tab only; switch it off under *Settings › Sign-in & SSO* once a real method works |
+| **Operator token** (`OPERATOR_TOKEN`) | The console, acting as the workspace operator. Kept in the browser tab only; switch it off under *Settings › Sign-in & SSO* once a real method works |
+
+Setting these up: [Sign-in](./enterprise-sso).
 
 On a fresh install an admin lands in the **guided setup** (`/app/setup`):
 Cloud project → service account → Chat app configuration with a live check
 for the first signed event → optional sign-in → the first standup from a
 template, run immediately. Progress is saved as you go; the welcome page
 detects a working Chat connection and skips straight to the standup step.
+[Guided setup and first test](./first-standup) walks through it.
 
 ## What's there
 
@@ -26,8 +29,9 @@ detects a working Chat connection and skips straight to the standup step.
   missing), the table, and per standup: **Overview** (today's run polled live,
   recent runs, open blockers, schedule), **History** (every run with full
   answers, CSV export), **Insights** (participation by person, mood and blocker
-  charts) and **Settings** (schedule, questions, mood, roster, escalation,
-  webhook with a signed test, digest, archive).
+  charts) and **Settings** (schedule with time pickers, questions, mood, the
+  People grid and roster group, escalation, webhook with a signed test, digest,
+  and a Danger zone to archive, unarchive or delete).
 - **Blockers** — every open, acknowledged or resolved blocker across the
   standups you can see, with filters and the same actions as in Chat.
 - **Reports** — participation, team mood and blockers over 4, 8 or 12 weeks,
@@ -38,14 +42,43 @@ detects a working Chat connection and skips straight to the standup step.
   MCP server, API & tokens, Danger zone (disconnect Chat; delete all history —
   both behind a typed confirmation).
 - **My standups** (`/app/me`) — for everyone else: today's standup with an
-  *Answer in Chat* link and *Skip today*, recent answers, timezone and vacation
-  mode.
+  *Answer in Chat* link and *Skip today* (which asks for a one-line reason),
+  recent answers, timezone, vacation mode and *My schedule*.
 
 Admins see the whole workspace. **Managers** — people who administer at least
 one standup — see and manage their own standups, blockers, reports and team
 without Workspace-admin rights. Everyone else gets the personal page.
 
-A standup's **Settings → People** grid lists everyone in its Chat space, or everyone in a Google Group it follows ([setup](./google-chat-setup#roster-group)): who is on the standup, who counts when they miss it, and which days each person works. Personal weeks, days off and time-off approvals also live under **Team → Edit schedule**, **My page → My schedule** and **Team → Requests** — see [Personal schedules](./schedules).
+## People
+
+A standup's **Settings → People** grid lists everyone in its Chat space, or
+everyone in the Google Group it follows ([Directory and group
+rosters](./directory)). Per person:
+
+| Column | Meaning |
+| --- | --- |
+| On standup | Prompted for this standup |
+| Required | Listed as missing when they don't answer. The others still get the prompt but never count as missing |
+| Mon–Sun | The days they work. Unticked days mean no prompt, and never missing. The standup's own off days are greyed out |
+
+**Roster** switches between *Picked from the space* and *Everyone in a Google
+Group*. With a group, **Sync now** and the last sync time appear, and people
+you untick stay off. The create form uses the same grid, with everyone in the
+space ticked to start.
+
+Personal weeks, days off and time-off approvals also live under **Team → Edit
+schedule**, **My page → My schedule** and **Team → Requests** — see
+[Personal schedules](./schedules).
+
+## Naming, archiving and deleting
+
+- Standup names are unique across the workspace, archived standups included,
+  ignoring case. The create form flags a clash before you press Create.
+- **Archive** (Danger zone, type `ARCHIVE`) stops prompts and keeps history.
+  **Unarchive** resumes on the next scheduled day.
+- **Delete** removes an archived standup with every run, answer, blocker and
+  poll, after you type its name. Only workspace admins can delete. Messages
+  already in Chat stay, and people's own weeks and days off are kept.
 
 ## Security notes
 

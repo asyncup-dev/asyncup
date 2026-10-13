@@ -19,7 +19,7 @@ Every request needs one of:
 | How | Who you are |
 | --- | --- |
 | Session cookie from Google or SAML sign-in | **admin** if you are a Workspace admin, **manager** if you administer at least one standup, otherwise **member** |
-| `Authorization: Bearer <DASHBOARD_TOKEN>` | **admin** (the operator token, while token sign-in is on) |
+| `Authorization: Bearer <OPERATOR_TOKEN>` | **admin** (the operator token, while token sign-in is on) |
 
 `GET /api/v1/auth/methods` (which sign-in buttons to show) and
 `GET /api/v1/openapi.json` are public. Any other unauthenticated call gets
@@ -38,7 +38,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `lockout`, `chat_unavailable`, `unavailable`, `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`, `refused` (a time-off policy said no, with the reason).
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `active` (delete a standup that isn't archived), `lockout`, `chat_unavailable`, `unavailable`, `no_roster_group`, `roster_unavailable` (Google refused the group read, with the fix), `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`, `refused` (a time-off policy said no, with the reason).
 
 ## Endpoints
 
@@ -70,6 +70,7 @@ else, the standups they administer or belong to. Each entry:
   "timeOffPolicy": "self",
   "escalation": { "afterDays": 2, "contact": { "userName": "users/99", "displayName": "Priya" } },
   "webhook": { "configured": true },
+  "roster": { "group": null, "syncedAt": null, "error": null },
   "people": { "total": 9, "mandatory": 8 },
   "today": { "date": "2026-09-16", "status": "open", "submitted": 7, "expected": 9,
              "missing": [{ "userName": "users/5", "displayName": "Asha" }] },
@@ -77,13 +78,23 @@ else, the standups they administer or belong to. Each entry:
 ```
 
 `today.status` is `null` before the day's run opens. `permissions.manage`
-is true for admins and for managers of that standup.
+is true for admins and for managers of that standup. `roster.group` is the
+Google Group email the roster follows, or `null` when people are picked by
+hand; `syncedAt` and `error` describe the last sync.
 
 ### `GET /api/v1/standups/:id`
 
-The same object plus `participants` (`userName`, `displayName`,
-`mandatory`, `timezone`, `onVacation`) and `admins`. Returns `404` for a
-standup the caller may not see — including one in another tenant.
+The same object plus:
+
+- `participants`: `userName`, `displayName`, `mandatory`, `timezone`,
+  `onVacation`, `workingDays` (their own week, or `null` to follow the
+  standup), `otherStandups` (how many other standups they're on) and `source`
+  (`manual` or `group`);
+- `admins`;
+- `keptOff`: group members taken off by hand, whom syncs keep off.
+
+Returns `404` for a standup the caller may not see — including one in another
+tenant.
 
 ### Creating a standup
 
@@ -94,7 +105,7 @@ Admins only. The chat `setup` command and this endpoint share one core, so namin
 | `GET` | `/templates` | The gallery: `daily-standup`, `weekly-retro`, `mood-check-in`, `sprint-planning`, `blocker-sweep`, `blank`, each with its questions, days, times and mood defaults |
 | `GET` | `/spaces` | Spaces the app has been added to, each with the `standups` already reporting there. Answered by the Chat API with the service account; `502 chat_unavailable` carries the reason |
 | `GET` | `/spaces/:name/members` | Human members of a space as roster suggestions. `:name` is the resource name URL-encoded (`spaces%2FAAAA`) |
-| `POST` | `/standups` | `{ name, spaceName, templateId?, participants?: [{ userName, displayName, mandatory? }], admins?: [{ userName, displayName }], runNow?, …config }` → `201` with the same shape as `GET /standups/:id` plus `template` and `runNow` (the run-now result, or `null`) |
+| `POST` | `/standups` | `{ name, spaceName, templateId?, participants?: [{ userName, displayName, mandatory? }], rosterGroup?, admins?: [{ userName, displayName }], runNow?, …config }` → `201` with the same shape as `GET /standups/:id` plus `template` and `runNow` (the run-now result, or `null`). With `rosterGroup` (a Google Group email) the roster follows the group and syncs straight away |
 
 A template seeds the configuration; any config key from `PATCH /standups/:id` sent alongside wins over it (`escalateUserName` must be one of the request's `participants` or `admins`). A signed-in admin becomes the standup's admin, and `admins` adds managers on top — name one when creating on a team lead's behalf, or from a script with the operator token, since a standup with no admins is open to configuration by anyone in its space. `409 duplicate` when any standup in the workspace, archived ones included, already has that name (case-insensitive). Renaming through `PATCH /standups/:id` follows the same rule and answers `400 invalid` on `name`.
 
@@ -104,14 +115,16 @@ Admins and that standup's managers only (`403 forbidden` otherwise).
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| `PATCH` | `/standups/:id` | Any subset of `name`, `promptTime`, `deadlineTime`, `timezone`, `reminderMinutesBefore`, `escalateAfterDays`, `days` (list or `"mon,tue"`), `timeOffPolicy` (`self` \| `approval` \| `managers`, see [Personal schedules](./schedules)), `webhookUrl` (`null` disables), `questions` (list), `moodEnabled`, `moodAnonymous`, `digestEnabled`, `escalateUserName` (`null` disables). Same rules as the chat commands; `400 invalid` names the `field`. |
+| `PATCH` | `/standups/:id` | Any subset of `name`, `promptTime`, `deadlineTime`, `timezone`, `reminderMinutesBefore`, `escalateAfterDays`, `days` (list or `"mon,tue"`), `timeOffPolicy` (`self` \| `approval` \| `managers`, see [Personal schedules](./schedules)), `webhookUrl` (`null` disables), `questions` (list), `moodEnabled`, `moodAnonymous`, `digestEnabled`, `escalateUserName` (`null` disables; a participant or one of the standup's admins), `rosterGroup` (a Google Group email; `null` or empty goes back to people picked by hand). Same rules as the chat commands; `400 invalid` names the `field`. |
 | `POST` | `/standups/:id/run-now` | `{ "result": "started" \| "already_open" \| "already_closed" \| "past_deadline" \| "no_participants" }` |
 | `POST` | `/standups/:id/nudge` | Reminds everyone still expected today; `409 no_open_run` otherwise |
 | `POST` | `/standups/:id/archive`, `/unarchive` | Stops or resumes prompts; history stays |
 | `DELETE` | `/standups/:id` | Workspace admins only. `{ "confirm": "<the standup's name>" }` removes an **archived** standup with every run, answer, blocker and poll, and returns the counts; `409 active` until it is archived, `400 invalid` for a wrong name. People's own weeks and days off stay; messages already posted in Chat are not touched |
 | `POST` | `/standups/:id/participants` | `{ userName: "users/…", displayName, mandatory? }` → `201` with `reachable` (can the bot DM them) |
 | `PATCH` | `/standups/:id/participants/:userName` | `{ mandatory?, onVacation?, admin? }`; `409 last_admin` guards the last admin. `:userName` is the Chat resource name URL-encoded (`users%2F123`) |
-| `DELETE` | `/standups/:id/participants/:userName` | `204` |
+| `DELETE` | `/standups/:id/participants/:userName` | `204`. On a group roster the person is kept off: later syncs don't add them back |
+| `GET` | `/standups/:id/members` | Members of the standup's Chat space, as roster candidates; `502 chat_unavailable` carries Google's reason |
+| `POST` | `/standups/:id/roster/sync` | Sync a group roster now → `{ added: [names], removed: [names], skipped: [{ email, reason }], syncedAt }`. `409 no_roster_group` when the standup doesn't follow a group, `502 roster_unavailable` when Google refuses (the message names the admin role to grant), `503` when the server has no group support |
 | `GET` | `/standups/:id/export.csv?days=90` | CSV download |
 
 ### Runs
@@ -168,7 +181,7 @@ Admins only.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/settings` | Grouped: `chat`, `workspace`, `signIn`, `tokens`, `setup`, `mcp`. Secrets are never echoed — only `{ "set": true }` (the service account also shows its `email`). |
-| `PATCH` | `/settings` | `{ key: value, … }` for any editable field: strings set, `null` clears a secret, an empty string keeps it, booleans for `calendarOoo`, `tokenSignIn`, `setupComplete`, `mcpEnabled`. Same rules as the dashboard; `400 invalid` names the `field`; `409 lockout` refuses a change that would leave no working sign-in method. |
+| `PATCH` | `/settings` | `{ key: value, … }` for any editable field: strings set, `null` clears a secret, an empty string keeps it, booleans for `calendarOoo`, `tokenSignIn`, `setupComplete`, `mcpEnabled`. Same rules as the web app; `400 invalid` names the `field`; `409 lockout` refuses a change that would leave no working sign-in method. |
 | `POST` | `/settings/tokens/:name` | `tick`, `export` or `scim` → `201 { token }`, shown once |
 | `DELETE` | `/settings/tokens/:name` | `204` |
 | `DELETE` | `/history` | `{ "confirm": "DELETE HISTORY" }` — removes every run, submission, blocker and poll in the workspace; standups, rosters and settings stay. Returns the counts. `400 invalid` without the phrase |

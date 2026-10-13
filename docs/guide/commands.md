@@ -108,8 +108,9 @@ Anyone can DM the bot directly:
 - **Skip today:** the prompt card has a 🏖️ *Skip today* button. It asks for a
   one-line reason, posts it in the day's thread, and lists you as away, not
   missing. *Undo skip* removes that thread reply.
-- **Every field is required:** each question and the mood must be filled in.
-  Answer the blockers question with "none" when there are none.
+- **Every field is required:** each question and the mood must be filled in;
+  the form says which one is missing when you submit. Answer the blockers
+  question with "none" when there are none.
 - **Pre-fill:** the "yesterday" answer is pre-filled from your previous
   "today" answer.
 - **Late submissions** after the deadline still post, flagged *late*; the
@@ -119,12 +120,12 @@ Anyone can DM the bot directly:
   `blocker <id> resolve`. With `escalate @user` configured, the contact gets
   one DM at run close listing every blocker that newly crossed the threshold —
   each blocker is escalated once.
-- **Calendar OOO** (when [enabled](./configuration)): participants with an
-  *Out of office* event in Google Calendar are automatically marked away for
-  that day's run. Emails come from the Directory API when a Workspace admin
-  email is configured (works for everyone immediately), otherwise they are
-  learned from Chat interactions — kicking in after a person has used the
-  bot at least once.
+- **Calendar OOO** (when [enabled](./directory#calendar-ooo)): participants
+  with an *Out of office* event in Google Calendar are automatically marked
+  away for that day's run. Emails come from the [Directory](./directory) when
+  the service account has its admin role (works for everyone immediately),
+  otherwise they are learned from Chat interactions — kicking in after a
+  person has used the bot at least once.
 - **Roster snapshots:** the day's roster is frozen when the run opens;
   `add`/`remove`/`vacation` apply from the next run.
 - **Custom questions** apply from the next run. Questions containing the word
@@ -135,4 +136,10 @@ Anyone can DM the bot directly:
 
 The DM card that asks for today's standup keeps up with you: once you
 submit it shows when (with **Edit answers** until the deadline), and once
-you skip it shows **↩️ Undo skip**. Reminders and nudges update the same way.
+you skip it shows your reason with **↩️ Undo skip**. Reminders and nudges
+update the same way.
+
+On a standup whose roster follows a Google Group, `add` keeps working: people
+you add stay on. To keep a group member off, untick them in the web app's
+People grid; `remove` in Chat only lasts until the next sync adds them back
+([group rosters](./directory#rosters-that-follow-a-google-group)).

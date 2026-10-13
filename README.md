@@ -29,22 +29,26 @@ Each answer is posted as one card per person under a **per-date thread** in your
  └─ 📊 wrap-up: ✅ 7/9 mandatory submitted · ❌ Missing: Asha, Rohit
 ```
 
-**Docs: [The Handbook](docs/guide/handbook.md) · [Getting started](docs/guide/getting-started.md) · [Google Chat setup](docs/guide/google-chat-setup.md) · [Commands](docs/guide/commands.md) · [Configuration](docs/guide/configuration.md) · [Deployment](docs/guide/deployment.md)**
+**Docs: [Getting started](docs/guide/getting-started.md) · [Host](docs/guide/server-setup.md) · [Google Cloud and the Chat app](docs/guide/google-chat-setup.md) · [First test](docs/guide/first-standup.md) · [Operations](docs/guide/operations.md) · [Commands](docs/guide/commands.md) · [Configuration](docs/guide/configuration.md) · [Handbook](docs/guide/handbook.md)** — or the site at [asyncup-dev.github.io/docs](https://asyncup-dev.github.io/docs/)
 
 ## Features
 
 - **Dialog form, not a chat interrogation** — all questions in one modal, one submit. **Edit until the deadline**; the posted card updates in place.
 - **Custom questions** per standup (`questions set …`), with the mood dropdown toggleable.
 - **Mandatory vs optional participants** — the report counts only who you choose.
-- **Vacation & skip** — DM `vacation`/`back` for yourself, a 🏖️ *Skip today* button on every prompt; away people aren't nagged or counted as missing. Optional **Google Calendar OOO sync** marks people away automatically.
+- **Vacation & skip** — DM `vacation`/`back` for yourself; a 🏖️ *Skip today* button on every prompt asks for a one-line reason, posts it in the day's thread, and can be undone. Away people aren't nagged or counted as missing. Optional **Google Calendar OOO sync** marks people away automatically.
+- **Prompt cards that keep up** — the DM card turns into *Submitted* (with *Edit answers*) or *Skipped* (with *Undo skip*), and every question plus the mood is required.
+- **People grid and group rosters** — per person: on the standup, required, and which days they work. Or let a standup follow a **Google Group**: joiners and leavers sync hourly, no domain-wide delegation needed.
+- **Personal schedules** — personal weeks, days off and extra working days, with an optional manager-approval policy per standup.
 - **Pre-fill** — "yesterday" starts as your previous "today".
 - **Per-participant timezones** — anyone can DM `timezone <IANA>` and prompts go out at 09:30 *their* time; reminder nudge before the deadline, late submissions flagged.
-- **Blocker tracking, collaboration & escalation** — blockers open automatically from answers and can be **worked as items**: tag teammates (interactive DM card with Acknowledge / Update / Resolve), updates broadcast to everyone involved + a per-blocker thread, daily nudges until acknowledged, and escalation DMs when they go stale. Untagged blockers auto-resolve on the next clean submission; tagged ones need an explicit resolve.
+- **Blocker tracking, collaboration & escalation** — blockers open automatically from answers and the reporter gets a card to **👥 Tag people** from the Workspace. Tagged people get an interactive DM card (Acknowledge / Tag / Update / Resolve), updates broadcast to everyone involved + a per-blocker thread, daily nudges until acknowledged, and escalation DMs when they go stale. Untagged blockers auto-resolve on the next clean submission; tagged ones need an explicit resolve.
 - **Anonymous mood** (`mood anon`) — cards hide who felt what; the wrap-up shows the team average.
-- **Web app with Google sign-in** — guided setup with live verification, then the console: standups, blockers, reports, team and settings. Workspace admins get the console automatically; everyone else gets a personal page (their standups, answers, timezone, vacation). Token access (`DASHBOARD_TOKEN`) stays as break-glass.
+- **Web app with Google sign-in** — guided setup with live verification, then the console: standups, blockers, reports, team and settings. Workspace admins get the console automatically; everyone else gets a personal page (their standups, answers, timezone, vacation). The operator token (`OPERATOR_TOKEN`) stays as break-glass.
+- **MCP server for Claude Code** — your own assistants read standups, answer or skip, work blockers and nudge the team through scoped personal tokens. No model runs inside AsyncUp.
 - **Enterprise SSO without the SSO tax** — SAML 2.0 sign-in (Google Workspace, Okta, Entra, OneLogin) and a SCIM 2.0 provisioning endpoint (deactivate in the IdP → removed from every roster), all in the MIT core.
 - **Insights** — `trends` in chat, 8-week charts in the web app (participation, mood, blockers), weekly digest (`digest on`), CSV export.
-- **See it work immediately** — `run now` opens today's run and prompts everyone on the spot; `archive` retires a standup with history intact.
+- **See it work immediately** — `run now` opens today's run and prompts everyone on the spot (refused once the deadline has passed); `archive` retires a standup with history intact, and admins can then delete it for good. Names are unique across the workspace.
 - **Outbound webhooks** — per-standup JSON POSTs on every submission and wrap-up; pipe standups into Sheets, Zapier/n8n, or your own service.
 - **Polls** — `poll Ship Friday? | Yes | No` posts a live-updating card in the space; one tap to vote, change your vote anytime, close for final results.
 - **Team admins & multiple standups per space** — config restricted to admins; address standups by `#id`.
@@ -55,25 +59,15 @@ Each answer is posted as one card per person under a **per-date thread** in your
 
 ## Quickstart
 
-Prereq: a one-time Google Chat app configuration (~15 min) — see
-**[docs/guide/google-chat-setup.md](docs/guide/google-chat-setup.md)**.
+Follow **[Getting started](docs/guide/getting-started.md)**: it walks the whole
+path, from an empty server to a test standup in a private space, in about an
+hour and a half. The short version:
 
-```bash
-cp .env.example .env       # set DASHBOARD_TOKEN + SECRET_KEY (openssl rand -hex 32)
-docker compose up -d       # pulls ghcr.io/asyncup-dev/asyncup (amd64 + arm64)
-```
+1. **[Host](docs/guide/server-setup.md)** — Docker Compose with Caddy for HTTPS, an `.env` with `OPERATOR_TOKEN` and `SECRET_KEY`, `docker compose up -d`.
+2. **[Google Cloud and the Chat app](docs/guide/google-chat-setup.md)** — a project with the Chat API, a service-account key, and a Chat app pointing at `https://HOST/chat/events`.
+3. **[Guided setup and first test](docs/guide/first-standup.md)** — open `https://HOST/app`, finish the guided setup, run a standup in a private space.
 
-Expose `POST /chat/events` via HTTPS, point the Chat app at it, then in your team space:
-
-```
-@AsyncUp setup Engineering
-@AsyncUp add @Alice @Bob @Carol
-@AsyncUp optional @Carol
-@AsyncUp deadline 11:30
-@AsyncUp status
-```
-
-Full command and configuration reference in the [docs](docs/guide/commands.md).
+Then roll out to your team, and optionally add [group rosters](docs/guide/directory.md) and [Google or SAML sign-in](docs/guide/enterprise-sso.md).
 
 ## Development
 
@@ -90,7 +84,7 @@ Architecture: `src/core` (domain, scheduler, commands — no platform code),
 `src/adapters/gchat` (cards, event routing, API calls), `src/db` (repo over
 SQLite/PostgreSQL), `web/` (the React app served under `/app`), `src/api` (the JSON API it uses), `src/auth`
 (sessions, Google OIDC, SAML), `src/scim` (provisioning), `src/integrations`
-(Calendar, Directory), `src/ai` (summaries).
+(Calendar, Directory, Google Groups), `src/mcp` (the MCP server).
 Adding a platform means implementing the `ChatAdapter` interface in
 [src/core/adapter.ts](src/core/adapter.ts) — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
