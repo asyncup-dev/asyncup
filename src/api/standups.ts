@@ -45,7 +45,8 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
       else apiError(res, 400, 'invalid', result.message, result.field);
       return;
     }
-    const runNow = body.runNow === true ? await ctx.scheduler.runNow(result.standup) : null;
+    if (result.standup.rosterGroup) await ctx.roster?.sync(result.standup);
+    const runNow = body.runNow === true ? await ctx.scheduler.runNow((await repo.getStandupById(result.standup.id))!) : null;
     res.status(201).json({ ...(await detail(result.standup, true)), template: result.template?.id ?? null, runNow });
   });
 
@@ -58,6 +59,9 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
       return;
     }
     await repo.updateStandup(standup.id, result.fields);
+    const fresh = (await repo.getStandupById(standup.id))!;
+    // A new roster group fills the roster now rather than at the next hourly sync.
+    if (fresh.rosterGroup && fresh.rosterGroup !== standup.rosterGroup) await ctx.roster?.sync(fresh);
     res.json(await summarise(repo, (await repo.getStandupById(standup.id))!, ctx.now(), true));
   });
 
@@ -209,10 +213,24 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
     });
   });
 
+  api.post('/standups/:id/roster/sync', async (req, res) => {
+    const standup = await loadStandup(ctx, req, res, { manage: true });
+    if (!standup) return;
+    if (!ctx.roster) return apiError(res, 503, 'unavailable', 'Group rosters are not available on this server.');
+    if (!standup.rosterGroup) return apiError(res, 409, 'no_roster_group', 'This standup’s people are added by hand; set a roster group first.');
+    const result = await ctx.roster.sync(standup);
+    if (!result.ok) return apiError(res, 502, 'roster_unavailable', result.message);
+    const fresh = (await repo.getStandupById(standup.id))!;
+    res.json({ added: result.added, removed: result.removed, skipped: result.skipped, syncedAt: fresh.rosterSyncedAt });
+  });
+
   api.delete('/standups/:id/participants/:userName', async (req, res) => {
     const standup = await loadStandup(ctx, req, res, { manage: true });
     if (!standup) return;
-    if (!(await repo.removeParticipant(standup.id, String(req.params.userName)))) {
+    // On a group roster, taking someone off must survive the next sync.
+    const userName = String(req.params.userName);
+    const removed = standup.rosterGroup ? await repo.excludeParticipant(standup.id, userName) : await repo.removeParticipant(standup.id, userName);
+    if (!removed) {
       apiError(res, 404, 'not_found', 'Not a participant.');
       return;
     }

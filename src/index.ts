@@ -6,6 +6,7 @@ import { FakeAdapter } from './adapters/fake/adapter.js';
 import { GoogleChatAdapter } from './adapters/gchat/adapter.js';
 import { EventRouter } from './adapters/gchat/events.js';
 import { GoogleCalendarOoo } from './integrations/google-calendar.js';
+import { GoogleGroupDirectory } from './integrations/google-groups.js';
 import { GoogleDirectory } from './integrations/google-directory.js';
 import { BlockerService } from './core/blocker-service.js';
 import { CommandHandler } from './core/commands.js';
@@ -17,6 +18,7 @@ import { ScheduleService } from './core/schedule.js';
 import { StandupService } from './core/standup-service.js';
 import { deriveWebhookSecret } from './core/crypto.js';
 import { WebhookNotifier } from './core/webhooks.js';
+import { RosterSync } from './core/roster-sync.js';
 import { createServer } from './server.js';
 
 const config = loadConfig();
@@ -59,8 +61,18 @@ const router = new EventRouter(
 
 // Integrations are resolved from settings per use, so settings changes
 // apply immediately — no restart.
+const roster = new RosterSync(
+  repo,
+  async () => {
+    const s = await settings.get();
+    return s.serviceAccountJson ? new GoogleGroupDirectory(s.serviceAccountJson) : null;
+  },
+  undefined,
+  (msg) => console.log(`[roster] ${msg}`),
+);
 const providers: SchedulerProviders = {
   schedule,
+  roster,
   ooo: async () => {
     const s = await settings.get();
     if (!s.calendarOoo || !s.serviceAccountJson) return null;
@@ -85,6 +97,7 @@ const app = createServer({
   blockers: blockerService,
   service: service,
   schedule,
+  roster,
   repo,
   settings,
   dashboardToken: config.dashboardToken,

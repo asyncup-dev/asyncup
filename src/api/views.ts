@@ -159,11 +159,14 @@ export async function standupDetailView(repo: Repo, standup: Standup, now: DateT
         timezone: x.timezone,
         onVacation: x.onVacation,
         workingDays: x.workingDays,
+        source: x.source,
         // A personal week is the person's, so the console warns when changing it here reaches other standups too.
         otherStandups: (await repo.listStandupsForUser(x.userName)).length - 1,
       })),
     ),
     admins: (await repo.listAdmins(standup.id)).map(person),
+    // Group members taken off by hand: shown as off, and kept off by syncs.
+    keptOff: (await repo.listRosterRows(standup.id)).filter((r) => r.keptOff && !r.active).map(person),
   };
 }
 

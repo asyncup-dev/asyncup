@@ -111,6 +111,35 @@ listed as 🏖️ away — never as missing.
 The `admin.directory.user.readonly` scope is read-only. If you skip it and
 leave the admin email empty, everything else works unchanged.
 
+## Optional: rosters from a Google Group {#roster-group}
+
+A standup can follow a Google Group instead of people picked from its space.
+Everyone in the group, including members of nested groups, is on the standup.
+Joiners get the default setup: prompted, counted when they miss it, and
+following the standup's days. Leavers drop off, and their history stays.
+People you take off by hand stay off, and people you add by hand stay on.
+
+Pick **Everyone in a Google Group** under the standup's **Settings › People**,
+or when you create the standup, and enter the group's email address. The
+roster syncs straight away, then hourly, and again in the hour before each
+run. **Sync now** shows who was added, who was removed, and who was skipped
+and why: people outside your Workspace, suspended accounts, and accounts that
+aren't active.
+
+AsyncUp reads groups as its service account, with an admin role and no
+domain-wide delegation, as Google recommends:
+
+1. In the Google Cloud project that holds the service account, enable the
+   **Admin SDK API**.
+2. In the Admin console, go to **Account › Admin roles › Create new role**.
+   Give it only **Admin API privileges › Groups › Read** and **Users › Read**.
+3. Open the new role, click **Assign service accounts**, and enter the service
+   account's email. Use the service account, not a person: AsyncUp calls Google
+   as the service account.
+
+A new role can take up to about 15 minutes to apply. Until then, a sync says
+it can't read the group, and names the role to grant.
+
 ## Troubleshooting
 
 - **"No DM space with users/…"** in logs → that user doesn't have the app installed; see step 5.

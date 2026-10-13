@@ -1,3 +1,5 @@
+import { GroupAccessError, type GroupDirectory, type GroupListing } from '../src/core/groups.js';
+import { RosterSync } from '../src/core/roster-sync.js';
 import { DateTime } from 'luxon';
 import { ScheduleService } from '../src/core/schedule.js';
 import { FakeAdapter } from '../src/adapters/fake/adapter.js';
@@ -61,6 +63,8 @@ export async function makeStack(
   const service = new StandupService(repo, adapter, clock.now, webhooks);
   const scheduleRef: { current: ScheduleService | undefined } = { current: undefined };
   const blockers = new BlockerService(repo, adapter, clock.now);
+  const groups = new FakeGroups();
+  const roster = new RosterSync(repo, async () => groups, clock.now);
   const scheduler = new Scheduler(
     repo,
     adapter,
@@ -70,6 +74,7 @@ export async function makeStack(
     {
       ooo: async () => opts.ooo ?? null,
       directory: async () => opts.directory ?? null,
+      roster,
       get schedule() {
         return scheduleRef.current;
       },
@@ -82,7 +87,21 @@ export async function makeStack(
   const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter, polls, schedule);
   commands.attachRunner(scheduler);
 
-  return { repo, adapter, service, blockers, polls, settings, scheduler, commands, clock, schedule };
+  return { repo, adapter, service, blockers, polls, settings, scheduler, commands, clock, schedule, groups, roster };
+}
+
+/** Google Groups as the tests want them: a listing per group email, or an error to throw. */
+export class FakeGroups implements GroupDirectory {
+  listings = new Map<string, GroupListing | Error>();
+  calls: string[] = [];
+
+  async listMembers(group: string): Promise<GroupListing> {
+    this.calls.push(group);
+    const listing = this.listings.get(group);
+    if (!listing) throw new GroupAccessError(`There is no Google Group ${group}.`);
+    if (listing instanceof Error) throw listing;
+    return listing;
+  }
 }
 
 export async function seedStandup(repo: Repo, opts: { deadlineTime?: string; spaceName?: string } = {}) {

@@ -331,6 +331,16 @@ CREATE TABLE schedule_change_digests (
   PRIMARY KEY (change_id, standup_id)
 );
 `,
+  // 13 — roster from a Google Group: the group per standup and its sync
+  //      state; where each participant came from, and who was taken off
+  //      by hand so a sync doesn't put them back
+  `
+ALTER TABLE standups ADD COLUMN roster_group TEXT;
+ALTER TABLE standups ADD COLUMN roster_synced_at TEXT;
+ALTER TABLE standups ADD COLUMN roster_sync_error TEXT;
+ALTER TABLE participants ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE participants ADD COLUMN kept_off INTEGER NOT NULL DEFAULT 0;
+`,
 ];
 
 /**
@@ -587,6 +597,14 @@ CREATE TABLE schedule_change_digests (
   PRIMARY KEY (change_id, standup_id)
 );
 `,
+  // 13 — roster from a Google Group (mirrors the SQLite migration)
+  `
+ALTER TABLE standups ADD COLUMN roster_group TEXT;
+ALTER TABLE standups ADD COLUMN roster_synced_at TEXT;
+ALTER TABLE standups ADD COLUMN roster_sync_error TEXT;
+ALTER TABLE participants ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE participants ADD COLUMN kept_off INTEGER NOT NULL DEFAULT 0;
+`,
 ];
 
 function toMcpToken(row: any): McpToken {
@@ -623,6 +641,9 @@ function toStandup(row: any): Standup {
     moodAnonymous: !!row.mood_anonymous,
     digestEnabled: !!row.digest_enabled,
     timeOffPolicy: (row.time_off_policy ?? 'self') as Standup['timeOffPolicy'],
+    rosterGroup: row.roster_group ?? null,
+    rosterSyncedAt: row.roster_synced_at ?? null,
+    rosterSyncError: row.roster_sync_error ?? null,
     escalateUserName: row.escalate_user_name ?? null,
     escalateDisplayName: row.escalate_display_name ?? null,
     escalateAfterDays: row.escalate_after_days,
@@ -640,6 +661,7 @@ function toParticipant(row: any): Participant {
     mandatory: !!row.mandatory,
     onVacation: !!row.on_vacation,
     workingDays: row.working_days ?? null,
+    source: row.source === 'group' ? 'group' : 'manual',
     active: !!row.active,
   };
 }
@@ -878,6 +900,7 @@ export class Repo {
         | 'moodAnonymous'
         | 'digestEnabled'
         | 'timeOffPolicy'
+        | 'rosterGroup'
         | 'escalateUserName'
         | 'escalateDisplayName'
         | 'escalateAfterDays'
@@ -898,6 +921,7 @@ export class Repo {
       moodAnonymous: 'mood_anonymous',
       digestEnabled: 'digest_enabled',
       timeOffPolicy: 'time_off_policy',
+      rosterGroup: 'roster_group',
       escalateUserName: 'escalate_user_name',
       escalateDisplayName: 'escalate_display_name',
       escalateAfterDays: 'escalate_after_days',
@@ -929,9 +953,43 @@ export class Repo {
       `INSERT INTO participants (standup_id, user_name, display_name, mandatory, active)
        VALUES (?, ?, ?, ?, 1)
        ON CONFLICT (standup_id, user_name)
-       DO UPDATE SET display_name = excluded.display_name, active = 1`,
+       DO UPDATE SET display_name = excluded.display_name, active = 1, kept_off = 0`,
       [input.standupId, input.userName, input.displayName, input.mandatory === false ? 0 : 1],
     );
+  }
+
+  // --- roster from a Google Group ---
+
+  /** Every roster row, on or off, with where it came from — what a group sync compares against. */
+  async listRosterRows(standupId: number): Promise<{ userName: string; displayName: string; active: boolean; source: 'manual' | 'group'; keptOff: boolean }[]> {
+    const rows = await this.db.all('SELECT user_name, display_name, active, source, kept_off FROM participants WHERE standup_id = ? ORDER BY display_name', [standupId]);
+    return rows.map((r: any) => ({ userName: r.user_name, displayName: r.display_name, active: !!r.active, source: r.source === 'group' ? 'group' : 'manual', keptOff: !!r.kept_off }));
+  }
+
+  /** A group member joins (or rejoins) the roster unless they were taken off by hand; their name follows the directory. */
+  async syncGroupMember(standupId: number, userName: string, displayName: string): Promise<void> {
+    await this.db.run(
+      `INSERT INTO participants (standup_id, user_name, display_name, mandatory, active, source)
+       VALUES (?, ?, ?, 1, 1, 'group')
+       ON CONFLICT (standup_id, user_name)
+       DO UPDATE SET display_name = excluded.display_name, active = CASE WHEN participants.kept_off = 1 THEN participants.active ELSE 1 END`,
+      [standupId, userName, displayName],
+    );
+  }
+
+  /** Someone who left the group leaves the roster; people added by hand stay. */
+  async dropGroupMember(standupId: number, userName: string): Promise<void> {
+    await this.db.run(`UPDATE participants SET active = 0 WHERE standup_id = ? AND user_name = ? AND source = 'group'`, [standupId, userName]);
+  }
+
+  /** Taken off by hand on a group roster: off, and kept off by later syncs. */
+  async excludeParticipant(standupId: number, userName: string): Promise<boolean> {
+    const result = await this.db.run('UPDATE participants SET active = 0, kept_off = 1 WHERE standup_id = ? AND user_name = ?', [standupId, userName]);
+    return result.changes > 0;
+  }
+
+  async setRosterSync(standupId: number, at: string, error: string | null): Promise<void> {
+    await this.db.run('UPDATE standups SET roster_synced_at = ?, roster_sync_error = ? WHERE id = ?', [at, error, standupId]);
   }
 
   async setParticipantMandatory(standupId: number, userName: string, mandatory: boolean): Promise<boolean> {

@@ -15,11 +15,13 @@ const ENG = {
   digestEnabled: true,
   escalation: { afterDays: 2, contact: { userName: 'users/priya', displayName: 'Priya Sharma' } },
   webhook: { configured: false },
+  roster: { group: null, syncedAt: null, error: null },
   people: { total: 9, mandatory: 8 },
   today: { date: '2026-09-16', status: 'open', submitted: 7, expected: 9, missing: [{ userName: 'users/asha', displayName: 'Asha Verma' }, { userName: 'users/rohit', displayName: 'Rohit Kumar' }] },
   permissions: { manage: true },
   participants: [],
   admins: [],
+  keptOff: [],
 };
 const DESIGN = { ...ENG, id: 2, name: 'Design', spaceName: 'spaces/BBBB', people: { total: 5, mandatory: 5 }, today: { date: '2026-09-16', status: 'closed', submitted: 5, expected: 5, missing: [] } };
 const WEEKLY = { ...ENG, id: 3, name: 'Product Weekly', today: { date: '2026-09-16', status: null, submitted: 0, expected: 0, missing: [] }, permissions: { manage: false } };

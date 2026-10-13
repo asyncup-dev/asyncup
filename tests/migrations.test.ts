@@ -7,8 +7,8 @@ import { POSTGRES_MIGRATIONS, Repo, SQLITE_MIGRATIONS } from '../src/db/repo.js'
 
 describe('migration 10 — AI removal', () => {
   it('keeps both dialect arrays aligned', () => {
-    expect(SQLITE_MIGRATIONS).toHaveLength(12);
-    expect(POSTGRES_MIGRATIONS).toHaveLength(12);
+    expect(SQLITE_MIGRATIONS).toHaveLength(13);
+    expect(POSTGRES_MIGRATIONS).toHaveLength(13);
     for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
       expect(migrations[9]).toContain('DROP COLUMN ai_enabled');
       expect(migrations[9]).toContain("'llmApiKey'");
@@ -45,7 +45,7 @@ describe('migration 10 — AI removal', () => {
     const columns = (check.query('PRAGMA table_info(standups)').all() as { name: string }[]).map((c) => c.name);
     expect(columns).not.toContain('ai_enabled');
     expect(columns).toContain('digest_enabled');
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(12);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(13);
     check.close();
   });
 });
@@ -89,7 +89,7 @@ describe('migration 11 — MCP tokens and activity', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(12);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(13);
     check.close();
   });
 });
@@ -130,7 +130,35 @@ describe('migration 12 — personal schedules', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(12);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(13);
     check.close();
+  });
+});
+
+describe('migration 13 — roster from a Google Group', () => {
+  it('adds the roster columns in both dialects', () => {
+    for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
+      expect(migrations[12]).toContain('ALTER TABLE standups ADD COLUMN roster_group TEXT');
+      expect(migrations[12]).toContain("ALTER TABLE participants ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
+      expect(migrations[12]).toContain('ALTER TABLE participants ADD COLUMN kept_off INTEGER NOT NULL DEFAULT 0');
+    }
+  });
+
+  it('upgrades a v12 database, keeping every existing roster as people added by hand', async () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), 'asyncup-mig-')), 'v12.db');
+    const raw = new Database(dbPath);
+    for (const migration of SQLITE_MIGRATIONS.slice(0, 12)) raw.exec(migration);
+    raw.exec(`
+      PRAGMA user_version = 12;
+      INSERT INTO standups (tenant_id, space_name, name, timezone) VALUES ('default', 'spaces/x', 'Engineering', 'UTC');
+      INSERT INTO participants (standup_id, user_name, display_name) VALUES (1, 'users/a', 'Asha');
+    `);
+    raw.close();
+
+    const repo = await Repo.sqlite(dbPath);
+    const standup = (await repo.listStandupsBySpace('default', 'spaces/x'))[0]!;
+    expect(standup).toMatchObject({ rosterGroup: null, rosterSyncedAt: null, rosterSyncError: null });
+    expect(await repo.listRosterRows(standup.id)).toEqual([{ userName: 'users/a', displayName: 'Asha', active: true, source: 'manual', keptOff: false }]);
+    await repo.close();
   });
 });

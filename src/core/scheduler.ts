@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { OooChecker } from './ooo.js';
+import type { RosterSync } from './roster-sync.js';
 import type { ScheduleService } from './schedule.js';
 import { directoryKey, type UserDirectory } from './directory.js';
 import type { Repo } from '../db/repo.js';
@@ -32,6 +33,8 @@ export interface SchedulerProviders {
   ooo?: () => Promise<OooChecker | null>;
   /** Personal weeks and dated overrides; absent in older wiring. */
   schedule?: ScheduleService;
+  /** Rosters drawn from a Google Group; absent in older wiring. */
+  roster?: RosterSync;
   directory?: () => Promise<UserDirectory | null>;
 }
 
@@ -81,6 +84,16 @@ export class Scheduler {
       if (stale.date < today) await this.closeRun(standup, stale);
     }
 
+    // A group roster refreshes hourly, and again in the hour before the run opens.
+    const roster = this.providers.roster;
+    let synced = false;
+    const syncRoster = async (minutes: number) => {
+      if (synced || !roster?.stale(standup, minutes)) return;
+      synced = true;
+      await roster.sync(standup);
+    };
+    await syncRoster(60);
+
     if (!standupDays(standup).includes(WEEKDAY_BY_LUXON[localNow.weekday]!)) return;
 
     const promptAt = timeOn(today, standup.promptTime, zone);
@@ -89,8 +102,9 @@ export class Scheduler {
 
     let run = await this.repo.getRun(standup.id, today);
     if (!run) {
-      const roster = await this.repo.listParticipants(standup.id);
-      const active = roster.filter((p) => !p.onVacation);
+      if (now >= promptAt.minus({ hours: 1 })) await syncRoster(10);
+      const people = await this.repo.listParticipants(standup.id);
+      const active = people.filter((p) => !p.onVacation);
       if (active.length === 0) return;
       // The run opens once promptTime arrives in the earliest zone on the
       // roster, so participants east of the standup zone aren't held back.
@@ -156,6 +170,7 @@ export class Scheduler {
     if (run?.status === 'closed') return 'already_closed';
     const existed = !!run;
     if (!run) {
+      if (this.providers.roster?.stale(standup, 10)) await this.providers.roster.sync(standup);
       const roster = await this.repo.listParticipants(standup.id);
       if (roster.filter((p) => !p.onVacation).length === 0) return 'no_participants';
       run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);

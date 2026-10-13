@@ -9,6 +9,7 @@ import { runProgress } from '../core/progress.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { SettingsService } from '../core/settings.js';
 import type { StandupService } from '../core/standup-service.js';
+import type { RosterSync } from '../core/roster-sync.js';
 import type { ScheduleService } from '../core/schedule.js';
 import { standupQuestions, type Standup, type Weekday } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
@@ -40,6 +41,8 @@ export interface ApiContext {
   service: StandupService | null;
   /** Personal weeks, days off and approvals; null when the host was built without it. */
   schedule: ScheduleService | null;
+  /** Rosters drawn from a Google Group; null when the host was built without it. */
+  roster: RosterSync | null;
   webhooks: WebhookNotifier;
   /** Builds a Chat API client for verification calls (tests inject a fake). */
   chatClientFactory: ChatClientFactory;
@@ -156,6 +159,7 @@ export async function summarise(repo: Repo, s: Standup, now: DateTime, manage: b
       contact: s.escalateUserName ? { userName: s.escalateUserName, displayName: s.escalateDisplayName } : null,
     },
     webhook: { configured: !!s.webhookUrl },
+    roster: { group: s.rosterGroup, syncedAt: s.rosterSyncedAt, error: s.rosterSyncError },
     people: { total: participants.length, mandatory: participants.filter((p) => p.mandatory).length },
     today,
     permissions: { manage },
