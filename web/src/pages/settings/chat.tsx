@@ -70,7 +70,7 @@ export function ChatSettings() {
           {verifyEvent.data || verifyEvent.isPending || verifyEvent.isError ? <div style={{ flexBasis: '100%' }}><VerifyStatus state={fromMutation(verifyEvent)} /></div> : null}
           {verifyDm.data || verifyDm.isPending || verifyDm.isError ? <div style={{ flexBasis: '100%' }}><VerifyStatus state={fromMutation(verifyDm)} /></div> : null}
         </SettingsRow>
-        <SettingsRow label="Directory & Calendar access" hint="Resolves emails, recognises admins, marks people away on OOO days. Needs domain-wide delegation.">
+        <SettingsRow label="Directory & Calendar access" hint="Directory lookups (emails, admin roles) work without this once the service account has an admin role with Users › Read. Calendar out-of-office needs domain-wide delegation, acting as a Workspace admin.">
           <label className="row t-small">
             <input type="checkbox" checked={dwdOn} onChange={(e) => (e.target.checked ? setAdminEmail(email || '') : void save({ workspaceAdminEmail: '' }))} /> {dwdOn ? `On · acting as ${s.workspace.workspaceAdminEmail}` : 'Off'}
           </label>

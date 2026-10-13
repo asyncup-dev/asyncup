@@ -11,6 +11,14 @@ export interface DirectoryUser {
   suspended: boolean;
 }
 
+/** The service account may not read users: no admin role with Users › Read, and no delegation. */
+export class DirectoryAccessError extends Error {
+  // Explicit so Bun's function coverage can see it being called.
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 export interface UserDirectory {
   /** userKey: a Google user id (the digits of "users/<id>") or an email. */
   lookup(userKey: string): Promise<DirectoryUser | null>;

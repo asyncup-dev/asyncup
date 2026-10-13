@@ -1,13 +1,12 @@
 import { JWT } from 'google-auth-library';
-import type { DirectoryUser, UserDirectory } from '../core/directory.js';
+import { DirectoryAccessError, type DirectoryUser, type UserDirectory } from '../core/directory.js';
 
 const SCOPE = 'https://www.googleapis.com/auth/admin.directory.user.readonly';
 
 /**
- * Admin SDK Directory lookups. Requires the service-account key with
- * domain-wide delegation for admin.directory.user.readonly, impersonating a
- * Workspace admin (the "Workspace admin" setting under Google Chat) — Directory
- * reads are only permitted to admin subjects.
+ * Admin SDK Directory lookups, called as the service account itself: give it
+ * an admin role with Users › Read, as for group rosters. A Workspace admin
+ * email switches to domain-wide delegation, impersonating that admin.
  */
 export class GoogleDirectory implements UserDirectory {
   private clientEmail: string;
@@ -15,7 +14,7 @@ export class GoogleDirectory implements UserDirectory {
 
   constructor(
     credentialsJson: string,
-    private adminEmail: string,
+    private adminEmail = '',
   ) {
     const creds = JSON.parse(credentialsJson);
     this.clientEmail = creds.client_email;
@@ -26,7 +25,7 @@ export class GoogleDirectory implements UserDirectory {
     const jwt = new JWT({
       email: this.clientEmail,
       key: this.privateKey,
-      subject: this.adminEmail,
+      ...(this.adminEmail ? { subject: this.adminEmail } : {}),
       scopes: [SCOPE],
     });
     try {
@@ -47,7 +46,11 @@ export class GoogleDirectory implements UserDirectory {
         suspended: !!res.data.suspended,
       };
     } catch (err: any) {
-      if (err?.response?.status === 404 || err?.code === 404) return null;
+      const status = err?.response?.status ?? err?.code;
+      if (status === 404) return null;
+      if (status === 403 && !this.adminEmail) {
+        throw new DirectoryAccessError(`AsyncUp can't read users. In the Admin console, give ${this.clientEmail} an admin role with Users › Read, and enable the Admin SDK API in its Google Cloud project.`);
+      }
       throw err;
     }
   }

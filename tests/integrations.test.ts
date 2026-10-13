@@ -2,6 +2,7 @@ import { describe, expect, it, spyOn } from 'bun:test';
 import { JWT, OAuth2Client } from 'google-auth-library';
 import { GoogleCalendarOoo } from '../src/integrations/google-calendar.js';
 import { GoogleDirectory } from '../src/integrations/google-directory.js';
+import { DirectoryAccessError } from '../src/core/directory.js';
 
 const CREDS = JSON.stringify({ client_email: 'bot@proj.iam.gserviceaccount.com', private_key: 'PEM' });
 
@@ -140,6 +141,27 @@ describe('GoogleDirectory', () => {
         throw Object.assign(new Error('Not Found'), { code: 404 });
       },
       async () => expect(await dir.lookup('ghost@org.com')).toBeNull(),
+    );
+  });
+
+  it('calls as the service account itself when no Workspace admin is set, and explains a missing role', async () => {
+    const dir = new GoogleDirectory(CREDS);
+    await withRequest(
+      async () => ({ data: { id: '7', primaryEmail: 'asha@org.com' } }),
+      async (calls) => {
+        expect(await dir.lookup('asha@org.com')).toMatchObject({ id: '7', email: 'asha@org.com' });
+        expect(calls[0]!.subject).toBeUndefined();
+      },
+    );
+    await withRequest(
+      async () => {
+        throw Object.assign(new Error('Forbidden'), { response: { status: 403 } });
+      },
+      async () => {
+        const err = await dir.lookup('asha@org.com').catch((e) => e);
+        expect(err).toBeInstanceOf(DirectoryAccessError);
+        expect(err.message).toBe("AsyncUp can't read users. In the Admin console, give bot@proj.iam.gserviceaccount.com an admin role with Users › Read, and enable the Admin SDK API in its Google Cloud project.");
+      },
     );
   });
 

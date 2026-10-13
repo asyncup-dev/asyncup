@@ -78,7 +78,7 @@ export function ServiceAccountPage() {
           <input id="dwd" type="checkbox" checked={dwdOn} onChange={(e) => setDwd(e.target.checked)} />
           <label htmlFor="dwd">
             <div className="t-medium">Directory &amp; Calendar access (optional)</div>
-            <div className="t-caption">Lets AsyncUp resolve emails, recognise Workspace admins and auto-mark people away on out-of-office days. Needs domain-wide delegation.</div>
+            <div className="t-caption">Only for Calendar out-of-office, which needs domain-wide delegation. Email and admin lookups work without it once the service account has an admin role with Users › Read.</div>
           </label>
         </div>
         {dwdOn ? (

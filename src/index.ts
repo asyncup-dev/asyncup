@@ -80,7 +80,7 @@ const providers: SchedulerProviders = {
   },
   directory: async () => {
     const s = await settings.get();
-    if (!s.workspaceAdminEmail || !s.serviceAccountJson) return null;
+    if (!s.serviceAccountJson) return null;
     return new GoogleDirectory(s.serviceAccountJson, s.workspaceAdminEmail);
   },
 };
