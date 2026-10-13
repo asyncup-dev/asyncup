@@ -1,4 +1,4 @@
-import type { ChatAdapter, SpaceInfo, SpaceMember } from '../../core/adapter.js';
+import type { ChatAdapter, SpaceInfo, SpaceMember, PromptState } from '../../core/adapter.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import type { TimeOffRequest } from '../../core/schedule.js';
 
@@ -10,6 +10,8 @@ interface SentDm {
   blockerId?: number;
   text?: string;
   request?: TimeOffRequest;
+  /** A blocker card sent to the person who raised it. */
+  owner?: boolean;
 }
 
 interface PostedMessage {
@@ -37,14 +39,23 @@ export class FakeAdapter implements ChatAdapter {
 
   constructor(private log: ((msg: string) => void) | null = null) {}
 
-  async sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<void> {
+  async sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<string | null> {
     this.dms.push({ kind: 'prompt', userName, standupId: standup.id, runId: run.id });
     this.log?.(`DM prompt → ${userName} (standup "${standup.name}", ${run.date})`);
+    return `messages/fake-${++this.messageCounter}`;
   }
 
-  async sendReminder(userName: string, standup: Standup, run: Run): Promise<void> {
+  async sendReminder(userName: string, standup: Standup, run: Run): Promise<string | null> {
     this.dms.push({ kind: 'reminder', userName, standupId: standup.id, runId: run.id });
     this.log?.(`DM reminder → ${userName} (standup "${standup.name}", ${run.date})`);
+    return `messages/fake-${++this.messageCounter}`;
+  }
+
+  /** Card rewrites, newest last: which messages, and the state they now show. */
+  cardUpdates: { messageNames: string[]; runId: number; state: PromptState }[] = [];
+
+  async updateStandupCards(messageNames: string[], _standup: Standup, run: Run, state: PromptState): Promise<void> {
+    this.cardUpdates.push({ messageNames, runId: run.id, state });
   }
 
   async postThreadParent(standup: Standup, run: Run): Promise<void> {
@@ -98,8 +109,8 @@ export class FakeAdapter implements ChatAdapter {
     this.log?.(`DM text → ${userName}: ${text.split('\n')[0]}`);
   }
 
-  async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
-    this.dms.push({ kind: 'blockerCard', userName, standupId: standup.id, blockerId: blocker.id, text: note });
+  async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string, owner = false): Promise<void> {
+    this.dms.push({ kind: 'blockerCard', userName, standupId: standup.id, blockerId: blocker.id, text: note, ...(owner ? { owner } : {}) });
     this.log?.(`DM blocker card #${blocker.id} → ${userName} (${note})`);
   }
 

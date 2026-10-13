@@ -17,12 +17,18 @@ export interface SpaceMember {
  * Platform abstraction. The core never touches Google Chat (or Slack/Teams)
  * APIs directly — only this interface. New platforms = new implementation.
  */
-export interface ChatAdapter {
-  /** DM the user a prompt with a way to fill in the standup form. */
-  sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<void>;
+/** Where someone stands on a run, as their prompt cards show it. */
+export type PromptState = { kind: 'open' } | { kind: 'submitted'; at: string; late: boolean } | { kind: 'skipped' };
 
-  /** DM a reminder to someone who has not submitted yet. */
-  sendReminder(userName: string, standup: Standup, run: Run): Promise<void>;
+export interface ChatAdapter {
+  /** DM the user a prompt with a way to fill in the standup form; returns the card's message name when known. */
+  sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<string | null>;
+
+  /** DM a reminder to someone who has not submitted yet; returns the card's message name when known. */
+  sendReminder(userName: string, standup: Standup, run: Run): Promise<string | null>;
+
+  /** Rewrite the prompt, reminder and nudge cards already sent for a run to show where the person stands. */
+  updateStandupCards(messageNames: string[], standup: Standup, run: Run, state: PromptState): Promise<void>;
 
   /** Post the parent message that opens the day's thread in the report space. */
   postThreadParent(standup: Standup, run: Run): Promise<void>;
@@ -49,7 +55,7 @@ export interface ChatAdapter {
    * Interactive blocker card (Acknowledge / Add update / Resolve buttons),
    * DMed when someone is tagged on a blocker or nudged about one.
    */
-  sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void>;
+  sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string, owner?: boolean): Promise<void>;
 
   /** DM a manager a time-off request with Approve / Decline. */
   sendTimeOffRequest(managerUserName: string, request: TimeOffRequest): Promise<void>;

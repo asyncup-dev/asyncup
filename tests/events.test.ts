@@ -63,7 +63,7 @@ describe('EventRouter', () => {
       user: { name: 'users/alice', displayName: 'Alice' },
       space: { name: 'spaces/dm-alice', spaceType: 'DIRECT_MESSAGE' },
     });
-    expect(skipped.text).toContain('Skipped');
+    expect(skipped.cardsV2[0].card.sections[0].widgets[0].textParagraph.text).toContain('You skipped today');
   });
 
   it('routes space messages to the command handler with sender and mentions', async () => {
@@ -247,7 +247,7 @@ describe('EventRouter', () => {
       user: { name: 'users/alice', displayName: 'Alice' },
     });
     expect(reply.actionResponse.type).toBe('UPDATE_MESSAGE');
-    expect(reply.text).toContain('Skipped');
+    expect(reply.cardsV2[0].card.sections[0].widgets[0].textParagraph.text).toContain('You skipped today');
     expect(
       (await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')?.skippedAt,
     ).not.toBeNull();

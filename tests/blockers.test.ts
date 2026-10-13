@@ -29,7 +29,7 @@ describe('Blocker collaboration', () => {
     expect(reply).toContain('Tagged Bob');
     expect(reply).toContain('explicit');
 
-    const cards = stack.adapter.dms.filter((d) => d.kind === 'blockerCard');
+    const cards = stack.adapter.dms.filter((d) => d.kind === 'blockerCard' && !d.owner);
     expect(cards).toHaveLength(1);
     expect(cards[0]!.userName).toBe(BOB.userName);
     expect(cards[0]!.blockerId).toBe(blocker.id);

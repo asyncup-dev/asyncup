@@ -105,7 +105,7 @@ describe('cards (reminder, blocker, poll, thread and summary variants)', () => {
     expect(report.decoratedText.topLabel).toBe('Reported by Alice on 2026-06-10');
     expect(report.decoratedText.text).toBe('Waiting on API keys');
     const actions = actionsOf(buttons.buttonList.buttons);
-    expect(actions.map((a) => a.function)).toEqual(['ackBlocker', 'openBlockerUpdate', 'resolveBlocker']);
+    expect(actions.map((a) => a.function)).toEqual(['ackBlocker', 'openTagBlocker', 'openBlockerUpdate', 'resolveBlocker']);
     expect(actions[1].interaction).toBe('OPEN_DIALOG');
     for (const action of actions) {
       expect(action.parameters).toEqual([{ key: 'blockerId', value: '3' }]);

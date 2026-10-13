@@ -1,3 +1,4 @@
+import type { PromptState } from '../../core/adapter.js';
 import { describeDates, type TimeOffRequest } from '../../core/schedule.js';
 import { DateTime } from 'luxon';
 import { moodEmoji as moodEmojiFor } from '../../core/insights.js';
@@ -18,6 +19,9 @@ import {
 export const OPEN_DIALOG_FN = 'openStandupDialog';
 export const SUBMIT_DIALOG_FN = 'submitStandup';
 export const SKIP_TODAY_FN = 'skipToday';
+export const UNSKIP_FN = 'unskipToday';
+export const OPEN_TAG_FN = 'openTagBlocker';
+export const SUBMIT_TAG_FN = 'submitTagBlocker';
 export const ACK_BLOCKER_FN = 'ackBlocker';
 export const RESOLVE_BLOCKER_FN = 'resolveBlocker';
 export const OPEN_BLOCKER_UPDATE_FN = 'openBlockerUpdate';
@@ -58,26 +62,42 @@ function promptButtons(runId: number, fillLabel: string, endpoint: string | null
   };
 }
 
-/** DM card asking the participant to fill in today's standup. */
-export function promptMessage(standup: Standup, run: Run, endpoint: string | null = null) {
+/** The prompt card's text and buttons for where the person stands on the run. */
+function promptBody(standup: Standup, run: Run, state: PromptState, endpoint: string | null) {
+  const param = [{ key: 'runId', value: String(run.id) }];
+  const due = `<b>${standup.deadlineTime} ${standup.timezone}</b>`;
+  if (state.kind === 'submitted') {
+    const at = DateTime.fromISO(state.at).setZone(standup.timezone).toFormat('HH:mm');
+    return [
+      { textParagraph: { text: `✅ Submitted at <b>${at}</b>${state.late ? ' (late)' : ''}. You can edit your answers until ${due}.` } },
+      { buttonList: { buttons: [{ text: 'Edit answers', onClick: { action: clickAction(OPEN_DIALOG_FN, param, endpoint, 'OPEN_DIALOG') } }] } },
+    ];
+  }
+  if (state.kind === 'skipped') {
+    return [
+      { textParagraph: { text: `🏖️ You skipped today, so you won’t be counted as missing. Changed your mind? Undo it before ${due}.` } },
+      { buttonList: { buttons: [{ text: '↩️ Undo skip', onClick: { action: clickAction(UNSKIP_FN, param, endpoint) } }] } },
+    ];
+  }
+  return [
+    {
+      textParagraph: {
+        text: `Good morning! Time for your async standup — it takes a minute. Due by ${due}. You can re-open the form to edit until the deadline.`,
+      },
+    },
+    promptButtons(run.id, 'Fill standup', endpoint),
+  ];
+}
+
+/** DM card asking the participant to fill in today's standup; later rewritten to show they submitted or skipped. */
+export function promptMessage(standup: Standup, run: Run, endpoint: string | null = null, state: PromptState = { kind: 'open' }) {
   return {
     cardsV2: [
       {
         cardId: `standup-prompt-${run.id}`,
         card: {
           header: { title: `📋 ${standup.name}`, subtitle: humanDate(run.date) },
-          sections: [
-            {
-              widgets: [
-                {
-                  textParagraph: {
-                    text: `Good morning! Time for your async standup — it takes a minute. Due by <b>${standup.deadlineTime} ${standup.timezone}</b>. You can re-open the form to edit until the deadline.`,
-                  },
-                },
-                promptButtons(run.id, 'Fill standup', endpoint),
-              ],
-            },
-          ],
+          sections: [{ widgets: promptBody(standup, run, state, endpoint) }],
         },
       },
     ],
@@ -157,8 +177,50 @@ export function standupDialog(
   };
 }
 
-/** Interactive DM card for someone tagged on (or nudged about) a blocker. */
-export function blockerCard(standup: Standup, blocker: Blocker, note: string, endpoint: string | null = null) {
+/** Pick people in the Workspace to tag on a blocker; they get the blocker card. */
+export function tagBlockerDialog(blocker: Blocker, endpoint: string | null = null) {
+  return {
+    actionResponse: {
+      type: 'DIALOG',
+      dialogAction: {
+        dialog: {
+          body: {
+            sections: [
+              {
+                header: `Blocker #${blocker.id}`,
+                widgets: [
+                  { textParagraph: { text: blocker.text } },
+                  {
+                    selectionInput: {
+                      name: 'people',
+                      label: 'Who can help?',
+                      type: 'MULTI_SELECT',
+                      multiSelectMaxSelectedItems: 10,
+                      multiSelectMinQueryLength: 1,
+                      platformDataSource: { commonDataSource: 'USER' },
+                    },
+                  },
+                  {
+                    buttonList: {
+                      buttons: [{ text: 'Tag', onClick: { action: clickAction(SUBMIT_TAG_FN, [{ key: 'blockerId', value: String(blocker.id) }], endpoint) } }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Interactive DM card for a blocker: for someone tagged on (or nudged about)
+ * it, or, with `owner`, for the person who raised it, who can't acknowledge
+ * their own blocker but can pull people in.
+ */
+export function blockerCard(standup: Standup, blocker: Blocker, note: string, endpoint: string | null = null, owner = false) {
   const param = [{ key: 'blockerId', value: String(blocker.id) }];
   return {
     cardsV2: [
@@ -179,7 +241,8 @@ export function blockerCard(standup: Standup, blocker: Blocker, note: string, en
                 {
                   buttonList: {
                     buttons: [
-                      { text: '✋ Acknowledge', onClick: { action: clickAction(ACK_BLOCKER_FN, param, endpoint) } },
+                      ...(owner ? [] : [{ text: '✋ Acknowledge', onClick: { action: clickAction(ACK_BLOCKER_FN, param, endpoint) } }]),
+                      { text: '👥 Tag people', onClick: { action: clickAction(OPEN_TAG_FN, param, endpoint, 'OPEN_DIALOG') } },
                       {
                         text: '📝 Add update',
                         onClick: {

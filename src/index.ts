@@ -43,7 +43,7 @@ const adapter =
 const webhooks = new WebhookNotifier(undefined, undefined, undefined, (standupId) =>
   deriveWebhookSecret(config.secretKey, standupId),
 );
-const service = new StandupService(repo, adapter, undefined, webhooks);
+const service = new StandupService(repo, adapter, undefined, webhooks, (msg) => console.log(`[standup] ${msg}`));
 const blockerService = new BlockerService(repo, adapter);
 const pollService = new PollService(repo, adapter);
 const schedule = new ScheduleService(repo, adapter, undefined, webhooks, (msg) => console.log(`[schedule] ${msg}`));

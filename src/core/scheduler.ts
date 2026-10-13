@@ -140,8 +140,9 @@ export class Scheduler {
       const pPromptAt = timeOn(today, standup.promptTime, rp.timezone ?? zone);
       if (now < pPromptAt) continue;
       try {
-        await this.adapter.sendStandupPrompt(rp.userName, standup, run);
+        const card = await this.adapter.sendStandupPrompt(rp.userName, standup, run);
         await this.repo.markPrompted(run.id, rp.userName, now.toISO()!);
+        if (card) await this.repo.addCardMessage(run.id, rp.userName, card);
       } catch (err) {
         this.log(`prompt to ${rp.userName} failed: ${err}`);
       }
@@ -151,8 +152,9 @@ export class Scheduler {
       for (const rp of participants) {
         if (rp.remindedAt || !rp.promptedAt || skipPrompt(rp)) continue;
         try {
-          await this.adapter.sendReminder(rp.userName, standup, run);
+          const card = await this.adapter.sendReminder(rp.userName, standup, run);
           await this.repo.markReminded(run.id, rp.userName, now.toISO()!);
+          if (card) await this.repo.addCardMessage(run.id, rp.userName, card);
         } catch (err) {
           this.log(`reminder to ${rp.userName} failed: ${err}`);
         }
@@ -193,8 +195,9 @@ export class Scheduler {
     for (const rp of await this.repo.listRunParticipants(run.id)) {
       if (rp.promptedAt || rp.onVacation || rp.skippedAt !== null || submitted.has(rp.userName)) continue;
       try {
-        await this.adapter.sendStandupPrompt(rp.userName, standup, run);
+        const card = await this.adapter.sendStandupPrompt(rp.userName, standup, run);
         await this.repo.markPrompted(run.id, rp.userName, now.toISO()!);
+        if (card) await this.repo.addCardMessage(run.id, rp.userName, card);
       } catch (err) {
         this.log(`prompt to ${rp.userName} failed: ${err}`);
       }

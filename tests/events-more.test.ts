@@ -21,7 +21,7 @@ describe('EventRouter action parameters', () => {
       common: { invokedFunction: 'skipToday', parameters: [{ key: 'runId', value: String(run.id) }] },
       user: ALICE,
     });
-    expect(reply.text).toContain('Skipped');
+    expect(reply.cardsV2[0].card.sections[0].widgets[0].textParagraph.text).toContain('You skipped today');
     expect(
       (await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')?.skippedAt,
     ).not.toBeNull();

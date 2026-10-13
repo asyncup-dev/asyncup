@@ -51,11 +51,14 @@ in the space.
 
 ## Working a blocker together (everyone)
 
-Blockers get an id (`blockers` shows them). Tag teammates to pull them in:
+Blockers get an id (`blockers` shows them). When your answer opens a
+blocker, the bot DMs you its card with **👥 Tag people**: pick anyone in your
+Workspace who can help. Tagged people get the same card, so they can pull
+others in too. From a space, tag by command:
 
 | Command | Effect |
 | --- | --- |
-| `blocker 12 tag @Asha @Rohit` | Tagged people get an interactive DM card (✋ Acknowledge · 📝 Add update · ✅ Resolve) |
+| `blocker 12 tag @Asha @Rohit` | Tagged people get an interactive DM card (✋ Acknowledge · 👥 Tag people · 📝 Add update · ✅ Resolve) |
 | `blocker 12 update <text>` | Post an update — DMed to the reporter and everyone tagged, and added to the blocker's thread in the space |
 | `blocker 12 resolve` | Close it (reporter, tagged people, or admins) |
 
@@ -94,6 +97,7 @@ Anyone can DM the bot directly:
 | `off list` / `off cancel <date>` | Upcoming entries / withdraw one |
 | `days mon-thu\|adhoc\|reset` | Your own week ([Personal schedules](./schedules)) |
 | `back` | Resume prompts |
+| `unskip` | Take back today's skip while the run is open — or press **↩️ Undo skip** on the prompt card |
 | `timezone <IANA>` | Get prompts at the standup's prompt time in *your* timezone (all your standups) |
 | `timezone reset` | Follow each standup's timezone again (`timezone` alone shows the current setting) |
 
@@ -123,3 +127,9 @@ Anyone can DM the bot directly:
 - **Custom questions** apply from the next run. Questions containing the word
   "blocker" get blocker tracking; questions containing "yesterday"/"today"
   get pre-fill behavior.
+
+## The prompt card
+
+The DM card that asks for today's standup keeps up with you: once you
+submit it shows when (with **Edit answers** until the deadline), and once
+you skip it shows **↩️ Undo skip**. Reminders and nudges update the same way.
