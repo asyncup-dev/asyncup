@@ -165,6 +165,17 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
     }
   });
 
+  // Derived from SECRET_KEY, so it only changes when that does; managers need it to check signatures.
+  api.get('/standups/:id/webhook/secret', async (req, res) => {
+    const standup = await loadStandup(ctx, req, res, { manage: true });
+    if (!standup) return;
+    if (!ctx.webhookSecret) {
+      apiError(res, 503, 'unavailable', 'Webhook signing is not available on this server.');
+      return;
+    }
+    res.json({ secret: ctx.webhookSecret(standup.id) });
+  });
+
   api.post('/standups/:id/participants', async (req, res) => {
     const standup = await loadStandup(ctx, req, res, { manage: true });
     if (!standup) return;

@@ -88,13 +88,10 @@ never breaks the standup.
 
 Every delivery is signed: the `X-AsyncUp-Signature` header carries
 `sha256=<hex>`, the HMAC-SHA256 of the raw request body with the standup's
-signing secret. The secret is derived from `SECRET_KEY` and the standup's id,
-so rotating `SECRET_KEY` rotates it. Compute it on the server that holds the
-key (standup id 3 here):
-
-```bash
-printf 'webhook:3' | openssl dgst -sha256 -hmac "$SECRET_KEY" | awk '{print $NF}'
-```
+signing secret. Copy it from the standup's **Settings → Outbound webhook →
+Show signing secret** (admins and that standup's managers), or fetch it with
+`GET /api/v1/standups/:id/webhook/secret`. It is derived from `SECRET_KEY` and
+the standup's id, so it changes only when `SECRET_KEY` does.
 
 Verify it in your receiver and reject anything that doesn't match:
 

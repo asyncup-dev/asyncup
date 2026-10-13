@@ -44,6 +44,7 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}) {
       'GET /api/v1/standups/1/members': { body: { members: [{ userName: 'users/alice', displayName: 'Alice' }, { userName: 'users/carol', displayName: 'Carol' }] } },
       'PATCH /api/v1/people/users%2Fbob/schedule': { body: (init?: RequestInit) => { weeks.push(JSON.parse(String(init?.body))); return {}; } },
       'POST /api/v1/verify/webhook': { body: { state: 'pass', detail: 'Webhook answered 204.', checkedAt: 'x' } },
+      'GET /api/v1/standups/1/webhook/secret': { body: { secret: 'a1b2c3' } },
       'GET /api/v1/standups/1/insights?weeks=16': { body: { weeks: WEEKS } },
       'GET /api/v1/standups/1/runs?limit=40': { body: { runs: RUNS } },
       'GET /api/v1/standups/1/runs/2026-09-16': { body: detail('2026-09-16', true) },
@@ -96,6 +97,11 @@ describe('standup settings tab', () => {
     await waitFor(() => expect(patches.at(-1)).toEqual({ webhookUrl: 'https://hooks.example/x' }));
     await user.click(screen.getByRole('button', { name: 'Send test' }));
     expect(await screen.findByText(/Webhook answered 204/)).toBeInTheDocument();
+    // the signing secret stays hidden until asked for
+    expect(screen.queryByText('a1b2c3')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show signing secret' }));
+    expect(await screen.findByText('a1b2c3')).toBeInTheDocument();
+    expect(screen.getByText('Signing secret')).toBeInTheDocument();
     await user.click(screen.getAllByRole('checkbox').at(-1)!);
     await waitFor(() => expect(patches.at(-1)).toEqual({ digestEnabled: true }));
     expect(calls).toContain('POST /api/v1/verify/webhook');
@@ -226,6 +232,14 @@ describe('standup settings tab', () => {
     server({ 'GET /api/v1/me': { body: { kind: 'manager', via: 'session', tenantId: 'default', user: { userName: 'users/bob', email: 'b@o.com', name: 'Bob' }, managedStandupIds: [1] } } });
     renderApp('/standups/1/settings');
     expect(await screen.findByText(/Only workspace admins can delete a standup/)).toBeInTheDocument();
+  });
+
+  it('says why the signing secret could not be shown', async () => {
+    server({ 'GET /api/v1/standups/1/webhook/secret': { status: 403, body: { error: { code: 'forbidden', message: 'Only admins and this standup’s managers can do that.' } } } });
+    renderApp('/standups/1/settings');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Show signing secret' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Only admins and this standup’s managers can do that.');
   });
 
   it('surfaces a rejected save', async () => {

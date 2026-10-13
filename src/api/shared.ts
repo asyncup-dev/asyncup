@@ -44,6 +44,8 @@ export interface ApiContext {
   /** Rosters drawn from a Google Group; null when the host was built without it. */
   roster: RosterSync | null;
   webhooks: WebhookNotifier;
+  /** The key a standup's webhooks are signed with; null when the host was built without one. */
+  webhookSecret: ((standupId: number) => string) | null;
   /** Builds a Chat API client for verification calls (tests inject a fake). */
   chatClientFactory: ChatClientFactory;
   samlBroker: (config: SamlConfig) => SamlBroker;

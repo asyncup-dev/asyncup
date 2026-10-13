@@ -266,6 +266,7 @@ export const Spaces = named(
   'Spaces',
   z.strictObject({ spaces: z.array(z.strictObject({ name: z.string(), displayName: z.string(), standups: z.array(z.strictObject({ id, name: z.string() })) })) }),
 );
+export const WebhookSecret = named('WebhookSecret', z.strictObject({ secret: z.string() }), 'HMAC-SHA256 key for the X-AsyncUp-Signature header. It changes only when SECRET_KEY does.');
 export const SpaceMembers = named('SpaceMembers', z.strictObject({ members: z.array(Person) }));
 
 // --- the caller's own view
