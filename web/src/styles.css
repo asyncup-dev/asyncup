@@ -103,6 +103,8 @@ a:hover {
   font: inherit;
 }
 .input::placeholder { color: var(--text-muted); }
+.input[aria-invalid='true'] { border-color: var(--danger-fg); }
+.field-error { color: var(--danger-fg); }
 .field { display: grid; gap: var(--space-2); }
 .field > label { font-weight: 500; }
 

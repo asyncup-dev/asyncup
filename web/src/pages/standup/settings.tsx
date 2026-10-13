@@ -109,9 +109,9 @@ export function StandupSettingsPage() {
         <div className="col">
           <SectionCard title="Schedule" hint="Changes apply from the next run." action={<button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending} onClick={() => void save({ ...schedule, reminderMinutesBefore: Number(schedule.reminderMinutesBefore) }, 'Schedule')}>Save</button>}>
             <SettingsRow label="Prompt and deadline" hint="Prompt goes out in each person’s own timezone">
-              <input className="input" aria-label="Prompt time" style={{ width: 110 }} value={schedule.promptTime} onChange={(e) => setSchedule({ ...schedule, promptTime: e.target.value })} />
+              <input type="time" required className="input" aria-label="Prompt time" style={{ width: 110 }} value={schedule.promptTime} onChange={(e) => setSchedule({ ...schedule, promptTime: e.target.value })} />
               <span>→</span>
-              <input className="input" aria-label="Deadline time" style={{ width: 110 }} value={schedule.deadlineTime} onChange={(e) => setSchedule({ ...schedule, deadlineTime: e.target.value })} />
+              <input type="time" required className="input" aria-label="Deadline time" style={{ width: 110 }} value={schedule.deadlineTime} onChange={(e) => setSchedule({ ...schedule, deadlineTime: e.target.value })} />
               <select className="input" aria-label="Timezone" style={{ width: 'auto' }} value={schedule.timezone} onChange={(e) => setSchedule({ ...schedule, timezone: e.target.value })}>
                 {timezoneOptions(s.schedule.timezone).map((z) => <option key={z} value={z}>{z}</option>)}
               </select>

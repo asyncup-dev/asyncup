@@ -57,6 +57,13 @@ export type StandupConfigResult =
   | { ok: true; fields: StandupConfigFields }
   | { ok: false; field: keyof StandupConfigInput; message: string };
 
+/** Names are unique across the workspace, archived standups included, so reports and commands are never ambiguous. */
+export function nameTaken(s: Standup): string {
+  return s.active
+    ? `A standup named "${s.name}" already exists (#${s.id}). Pick another name.`
+    : `An archived standup is named "${s.name}" (#${s.id}). Delete it to reuse the name, or pick another.`;
+}
+
 const fail = (field: keyof StandupConfigInput, message: string): StandupConfigResult => ({ ok: false, field, message });
 
 function bool(field: keyof StandupConfigInput, value: unknown): boolean | StandupConfigResult {
@@ -74,6 +81,8 @@ export async function validateStandupConfig(
   if (has('name')) {
     const name = String(input.name).trim();
     if (!name) return fail('name', 'Name is required.');
+    const taken = await repo.findStandupNamed(standup.tenantId, name, standup.id);
+    if (taken) return fail('name', nameTaken(taken));
     fields.name = name;
   }
   if (has('promptTime') || has('deadlineTime')) {

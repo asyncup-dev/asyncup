@@ -17,7 +17,7 @@ in the space.
 
 | Command | Effect |
 | --- | --- |
-| `setup [name]` | Create a standup reporting to this space (creator becomes admin; duplicate names are refused) |
+| `setup [name]` | Create a standup reporting to this space (creator becomes admin; names must be unique across the workspace) |
 | `run now` | Open today's run immediately and prompt everyone — see the whole flow without waiting for the schedule. Refused once today's deadline has passed, since the run would close at once; a scheduled run never opens after its deadline either |
 | `archive` | Retire the standup: prompts and reports stop, history stays |
 | `add @user…` | Add participants (mandatory by default) |

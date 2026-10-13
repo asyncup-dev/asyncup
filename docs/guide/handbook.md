@@ -104,8 +104,9 @@ In the team space:
 
 `run now` is the fastest way to demo the whole loop instead of waiting for
 tomorrow; the standup's Overview in the web app has a matching **Run now** button.
-`setup` refuses duplicate names; a mis-created standup is retired with
-`archive` (history stays). Multiple standups can share a space — prefix
+Standup names are unique across the workspace, archived standups included, so
+`setup` refuses a name already in use; a mis-created standup is retired with
+`archive` (history stays), and deleting it in the web app frees its name. Multiple standups can share a space — prefix
 commands with `#<id>` (ids shown by `status`).
 
 ### 2.2 Day-to-day configuration
@@ -225,7 +226,7 @@ first standup exists). Everything else needs a standup admin.
 
 | Command | Effect |
 | --- | --- |
-| `setup [name]` | Create a standup (creator becomes admin; duplicate names refused) |
+| `setup [name]` | Create a standup (creator becomes admin; names unique across the workspace) |
 | `run now` | Open today's run immediately and prompt everyone (not after today's deadline) |
 | `archive` | Retire the standup — prompts stop, history stays |
 | `add @user…` / `remove @user…` | Manage the roster (add warns if the person can't be DMed yet) |

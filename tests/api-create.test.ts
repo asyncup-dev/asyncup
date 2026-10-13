@@ -139,13 +139,16 @@ describe('api: create standup', () => {
     }
   });
 
-  it('refuses a duplicate name in the same space, case-insensitively', async () => {
+  it('refuses a name used anywhere in the workspace, archived standups included, ignoring case', async () => {
     const { create, repo } = await startServer();
     const s = await seedStandup(repo);
-    const res = await create({ name: 'daily standup', spaceName: 'spaces/team' });
+    let res = await create({ name: ' daily standup ', spaceName: 'spaces/other' });
     expect(res.status).toBe(409);
-    expect((await res.json() as any).error).toMatchObject({ code: 'duplicate', message: expect.stringContaining(`#${s.id}`) });
-    expect((await create({ name: 'Daily Standup', spaceName: 'spaces/other' })).status).toBe(201);
+    expect((await res.json() as any).error).toMatchObject({ code: 'duplicate', message: `A standup named "Daily Standup" already exists (#${s.id}). Pick another name.` });
+    await repo.updateStandup(s.id, { active: false });
+    res = await create({ name: 'Daily Standup', spaceName: 'spaces/team' });
+    expect((await res.json() as any).error.message).toBe(`An archived standup is named "Daily Standup" (#${s.id}). Delete it to reuse the name, or pick another.`);
+    expect((await create({ name: 'Daily Standup 2', spaceName: 'spaces/team' })).status).toBe(201);
   });
 
   it('seeds from a template, lets explicit values win, and can open the first run', async () => {

@@ -44,6 +44,9 @@ describe('CommandHandler', () => {
     expect(reply).toContain('already has a standup named');
     expect(reply).toContain('archive');
     expect(await repo.listStandupsBySpace(TENANT, SPACE)).toHaveLength(1);
+    // the name is taken in every space
+    const elsewhere = await commands.handle({ ...ctx('setup ENGINEERING'), spaceName: 'spaces/other' });
+    expect(elsewhere).toBe('⚠️ A standup named "Engineering" already exists (#1). Pick another name. Nothing was created — try `setup <name>`.');
   });
 
   it('reports a setup that the core refuses', async () => {

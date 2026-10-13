@@ -96,7 +96,7 @@ Admins only. The chat `setup` command and this endpoint share one core, so namin
 | `GET` | `/spaces/:name/members` | Human members of a space as roster suggestions. `:name` is the resource name URL-encoded (`spaces%2FAAAA`) |
 | `POST` | `/standups` | `{ name, spaceName, templateId?, participants?: [{ userName, displayName, mandatory? }], admins?: [{ userName, displayName }], runNow?, …config }` → `201` with the same shape as `GET /standups/:id` plus `template` and `runNow` (the run-now result, or `null`) |
 
-A template seeds the configuration; any config key from `PATCH /standups/:id` sent alongside wins over it (`escalateUserName` must be one of the request's `participants` or `admins`). A signed-in admin becomes the standup's admin, and `admins` adds managers on top — name one when creating on a team lead's behalf, or from a script with the operator token, since a standup with no admins is open to configuration by anyone in its space. `409 duplicate` when the space already has a standup with that name (case-insensitive).
+A template seeds the configuration; any config key from `PATCH /standups/:id` sent alongside wins over it (`escalateUserName` must be one of the request's `participants` or `admins`). A signed-in admin becomes the standup's admin, and `admins` adds managers on top — name one when creating on a team lead's behalf, or from a script with the operator token, since a standup with no admins is open to configuration by anyone in its space. `409 duplicate` when any standup in the workspace, archived ones included, already has that name (case-insensitive). Renaming through `PATCH /standups/:id` follows the same rule and answers `400 invalid` on `name`.
 
 ### Managing a standup
 

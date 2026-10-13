@@ -1,6 +1,6 @@
 import type { Repo } from '../db/repo.js';
 import type { SettingsService } from './settings.js';
-import { validateStandupConfig, type StandupConfigInput } from './standup-config.js';
+import { nameTaken, validateStandupConfig, type StandupConfigInput } from './standup-config.js';
 import { templateById, type StandupTemplate } from './templates.js';
 import type { Standup } from './types.js';
 import { LIMITS } from './validation.js';
@@ -115,11 +115,8 @@ export async function createStandup(
     escalation = { escalateUserName: contact.userName, escalateDisplayName: contact.displayName };
   }
 
-  const existing = await repo.listStandupsBySpace(tenantId, spaceName);
-  const duplicate = existing.find((s) => s.name.toLowerCase() === name.toLowerCase());
-  if (duplicate) {
-    return { ok: false, code: 'duplicate', duplicate, message: `This space already has a standup named "${duplicate.name}" (#${duplicate.id}).` };
-  }
+  const duplicate = await repo.findStandupNamed(tenantId, name);
+  if (duplicate) return { ok: false, code: 'duplicate', duplicate, message: nameTaken(duplicate) };
 
   // Template first, then the caller's explicit values on top.
   const config: StandupConfigInput = template
@@ -146,5 +143,5 @@ export async function createStandup(
   for (const p of participants) await repo.upsertParticipant({ standupId: created.id, ...p });
   for (const a of creator ? [creator, ...admins] : admins) await repo.addAdmin(created.id, a.userName, a.displayName);
 
-  return { ok: true, standup: (await repo.getStandupById(created.id))!, template, siblings: existing.length + 1 };
+  return { ok: true, standup: (await repo.getStandupById(created.id))!, template, siblings: (await repo.listStandupsBySpace(tenantId, spaceName)).length };
 }

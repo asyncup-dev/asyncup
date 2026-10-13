@@ -46,3 +46,13 @@ describe('escalation contact', () => {
     });
   });
 });
+
+describe('renaming', () => {
+  it('keeps names unique across the workspace but lets a standup keep its own', async () => {
+    const { repo } = await makeStack();
+    const standup = await seedStandup(repo);
+    const other = await repo.createStandup({ tenantId: TENANT, spaceName: 'spaces/other', name: 'Retro', timezone: 'UTC' });
+    expect(await validateStandupConfig(repo, standup, { name: 'retro' })).toEqual({ ok: false, field: 'name', message: `A standup named "Retro" already exists (#${other.id}). Pick another name.` });
+    expect(await validateStandupConfig(repo, standup, { name: 'daily STANDUP' })).toEqual({ ok: true, fields: { name: 'daily STANDUP' } });
+  });
+});
