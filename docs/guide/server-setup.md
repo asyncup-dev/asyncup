@@ -215,9 +215,9 @@ Use a password without special characters, or URL-encode it inside
 `DATABASE_URL` (`@` becomes `%40`, `/` becomes `%2F`, and so on);
 `POSTGRES_PASSWORD` itself stays as typed.
 
-That compose file publishes port `8080` on every interface, and Docker's port
-publishing bypasses `ufw`. Change `"8080:8080"` to `"127.0.0.1:8080:8080"` in
-your copy, then add the Caddy service from Path A for HTTPS. (Or use Path A's
+That compose file publishes port `8080` on `127.0.0.1` only; add the Caddy
+service from Path A for HTTPS. Don't widen the port to every interface: Docker's
+port publishing bypasses `ufw`. (Or use Path A's
 compose file with `DATABASE_URL` added.) Sizing: 2 GB RAM is
 comfortable for app + Postgres. Backups become your job:
 

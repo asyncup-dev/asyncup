@@ -5,7 +5,7 @@ import { fromMutation, VerifyStatus } from '../../components/verify-status';
 import { useSaveSettings, useSetupProgress, useVerify } from '../../lib/setup';
 import { StepActions, StepPage } from './layout';
 
-const DWD_SCOPES = 'https://www.googleapis.com/auth/admin.directory.user.readonly,https://www.googleapis.com/auth/calendar.readonly';
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
 
 function parseKey(text: string): { ok: true; email: string; clientId: string | null } | { ok: false; message: string } {
   try {
@@ -23,13 +23,11 @@ export function ServiceAccountPage() {
   const verify = useVerify('service-account');
   const [text, setText] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
-  const [dwd, setDwd] = useState<boolean | null>(null);
-  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+  const [ooo, setOoo] = useState<boolean | null>(null);
 
   const sa = progress.data?.settings.chat.serviceAccount;
   const stored = sa?.set ?? false;
-  const dwdOn = dwd ?? !!progress.data?.settings.workspace.workspaceAdminEmail;
-  const email = adminEmail ?? progress.data?.settings.workspace.workspaceAdminEmail ?? '';
+  const oooOn = ooo ?? !!progress.data?.settings.workspace.calendarOoo;
 
   const submitKey = async () => {
     const parsed = parseKey(text);
@@ -42,8 +40,8 @@ export function ServiceAccountPage() {
     setText('');
     await verify.mutateAsync();
   };
-  const saveDwd = async () => {
-    await save.mutateAsync({ workspaceAdminEmail: dwdOn ? email.trim() : '', calendarOoo: dwdOn });
+  const saveOoo = async () => {
+    await save.mutateAsync({ calendarOoo: oooOn });
   };
 
   return (
@@ -75,27 +73,21 @@ export function ServiceAccountPage() {
       <VerifyStatus state={fromMutation(verify)} idle={stored ? `A key for ${sa?.email ?? 'the service account'} is stored.` : 'Not checked yet.'} />
       <div className="card section">
         <div className="switch">
-          <input id="dwd" type="checkbox" checked={dwdOn} onChange={(e) => setDwd(e.target.checked)} />
-          <label htmlFor="dwd">
-            <div className="t-medium">Directory &amp; Calendar access (optional)</div>
-            <div className="t-caption">Only for Calendar out-of-office, which needs domain-wide delegation. Email and admin lookups work without it once the service account has an admin role with Users › Read.</div>
+          <input id="ooo" type="checkbox" checked={oooOn} onChange={(e) => setOoo(e.target.checked)} />
+          <label htmlFor="ooo">
+            <div className="t-medium">Calendar out-of-office (optional)</div>
+            <div className="t-caption">Marks people away on days with an Out of office event in Google Calendar. Needs domain-wide delegation for the scope below. Group rosters and user lookups don't: they use an admin role on the service account (see the Directory guide).</div>
           </label>
         </div>
-        {dwdOn ? (
-          <>
-            <div className="field" style={{ maxWidth: 404 }}>
-              <label htmlFor="admin-email">Workspace admin to act as</label>
-              <input id="admin-email" className="input" type="email" value={email} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@yourdomain.com" />
-            </div>
-            <div className="card">
-              <CopyRow label="Client ID for delegation" hint="Admin console → Security → API controls → Domain-wide delegation" value={sa?.clientId ?? 'Paste and save the key first'} />
-              <CopyRow label="OAuth scopes" hint="Both, comma-separated, on the same row" value={DWD_SCOPES} />
-            </div>
-          </>
+        {oooOn ? (
+          <div className="card">
+            <CopyRow label="Client ID for delegation" hint="Admin console → Security → API controls → Domain-wide delegation" value={sa?.clientId ?? 'Paste and save the key first'} />
+            <CopyRow label="OAuth scope" hint="Add it on the same row as the client ID" value={CALENDAR_SCOPE} />
+          </div>
         ) : null}
         <div className="row">
-          <button type="button" className="btn" disabled={save.isPending || (dwdOn && !email.trim())} onClick={() => void saveDwd()}>
-            Save access settings
+          <button type="button" className="btn" disabled={save.isPending} onClick={() => void saveOoo()}>
+            Save
           </button>
         </div>
       </div>

@@ -63,6 +63,7 @@ export function ChatSettings() {
             </>
           )}
           {verifySa.data || verifySa.isPending || verifySa.isError ? <div style={{ flexBasis: '100%' }}><VerifyStatus state={fromMutation(verifySa)} /></div> : null}
+          {s.chat.serviceAccount.clientId ? <div className="t-caption" style={{ flexBasis: '100%' }}>Client ID for domain-wide delegation: <span className="t-mono">{s.chat.serviceAccount.clientId}</span></div> : null}
         </SettingsRow>
         <SettingsRow label="Connection test" hint="Confirm events arrive from Google, then send yourself a test DM.">
           <button type="button" className="btn" style={{ height: 28 }} disabled={verifyEvent.isPending} onClick={() => verifyEvent.mutate(undefined)}>Check events</button>
@@ -70,7 +71,7 @@ export function ChatSettings() {
           {verifyEvent.data || verifyEvent.isPending || verifyEvent.isError ? <div style={{ flexBasis: '100%' }}><VerifyStatus state={fromMutation(verifyEvent)} /></div> : null}
           {verifyDm.data || verifyDm.isPending || verifyDm.isError ? <div style={{ flexBasis: '100%' }}><VerifyStatus state={fromMutation(verifyDm)} /></div> : null}
         </SettingsRow>
-        <SettingsRow label="Directory & Calendar access" hint="Directory lookups (emails, admin roles) work without this once the service account has an admin role with Users › Read. Calendar out-of-office needs domain-wide delegation, acting as a Workspace admin.">
+        <SettingsRow label="Directory through delegation (legacy)" hint="Leave off. Directory lookups run as the service account once it has an admin role with Users › Read. Turn on only to act as a Workspace admin instead, which needs admin.directory.user.readonly delegated.">
           <label className="row t-small">
             <input type="checkbox" checked={dwdOn} onChange={(e) => (e.target.checked ? setAdminEmail(email || '') : void save({ workspaceAdminEmail: '' }))} /> {dwdOn ? `On · acting as ${s.workspace.workspaceAdminEmail}` : 'Off'}
           </label>
@@ -80,7 +81,6 @@ export function ChatSettings() {
               <button type="button" className="btn" style={{ height: 28 }} disabled={!email.trim() || patch.isPending} onClick={() => void save({ workspaceAdminEmail: email.trim() }).then((ok) => ok && setAdminEmail(null))}>Save</button>
             </>
           ) : null}
-          {s.chat.serviceAccount.clientId ? <div className="t-caption" style={{ flexBasis: '100%' }}>Delegation client ID: <span className="t-mono">{s.chat.serviceAccount.clientId}</span></div> : null}
         </SettingsRow>
       </SectionCard>
     </>

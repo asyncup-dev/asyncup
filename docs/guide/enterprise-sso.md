@@ -116,10 +116,10 @@ person uses the bot. Until then, `/app/me` shows a "not linked yet" note.
 ## Switch the operator token off
 
 Once Google or SAML works for at least one admin, switch token sign-in off:
-**Settings › Sign-in & SSO → Setup token → Accept DASHBOARD_TOKEN for
-sign-in**. The label still uses the older variable name; it means the operator
-token, whether you set it as `OPERATOR_TOKEN` or `DASHBOARD_TOKEN`. The token
-then stops working for the web app and the JSON API.
+**Settings › Sign-in & SSO → Setup token → Accept the operator token
+(OPERATOR_TOKEN) for sign-in**. It covers the token whether you set it as
+`OPERATOR_TOKEN` or the older `DASHBOARD_TOKEN`. The token then stops working
+for the web app and the JSON API.
 
 If you lock yourself out later, [Operations](./operations#locked-out) has the
 recovery.
