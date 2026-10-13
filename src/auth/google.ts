@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Express, Request } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import type { SettingsService } from '../core/settings.js';
-import type { UserDirectory } from '../core/directory.js';
+import { DirectoryAccessError, type DirectoryUser, type UserDirectory } from '../core/directory.js';
 import { readCookie } from '../core/http.js';
 import { clearSessionCookie, newSession, sealSession, setSessionCookie } from './session.js';
 
@@ -92,8 +92,8 @@ export function registerAuth(app: Express, deps: AuthDeps): void {
       // reachable via DASHBOARD_TOKEN).
       let admin = false;
       const directory = await deps.directory();
-      if (directory) {
-        const entry = await directory.lookup(identity.sub);
+      const entry = directory ? await lookupOrSkip(directory, identity.sub) : undefined;
+      if (entry !== undefined) {
         if (!entry || entry.suspended) {
           res.status(403).send('This Google account is not an active member of the Workspace.');
           return;
@@ -113,4 +113,15 @@ export function registerAuth(app: Express, deps: AuthDeps): void {
     clearSessionCookie(res);
     res.redirect('/app/sign-in');
   });
+}
+
+/** A Directory the service account may not read counts as no Directory: sign-in goes on as a regular user. */
+async function lookupOrSkip(directory: UserDirectory, key: string): Promise<DirectoryUser | null | undefined> {
+  try {
+    return await directory.lookup(key);
+  } catch (err) {
+    if (!(err instanceof DirectoryAccessError)) throw err;
+    console.error(`[auth] ${err.message}`);
+    return undefined;
+  }
 }

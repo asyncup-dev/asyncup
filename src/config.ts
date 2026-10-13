@@ -35,7 +35,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl: env.DATABASE_URL ?? '',
     adapter,
     tenantId: env.TENANT_ID ?? 'default',
-    dashboardToken: env.OPERATOR_TOKEN ?? env.DASHBOARD_TOKEN ?? '',
+    // A blank OPERATOR_TOKEN= line must not hide DASHBOARD_TOKEN.
+    dashboardToken: env.OPERATOR_TOKEN || env.DASHBOARD_TOKEN || '',
     secretKey: secretKey || 'dev-only-ephemeral-secret',
     dbSsl: env.DB_SSL ?? '',
     dbSslCa: env.DB_SSL_CA ?? '',

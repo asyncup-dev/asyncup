@@ -6,6 +6,7 @@ import type { OAuth2Client } from 'google-auth-library';
 import { GoogleIdentityBroker, registerAuth } from '../src/auth/google.js';
 import { newSession, openSession, sealSession, SESSION_COOKIE } from '../src/auth/session.js';
 import type { SettingsService } from '../src/core/settings.js';
+import { DirectoryAccessError, type UserDirectory } from '../src/core/directory.js';
 
 const SECRET = 'google-secret-key';
 
@@ -110,5 +111,55 @@ describe('openSession', () => {
     const sealed = sealSession(SECRET, newSession({ sub: '', email: 'okta@example.com', name: 'Okta', admin: false }));
     expect(openSession(SECRET, sealed)?.email).toBe('okta@example.com');
     expect(openSession(SECRET, sealSession(SECRET, newSession({ sub: '', email: '', name: 'Nobody', admin: false })))).toBeNull();
+  });
+});
+
+describe('Google sign-in and the Directory', () => {
+  let close: (() => void) | null = null;
+  afterEach(() => {
+    close?.();
+    close = null;
+  });
+
+  async function signIn(directory: UserDirectory | null) {
+    const app = express();
+    registerAuth(app, {
+      settings: { get: async () => ({ oauthClientId: 'id', oauthClientSecret: 'secret' }) } as unknown as SettingsService,
+      secretKey: SECRET,
+      directory: async () => directory,
+      broker: () => ({ authUrl: (_r: string, state: string) => `https://accounts.google.com/o?state=${state}`, exchange: async () => ({ sub: '42', email: 'asha@org.com', name: 'Asha' }) }),
+    });
+    const server = app.listen(0);
+    close = () => server.close();
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const start = await fetch(`${url}/auth/google`, { redirect: 'manual' });
+    const state = new URL(start.headers.get('location')!).searchParams.get('state')!;
+    const res = await fetch(`${url}/auth/callback?code=c&state=${state}`, { redirect: 'manual', headers: { cookie: start.headers.get('set-cookie')!.split(';')[0]! } });
+    const sealed = (res.headers.get('set-cookie') ?? '').match(new RegExp(`${SESSION_COOKIE}=([^;]+)`))?.[1];
+    return { status: res.status, session: sealed ? openSession(SECRET, sealed) : null };
+  }
+
+  it('takes the admin role from the Directory and refuses accounts it does not know', async () => {
+    expect((await signIn({ lookup: async () => ({ id: '42', email: 'asha@org.com', isAdmin: true, suspended: false }) })).session).toMatchObject({ admin: true });
+    expect((await signIn({ lookup: async () => null })).status).toBe(403);
+  });
+
+  it('signs in as a regular user when the service account may not read users', async () => {
+    const result = await signIn({
+      lookup: async () => {
+        throw new DirectoryAccessError('no Users › Read role');
+      },
+    });
+    expect(result.status).toBe(302);
+    expect(result.session).toMatchObject({ email: 'asha@org.com', admin: false });
+  });
+
+  it('still fails closed on any other Directory error', async () => {
+    const result = await signIn({
+      lookup: async () => {
+        throw new Error('network down');
+      },
+    });
+    expect(result.status).toBe(500);
   });
 });
