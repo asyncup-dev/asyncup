@@ -151,13 +151,18 @@ export async function runView(repo: Repo, standup: Standup, date: string) {
 export async function standupDetailView(repo: Repo, standup: Standup, now: DateTime, manage: boolean) {
   return {
     ...(await summarise(repo, standup, now, manage)),
-    participants: (await repo.listParticipants(standup.id)).map((x) => ({
-      userName: x.userName,
-      displayName: x.displayName,
-      mandatory: x.mandatory,
-      timezone: x.timezone,
-      onVacation: x.onVacation,
-    })),
+    participants: await Promise.all(
+      (await repo.listParticipants(standup.id)).map(async (x) => ({
+        userName: x.userName,
+        displayName: x.displayName,
+        mandatory: x.mandatory,
+        timezone: x.timezone,
+        onVacation: x.onVacation,
+        workingDays: x.workingDays,
+        // A personal week is the person's, so the console warns when changing it here reaches other standups too.
+        otherStandups: (await repo.listStandupsForUser(x.userName)).length - 1,
+      })),
+    ),
     admins: (await repo.listAdmins(standup.id)).map(person),
   };
 }

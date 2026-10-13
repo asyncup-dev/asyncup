@@ -12,8 +12,8 @@ const ENG = {
   today: { date: '2026-09-16', status: 'closed', submitted: 2, expected: 2, missing: [] },
   permissions: { manage: true },
   participants: [
-    { userName: 'users/alice', displayName: 'Alice', mandatory: true, timezone: null, onVacation: false },
-    { userName: 'users/bob', displayName: 'Bob', mandatory: false, timezone: 'Europe/Berlin', onVacation: true },
+    { userName: 'users/alice', displayName: 'Alice', mandatory: true, timezone: null, onVacation: false, workingDays: null, otherStandups: 1 },
+    { userName: 'users/bob', displayName: 'Bob', mandatory: false, timezone: 'Europe/Berlin', onVacation: true, workingDays: 'tue,sat', otherStandups: 0 },
   ],
   admins: [{ userName: 'users/alice', displayName: 'Alice' }],
 };
@@ -27,8 +27,10 @@ const WEEKS = Array.from({ length: 16 }, (_, i) => ({ label: `w${i}`, participat
 
 function server(over: Record<string, { status?: number; body: unknown }> = {}) {
   const patches: Record<string, unknown>[] = [];
+  const weeks: Record<string, unknown>[] = [];
   return {
     patches,
+    weeks,
     ...stubApi({
       'GET /api/v1/me': { body: ADMIN },
       'GET /api/v1/standups/1': { body: ENG },
@@ -38,7 +40,8 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}) {
       'PATCH /api/v1/standups/1/participants/users%2Fbob': { body: {} },
       'DELETE /api/v1/standups/1/participants/users%2Fbob': { status: 204, body: null },
       'POST /api/v1/standups/1/participants': { status: 201, body: { reachable: true } },
-      'GET /api/v1/spaces/spaces%2FA/members': { body: { members: [{ userName: 'users/alice', displayName: 'Alice' }, { userName: 'users/carol', displayName: 'Carol' }] } },
+      'GET /api/v1/standups/1/members': { body: { members: [{ userName: 'users/alice', displayName: 'Alice' }, { userName: 'users/carol', displayName: 'Carol' }] } },
+      'PATCH /api/v1/people/users%2Fbob/schedule': { body: (init?: RequestInit) => { weeks.push(JSON.parse(String(init?.body))); return {}; } },
       'POST /api/v1/verify/webhook': { body: { state: 'pass', detail: 'Webhook answered 204.', checkedAt: 'x' } },
       'GET /api/v1/standups/1/insights?weeks=16': { body: { weeks: WEEKS } },
       'GET /api/v1/standups/1/runs?limit=40': { body: { runs: RUNS } },
@@ -95,19 +98,30 @@ describe('standup settings tab', () => {
     expect(calls).toContain('POST /api/v1/verify/webhook');
   });
 
-  it('manages the roster and archives behind a typed confirmation', async () => {
-    const { calls } = server();
+  it('manages people, their days and the archive from the people grid', async () => {
+    const { calls, weeks } = server();
     renderApp('/standups/1/settings');
     const user = userEvent.setup();
-    expect(await screen.findByText('Participants · 2')).toBeInTheDocument();
-    expect(screen.getByText('Manager')).toBeInTheDocument();
-    expect(screen.getByText('Optional')).toHaveClass('badge-warning');
-    await user.click(screen.getByRole('button', { name: 'Make mandatory' }));
+    expect(await screen.findByText('People · 2 on this standup')).toBeInTheDocument();
+    const grid = await screen.findByRole('table', { name: 'People and their days' });
+    expect(within(grid).getByText('Manager')).toBeInTheDocument();
+    expect(within(grid).getByText('Away')).toBeInTheDocument();
+    expect(within(grid).getByText('Days also apply to their other standup')).toBeInTheDocument();
+    // the standup runs Mon and Tue; Bob works Tue (and Sat, which this standup never runs)
+    expect(screen.getByLabelText('Alice works Mon')).toBeChecked();
+    expect(screen.getByLabelText('Bob works Mon')).not.toBeChecked();
+    expect(screen.getByLabelText('Bob works Tue')).toBeChecked();
+    expect(screen.getByLabelText('Bob works Sat')).toBeDisabled();
+    expect(await screen.findByLabelText('Carol on this standup')).not.toBeChecked();
+    expect(screen.getByLabelText('Carol works Mon')).toBeDisabled();
+
+    await user.click(screen.getByLabelText('Bob counts if missing'));
     await waitFor(() => expect(calls).toContain('PATCH /api/v1/standups/1/participants/users%2Fbob'));
-    await user.click(screen.getByRole('button', { name: 'Add people' }));
-    await user.click(await screen.findByRole('button', { name: '+ Carol' }));
+    await user.click(screen.getByLabelText('Bob works Mon'));
+    await waitFor(() => expect(weeks).toEqual([{ workingDays: 'mon,tue,sat' }]));
+    await user.click(screen.getByLabelText('Carol on this standup'));
     await waitFor(() => expect(calls).toContain('POST /api/v1/standups/1/participants'));
-    await user.click(screen.getByRole('button', { name: 'Remove Bob' }));
+    await user.click(screen.getByLabelText('Bob on this standup'));
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(calls).toContain('DELETE /api/v1/standups/1/participants/users%2Fbob'));
 

@@ -48,6 +48,11 @@ export function useParticipantAdd() {
   });
 }
 
+/** Members of the standup's Chat space — the rows of its people grid. */
+export function useStandupMembers(id: number, enabled = true) {
+  return useQuery({ queryKey: ['standup-members', id], queryFn: () => api<{ members: Person[] }>(`/standups/${id}/members`), select: (d) => d.members, enabled });
+}
+
 export function useStandupPatch(id: number) {
   const client = useQueryClient();
   return useMutation({

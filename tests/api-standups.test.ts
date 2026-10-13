@@ -230,6 +230,31 @@ describe('api: roster', () => {
     expect((await op(`/standups/${s.id}/participants/${encodeURIComponent('users/dave')}`, { method: 'DELETE' })).status).toBe(204);
     expect((await repo.listParticipants(s.id)).map((p) => p.userName)).not.toContain('users/dave');
   });
+
+  it('lists the space’s members to the standup’s managers, and shows each person’s week', async () => {
+    const t = await startServer();
+    const s = await seedStandup(t.repo);
+    await t.repo.addAdmin(s.id, 'users/bob', 'Bob');
+    await t.repo.setWorkingDaysForUser('users/alice', 'mon,tue');
+    const other = await t.repo.createStandup({ tenantId: TENANT, spaceName: 'spaces/other', name: 'Other', timezone: 'UTC' });
+    await t.repo.upsertParticipant({ standupId: other.id, userName: 'users/alice', displayName: 'Alice' });
+    t.adapter.members.set(s.spaceName, [{ userName: 'users/alice', displayName: 'Alice' }, { userName: 'users/erin', displayName: 'Erin' }]);
+
+    const bob = t.cookieFor('bob', 'Bob');
+    expect(await (await t.as(bob, `/standups/${s.id}/members`)).json()).toEqual({ members: [{ userName: 'users/alice', displayName: 'Alice' }, { userName: 'users/erin', displayName: 'Erin' }] });
+    expect((await t.as(t.cookieFor('carol', 'Carol'), `/standups/${s.id}/members`)).status).toBe(403);
+    spyOn(t.adapter, 'listSpaceMembers').mockRejectedValue(new Error('quota'));
+    const down = await t.as(bob, `/standups/${s.id}/members`);
+    expect(down.status).toBe(502);
+    expect((await down.json() as any).error.message).toBe('Google Chat did not answer: quota');
+
+    const detail = (await (await t.as(bob, `/standups/${s.id}`)).json()) as any;
+    expect(detail.participants.map((p: any) => [p.userName, p.workingDays, p.otherStandups])).toEqual([
+      ['users/alice', 'mon,tue', 1],
+      ['users/bob', null, 0],
+      ['users/carol', null, 0],
+    ]);
+  });
 });
 
 describe('api: blockers', () => {

@@ -36,6 +36,7 @@ function fakeServer(seed: { settings?: (s: Settings) => void; lastEventAt?: stri
     verify: { project: pass('Audience looks right.'), 'service-account': pass('Key verified for bot@x — the app is already in at least one space.'), 'chat-event': fail('No event received yet.'), saml: pass('IdP answered 200.'), ...seed.verify },
     patches: [] as Record<string, unknown>[],
     posted: [] as Record<string, unknown>[],
+    weeks: [] as Record<string, unknown>[],
   };
   const apply = (patch: Record<string, unknown>) => {
     state.patches.push(patch);
@@ -74,6 +75,7 @@ function fakeServer(seed: { settings?: (s: Settings) => void; lastEventAt?: stri
     'GET /api/v1/templates': { body: { templates: TEMPLATES } },
     'GET /api/v1/spaces': { body: { spaces: [{ name: 'spaces/team', displayName: 'Platform HQ', standups: [] }, { name: 'spaces/busy', displayName: 'Busy', standups: [{ id: 1, name: 'Old' }] }] } },
     'GET /api/v1/spaces/spaces%2Fteam/members': { body: { members: [{ userName: 'users/asha', displayName: 'Asha' }, { userName: 'users/rohit', displayName: 'Rohit' }] } },
+    'PATCH /api/v1/people/users%2Frohit/schedule': { body: (init?: RequestInit) => { state.weeks.push(parse(init)); return {}; } },
     'GET /api/v1/spaces/spaces%2Fbusy/members': { status: 502, body: { error: { code: 'chat_unavailable', message: 'Google Chat did not answer: quota' } } },
     'POST /api/v1/standups': {
       status: 201,
@@ -285,24 +287,29 @@ describe('setup: sign-in, template, create and live', () => {
     expect(screen.getByText('Template: Daily standup')).toBeInTheDocument();
     expect(screen.getByLabelText('Name')).toHaveValue('Daily standup');
     expect(screen.getByLabelText('Question 3')).toHaveValue('Any blockers?');
-    expect(screen.getByText('Nobody yet — pick a space to see who is in it.')).toBeInTheDocument();
+    expect(screen.getByText('Pick a space to see who is in it.')).toBeInTheDocument();
     const run = screen.getByRole('button', { name: 'Create and run it now' });
     expect(run).toBeDisabled();
 
     await user.clear(screen.getByLabelText('Name'));
     await user.type(screen.getByLabelText('Name'), 'Engineering daily');
     await user.selectOptions(screen.getByLabelText('Post in space'), 'spaces/team');
-    expect(await screen.findByRole('button', { name: '+ Asha' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '+ Asha' }));
-    await user.click(screen.getByRole('button', { name: 'Add all' }));
-    expect(screen.getByText('Everyone in the space is on the list.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Make optional: Rohit' }));
-    expect(within(screen.getByLabelText('Participants')).getByText('optional')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Make mandatory: Rohit' }));
-    await user.click(screen.getByRole('button', { name: 'Remove Asha' }));
+    // everyone in the space starts on the standup
+    expect(await screen.findByLabelText('Asha on this standup')).toBeChecked();
+    expect(screen.getByText('People · 2 on this standup')).toBeInTheDocument();
+    await user.click(screen.getByLabelText('Asha on this standup'));
+    expect(screen.getByText('People · 1 on this standup')).toBeInTheDocument();
+    await user.click(screen.getByLabelText('Rohit counts if missing'));
+    expect(screen.getByLabelText('Rohit counts if missing')).not.toBeChecked();
+    await user.click(screen.getByLabelText('Rohit counts if missing'));
 
     await user.click(screen.getByRole('button', { name: 'Sat' }));
     await user.click(screen.getByRole('button', { name: 'Mon' }));
+    expect(screen.getByLabelText('Rohit works Mon')).toBeDisabled();
+    // Rohit works the standup's days except Saturday
+    await user.click(screen.getByLabelText('Rohit works Sat'));
+    await user.click(screen.getByLabelText('Rohit works Tue'));
+    await user.click(screen.getByLabelText('Rohit works Tue'));
     await user.selectOptions(screen.getByLabelText('Timezone'), 'UTC');
     await user.click(screen.getByRole('button', { name: '+ Add question' }));
     await user.type(screen.getByLabelText('Question 4'), 'Anything to celebrate?');
@@ -317,6 +324,7 @@ describe('setup: sign-in, template, create and live', () => {
     expect(body.days).toEqual(['tue', 'wed', 'thu', 'fri', 'sat']);
     expect(body.questions).toEqual(['What will you do today?', 'Anything to celebrate?', 'Any blockers?']);
     expect(body.participants).toEqual([{ userName: 'users/rohit', displayName: 'Rohit', mandatory: true }]);
+    expect(state.weeks).toEqual([{ workingDays: 'tue,wed,thu,fri' }]);
     expect(state.patches.at(-1)).toEqual({ setupComplete: true });
 
     expect(screen.getByText('1 of 3 submitted')).toBeInTheDocument();

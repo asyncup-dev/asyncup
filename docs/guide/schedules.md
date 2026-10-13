@@ -57,6 +57,11 @@ one-word reply that undoes it.
 
 ## From the console
 
+- **Standup → Settings → People**: a grid with everyone in the standup's
+  space. Per person, tick whether they are on the standup, whether they count
+  when they miss it, and which of the standup's days they work. Days the
+  standup doesn't run are greyed out. The create form uses the same grid, with
+  everyone in the space ticked to start with.
 - **Team → Edit schedule** on any person: the week, the overrides list with
   who set each one, an add row, and *Mark away today*.
 - **My page → My schedule**: the same controls for yourself, plus *Off today*
