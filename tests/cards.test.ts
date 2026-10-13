@@ -58,9 +58,8 @@ describe('cards', () => {
     });
     expect(buttons[1].onClick.action).toEqual({ function: url, interaction: 'OPEN_DIALOG', parameters: [{ key: 'fn', value: 'openSkipDialog' }, { key: 'runId', value: '7' }] });
     const submit = (standupDialog(7, QUESTIONS, false, [], url) as any).actionResponse.dialogAction.dialog.body.sections[0].widgets.at(-1).buttonList.buttons[0];
-    expect(submit.onClick.action).toEqual({ function: url, parameters: [{ key: 'fn', value: 'submitStandup' }, { key: 'runId', value: '7' }], requiredWidgets: ['q0', 'q1', 'q2'] });
-    const withMood = (standupDialog(7, QUESTIONS, true, [], url) as any).actionResponse.dialogAction.dialog.body.sections[0].widgets.at(-1).buttonList.buttons[0];
-    expect(withMood.onClick.action.requiredWidgets).toEqual(['q0', 'q1', 'q2', 'mood']);
+    // no requiredWidgets: the server checks every answer on submit
+    expect(submit.onClick.action).toEqual({ function: url, parameters: [{ key: 'fn', value: 'submitStandup' }, { key: 'runId', value: '7' }] });
   });
 
   it('dialog is built from the question list with prefill values', () => {

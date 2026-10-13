@@ -123,8 +123,8 @@ describe('skip and undo from Chat', () => {
     const { router, run, service, adapter, clock, scheduler } = await promptedRun();
     const dialog: any = await router.handle(click('openSkipDialog', run.id));
     const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;
-    expect(widgets[0].textInput).toMatchObject({ name: 'reason', label: 'Why are you skipping today?', type: 'SINGLE_LINE', validation: { characterLimit: 150 } });
-    expect(widgets[1].buttonList.buttons[0].onClick.action.requiredWidgets).toEqual(['reason']);
+    expect(widgets[0].textInput).toEqual({ name: 'reason', label: 'Why are you skipping today?', type: 'SINGLE_LINE', hintText: 'One line, up to 150 characters. Your team sees it in today’s thread.' });
+    expect(widgets[1].buttonList.buttons[0].onClick.action).toEqual({ function: 'skipToday', parameters: [{ key: 'runId', value: String(run.id) }] });
 
     expect(status(await router.handle(skipWith(run.id, '   ')))).toMatchObject({ statusCode: 'INVALID_ARGUMENT', userFacingMessage: 'Say in a line why you are skipping today.' });
     expect(status(await router.handle(skipWith(run.id, 'x'.repeat(151)))).userFacingMessage).toBe('Keep the reason to 150 characters.');

@@ -44,13 +44,11 @@ type Param = { key: string; value: string };
  * carry the action name as a parameter; the interaction-event format treats
  * `function` as an opaque string, so the same shape serves both.
  */
-export function clickAction(fn: string, parameters: Param[], endpoint: string | null, interaction?: 'OPEN_DIALOG', requiredWidgets?: string[]) {
+export function clickAction(fn: string, parameters: Param[], endpoint: string | null, interaction?: 'OPEN_DIALOG') {
   return {
     function: endpoint ?? fn,
     ...(interaction ? { interaction } : {}),
     parameters: endpoint ? [{ key: 'fn', value: fn }, ...parameters] : parameters,
-    // Chat refuses to submit the form until these inputs have a value.
-    ...(requiredWidgets ? { requiredWidgets } : {}),
   };
 }
 
@@ -175,11 +173,11 @@ export function standupDialog(
     });
   }
 
-  const required = [...questions.map((_, i) => `q${i}`), ...(moodEnabled ? ['mood'] : [])];
+  // Required answers are checked on submit, as Google's dialog guide does; Chat failed to open dialogs with requiredWidgets.
   widgets.push({
     buttonList: {
       buttons: [
-        { text: 'Submit', onClick: { action: clickAction(SUBMIT_DIALOG_FN, [{ key: 'runId', value: String(runId) }], endpoint, undefined, required) } },
+        { text: 'Submit', onClick: { action: clickAction(SUBMIT_DIALOG_FN, [{ key: 'runId', value: String(runId) }], endpoint) } },
       ],
     },
   });
@@ -208,13 +206,12 @@ export function skipDialog(runId: number, endpoint: string | null = null) {
                       name: 'reason',
                       label: 'Why are you skipping today?',
                       type: 'SINGLE_LINE',
-                      hintText: 'One line. Your team sees it in today’s thread.',
-                      validation: { characterLimit: LIMITS.skipNoteMax },
+                      hintText: `One line, up to ${LIMITS.skipNoteMax} characters. Your team sees it in today’s thread.`,
                     },
                   },
                   {
                     buttonList: {
-                      buttons: [{ text: 'Skip today', onClick: { action: clickAction(SKIP_TODAY_FN, [{ key: 'runId', value: String(runId) }], endpoint, undefined, ['reason']) } }],
+                      buttons: [{ text: 'Skip today', onClick: { action: clickAction(SKIP_TODAY_FN, [{ key: 'runId', value: String(runId) }], endpoint) } }],
                     },
                   },
                 ],
