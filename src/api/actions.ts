@@ -19,7 +19,10 @@ export async function nudgeToday(repo: Repo, adapter: ChatAdapter, standup: Stan
   const run = await repo.getRun(standup.id, now.setZone(standup.timezone).toISODate()!);
   if (!run || run.status !== 'open') return { ok: false, status: 409, code: 'no_open_run', message: 'There is no open run today — use run-now first.' };
   const progress = runProgress(await repo.listRunParticipants(run.id), await repo.listSubmissions(run.id));
-  for (const rp of progress.pending) await adapter.sendReminder(rp.userName, standup, run);
+  for (const rp of progress.pending) {
+    const card = await adapter.sendReminder(rp.userName, standup, run);
+    if (card) await repo.addCardMessage(run.id, rp.userName, card);
+  }
   return { ok: true, nudged: progress.pending.map(person) };
 }
 

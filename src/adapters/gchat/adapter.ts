@@ -1,5 +1,5 @@
 import { auth as chatAuth, chat, type chat_v1 } from '@googleapis/chat';
-import type { ChatAdapter, SpaceInfo, SpaceMember } from '../../core/adapter.js';
+import type { ChatAdapter, PromptState, SpaceInfo, SpaceMember } from '../../core/adapter.js';
 import type { SettingsService } from '../../core/settings.js';
 import { chatEndpointUrl } from './addon.js';
 import type { TimeOffRequest } from '../../core/schedule.js';
@@ -52,14 +52,22 @@ export class GoogleChatAdapter implements ChatAdapter {
     return this.client;
   }
 
-  async sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<void> {
+  async sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<string | null> {
     const dm = await this.ensureDmSpace(userName);
-    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: promptMessage(standup, run, await this.endpoint()) });
+    const res = await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: promptMessage(standup, run, await this.endpoint()) });
+    return res.data.name ?? null;
   }
 
-  async sendReminder(userName: string, standup: Standup, run: Run): Promise<void> {
+  async sendReminder(userName: string, standup: Standup, run: Run): Promise<string | null> {
     const dm = await this.ensureDmSpace(userName);
-    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: reminderMessage(standup, run, await this.endpoint()) });
+    const res = await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: reminderMessage(standup, run, await this.endpoint()) });
+    return res.data.name ?? null;
+  }
+
+  async updateStandupCards(messageNames: string[], standup: Standup, run: Run, state: PromptState): Promise<void> {
+    const client = await this.getClient();
+    const requestBody = promptMessage(standup, run, await this.endpoint(), state);
+    for (const name of messageNames) await client.spaces.messages.update({ name, updateMask: 'cardsV2', requestBody });
   }
 
   async postThreadParent(standup: Standup, run: Run): Promise<void> {
@@ -99,9 +107,9 @@ export class GoogleChatAdapter implements ChatAdapter {
     await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: { text } });
   }
 
-  async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string): Promise<void> {
+  async sendBlockerCard(userName: string, standup: Standup, blocker: Blocker, note: string, owner = false): Promise<void> {
     const dm = await this.ensureDmSpace(userName);
-    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note, await this.endpoint()) });
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: blockerCard(standup, blocker, note, await this.endpoint(), owner) });
   }
 
   async sendTimeOffRequest(managerUserName: string, request: TimeOffRequest): Promise<void> {

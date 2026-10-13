@@ -341,6 +341,11 @@ ALTER TABLE standups ADD COLUMN roster_sync_error TEXT;
 ALTER TABLE participants ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
 ALTER TABLE participants ADD COLUMN kept_off INTEGER NOT NULL DEFAULT 0;
 `,
+  // 14 — the prompt, reminder and nudge cards sent for each run, so they can
+  //      change once the person submits or skips
+  `
+ALTER TABLE run_participants ADD COLUMN card_messages TEXT;
+`,
 ];
 
 /**
@@ -604,6 +609,11 @@ ALTER TABLE standups ADD COLUMN roster_synced_at TEXT;
 ALTER TABLE standups ADD COLUMN roster_sync_error TEXT;
 ALTER TABLE participants ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
 ALTER TABLE participants ADD COLUMN kept_off INTEGER NOT NULL DEFAULT 0;
+`,
+  // 14 — the prompt, reminder and nudge cards sent for each run, so they can
+  //      change once the person submits or skips
+  `
+ALTER TABLE run_participants ADD COLUMN card_messages TEXT;
 `,
 ];
 
@@ -1338,6 +1348,35 @@ export class Repo {
       runId,
       userName,
     ]);
+  }
+
+  /** Remembers a prompt, reminder or nudge card so it can be updated later. */
+  async addCardMessage(runId: number, userName: string, messageName: string): Promise<void> {
+    const row = await this.db.get('SELECT card_messages FROM run_participants WHERE run_id = ? AND user_name = ?', [runId, userName]);
+    if (!row) return;
+    const names: string[] = row.card_messages ? JSON.parse(row.card_messages) : [];
+    if (names.includes(messageName)) return;
+    await this.db.run('UPDATE run_participants SET card_messages = ? WHERE run_id = ? AND user_name = ?', [JSON.stringify([...names, messageName]), runId, userName]);
+  }
+
+  async listCardMessages(runId: number, userName: string): Promise<string[]> {
+    const row = await this.db.get('SELECT card_messages FROM run_participants WHERE run_id = ? AND user_name = ?', [runId, userName]);
+    return row?.card_messages ? JSON.parse(row.card_messages) : [];
+  }
+
+  /** Undoes a skip: the person is expected again. */
+  async clearSkipped(runId: number, userName: string): Promise<boolean> {
+    const result = await this.db.run(
+      `UPDATE run_participants SET skipped_at = NULL, away_reason = NULL WHERE run_id = ? AND user_name = ? AND skipped_at IS NOT NULL`,
+      [runId, userName],
+    );
+    return result.changes > 0;
+  }
+
+  /** A display name for a Chat user from any roster they are on. */
+  async displayNameFor(userName: string): Promise<string | null> {
+    const row = await this.db.get('SELECT display_name FROM participants WHERE user_name = ? ORDER BY active DESC LIMIT 1', [userName]);
+    return row?.display_name ?? null;
   }
 
   async markSkipped(runId: number, userName: string, at: string): Promise<boolean> {

@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import type { ChatAdapter } from './adapter.js';
+import type { ChatAdapter, PromptState } from './adapter.js';
 import type { WebhookNotifier } from './webhooks.js';
 import type { Repo } from '../db/repo.js';
 import { runProgress } from './progress.js';
@@ -21,6 +21,7 @@ export type SubmitResult =
   | { ok: false; reason: 'already_submitted' | 'run_not_found' | 'not_a_participant' };
 
 export type SkipResult = 'skipped' | 'already_submitted' | 'not_found';
+export type UnskipResult = 'unskipped' | 'not_skipped' | 'closed' | 'not_found';
 
 export class StandupService {
   constructor(
@@ -28,6 +29,7 @@ export class StandupService {
     private adapter: ChatAdapter,
     private now: () => DateTime = () => DateTime.utc(),
     private webhooks: WebhookNotifier | null = null,
+    private log: (msg: string) => void = () => {},
   ) {}
 
   /**
@@ -64,6 +66,7 @@ export class StandupService {
       await this.trackBlockers(standup, run, userName, displayName, input, { resolveOthers: false });
       if (updated.messageName) await this.adapter.updateSubmission(standup, updated);
       await this.webhooks?.submission(standup, run.date, updated, true);
+      await this.refreshCards(standup, run, userName);
       return { ok: true, late: false, edited: true };
     }
 
@@ -82,7 +85,26 @@ export class StandupService {
     const messageName = await this.adapter.postSubmission(standup, run, submission);
     if (messageName) await this.repo.setSubmissionMessageName(submission.id, messageName);
     await this.webhooks?.submission(standup, run.date, submission, false);
+    await this.refreshCards(standup, run, userName);
     return { ok: true, late, edited: false };
+  }
+
+  /** Rewrites the prompt, reminder and nudge cards a person was sent, to show they submitted, skipped or are still due. */
+  private async refreshCards(standup: Standup, run: Run, userName: string): Promise<void> {
+    const names = await this.repo.listCardMessages(run.id, userName);
+    if (names.length === 0) return;
+    const submission = await this.repo.getSubmission(run.id, userName);
+    const rp = (await this.repo.listRunParticipants(run.id)).find((p) => p.userName === userName);
+    const state: PromptState = submission
+      ? { kind: 'submitted', at: submission.submittedAt, late: submission.late }
+      : rp?.skippedAt
+        ? { kind: 'skipped' }
+        : { kind: 'open' };
+    try {
+      await this.adapter.updateStandupCards(names, standup, run, state);
+    } catch (err) {
+      this.log(`updating ${userName}'s cards for run ${run.id} failed: ${err}`);
+    }
   }
 
   private async trackBlockers(
@@ -108,6 +130,14 @@ export class StandupService {
         date: run.date,
       });
     }
+    // The owner gets a card for each new blocker, the one place to pull people in from.
+    for (const blocker of (await this.repo.listBlockersOpenedBy(run.id, userName)).filter((b) => texts.includes(b.text))) {
+      try {
+        await this.adapter.sendBlockerCard(userName, standup, blocker, 'Your blocker is open. Tag the people who can help.', true);
+      } catch (err) {
+        this.log(`blocker card to ${userName} failed: ${err}`);
+      }
+    }
     // A blocker-free submission resolves the person's previously open blockers.
     if (texts.length === 0 && opts.resolveOthers) {
       await this.repo.resolveBlockersFor(standup.id, userName, run.id, run.date);
@@ -119,7 +149,24 @@ export class StandupService {
     const run = await this.repo.getRunById(runId);
     if (!run) return 'not_found';
     if (await this.repo.getSubmission(run.id, userName)) return 'already_submitted';
-    return (await this.repo.markSkipped(run.id, userName, this.now().toISO()!)) ? 'skipped' : 'not_found';
+    if (!(await this.repo.markSkipped(run.id, userName, this.now().toISO()!))) return 'not_found';
+    await this.refreshCards((await this.repo.getStandupById(run.standupId))!, run, userName);
+    return 'skipped';
+  }
+
+  /** Today's date in the standup's timezone. */
+  today(standup: Standup): string {
+    return this.now().setZone(standup.timezone).toISODate()!;
+  }
+
+  /** Takes back a skip while the run is open: the person is expected again. */
+  async unskip(runId: number, userName: string): Promise<UnskipResult> {
+    const run = await this.repo.getRunById(runId);
+    if (!run) return 'not_found';
+    if (run.status !== 'open') return 'closed';
+    if (!(await this.repo.clearSkipped(run.id, userName))) return 'not_skipped';
+    await this.refreshCards((await this.repo.getStandupById(run.standupId))!, run, userName);
+    return 'unskipped';
   }
 
   /**

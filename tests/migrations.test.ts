@@ -7,8 +7,8 @@ import { POSTGRES_MIGRATIONS, Repo, SQLITE_MIGRATIONS } from '../src/db/repo.js'
 
 describe('migration 10 — AI removal', () => {
   it('keeps both dialect arrays aligned', () => {
-    expect(SQLITE_MIGRATIONS).toHaveLength(13);
-    expect(POSTGRES_MIGRATIONS).toHaveLength(13);
+    expect(SQLITE_MIGRATIONS).toHaveLength(14);
+    expect(POSTGRES_MIGRATIONS).toHaveLength(14);
     for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
       expect(migrations[9]).toContain('DROP COLUMN ai_enabled');
       expect(migrations[9]).toContain("'llmApiKey'");
@@ -45,7 +45,7 @@ describe('migration 10 — AI removal', () => {
     const columns = (check.query('PRAGMA table_info(standups)').all() as { name: string }[]).map((c) => c.name);
     expect(columns).not.toContain('ai_enabled');
     expect(columns).toContain('digest_enabled');
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(13);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(14);
     check.close();
   });
 });
@@ -89,7 +89,7 @@ describe('migration 11 — MCP tokens and activity', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(13);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(14);
     check.close();
   });
 });
@@ -130,7 +130,7 @@ describe('migration 12 — personal schedules', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(13);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(14);
     check.close();
   });
 });
@@ -160,5 +160,13 @@ describe('migration 13 — roster from a Google Group', () => {
     expect(standup).toMatchObject({ rosterGroup: null, rosterSyncedAt: null, rosterSyncError: null });
     expect(await repo.listRosterRows(standup.id)).toEqual([{ userName: 'users/a', displayName: 'Asha', active: true, source: 'manual', keptOff: false }]);
     await repo.close();
+  });
+});
+
+describe('migration 14 — prompt card messages', () => {
+  it('remembers the cards sent per run participant, in both dialects', () => {
+    for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
+      expect(migrations[13]).toContain('ALTER TABLE run_participants ADD COLUMN card_messages TEXT');
+    }
   });
 });

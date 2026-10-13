@@ -1,5 +1,6 @@
 import { IANAZone } from 'luxon';
 import type { BlockerService } from '../../core/blocker-service.js';
+import type { PromptState } from '../../core/adapter.js';
 import type { CommandHandler, Mention } from '../../core/commands.js';
 import type { PollService } from '../../core/poll-service.js';
 import type { StandupService } from '../../core/standup-service.js';
@@ -24,6 +25,11 @@ import {
   pollMessage,
   RESOLVE_BLOCKER_FN,
   SKIP_TODAY_FN,
+  UNSKIP_FN,
+  OPEN_TAG_FN,
+  SUBMIT_TAG_FN,
+  promptMessage,
+  tagBlockerDialog,
   standupDialog,
   SUBMIT_BLOCKER_UPDATE_FN,
   SUBMIT_DIALOG_FN,
@@ -114,13 +120,16 @@ export class EventRouter {
           : "You're not on any standup roster yet.",
       };
     }
+    if (text === 'unskip') {
+      return { text: await this.onUnskipDm(user) };
+    }
     if (this.schedule && /^(off|working|days)(\s|$)/.test(text)) {
       return { text: await this.onScheduleDm(user, raw) };
     }
     return {
       text:
         'When a standup is due you\'ll get a card here with a *Fill standup* button.\n' +
-        'DM commands: `vacation` (pause prompts while you\'re away) · `back` (resume) · ' +
+        'DM commands: `vacation` (pause prompts while you\'re away) · `back` (resume) · `unskip` (take back today\'s skip) · ' +
         '`off <date|range> [reason]` (a day off, e.g. `off tomorrow comp off`) · `working <date>` · `off list` · `off cancel <date>` · ' +
         '`days mon-thu|adhoc|reset` (your own week) · ' +
         '`timezone <IANA>` (get your prompts at the standup time in *your* zone; `timezone reset` to follow the standup zone).\n' +
@@ -154,6 +163,18 @@ export class EventRouter {
     if (!spec.ok) return spec.message;
     const result = await schedule.setOverride({ target: user, dates: spec.dates, working: command === 'working', reason: spec.rest, actor, channel: 'chat' });
     return result.message;
+  }
+
+  /** DM `unskip` — takes back today's skip on every standup where it still can. */
+  private async onUnskipDm(user: Mention): Promise<string> {
+    const undone: string[] = [];
+    for (const standup of await this.repo.listStandupsForUser(user.userName)) {
+      const run = await this.repo.getRun(standup.id, this.service.today(standup));
+      if (run && (await this.service.unskip(run.id, user.userName)) === 'unskipped') undone.push(standup.name);
+    }
+    return undone.length
+      ? `↩️ Skip undone for ${undone.join(', ')} — your prompt card is back, and you're expected today.`
+      : "Nothing to undo: you haven't skipped an open standup today.";
   }
 
   /** DM `timezone` — personal prompt timezone across all the user's standups. */
@@ -204,14 +225,35 @@ export class EventRouter {
       return this.onDialogSubmit(event, runId, user);
     }
 
-    if (fn === SKIP_TODAY_FN) {
+    if (fn === SKIP_TODAY_FN || fn === UNSKIP_FN) {
+      const run = Number.isInteger(runId) ? await this.repo.getRunById(runId) : null;
+      if (!run) return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: 'This standup prompt is no longer valid.' };
+      const standup = (await this.repo.getStandupById(run.standupId))!;
+      const card = (state: PromptState) => async () => ({ actionResponse: { type: 'UPDATE_MESSAGE' }, ...promptMessage(standup, run, await this.endpoint(), state) });
+      if (fn === UNSKIP_FN) {
+        const result = await this.service.unskip(runId, user.userName);
+        if (result === 'closed') return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: `Today's ${standup.name} has closed, so the skip stays.` };
+        return card({ kind: 'open' })();
+      }
       const result = await this.service.skipToday(runId, user.userName);
-      const messages = {
-        skipped: "🏖️ Skipped today's standup — you won't be counted as missing. Have a good one!",
-        already_submitted: '✅ You already submitted today, so there is nothing to skip.',
-        not_found: 'This standup prompt is no longer valid.',
-      };
-      return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: messages[result] };
+      if (result === 'already_submitted') {
+        const submission = (await this.repo.getSubmission(run.id, user.userName))!;
+        return card({ kind: 'submitted', at: submission.submittedAt, late: submission.late })();
+      }
+      if (result === 'not_found') return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: 'This standup prompt is no longer valid.' };
+      return card({ kind: 'skipped' })();
+    }
+
+    if (fn === OPEN_TAG_FN || fn === SUBMIT_TAG_FN) {
+      const blocker = await this.repo.getBlockerById(Number(getParameter(event, 'blockerId')));
+      if (!blocker || blocker.resolvedDate) return dialogError('This blocker is resolved or no longer exists.');
+      if (fn === OPEN_TAG_FN) return tagBlockerDialog(blocker, await this.endpoint());
+      // The people picker answers with Chat user resource names.
+      const picked = getFormValues(event, 'people').filter((v) => v.startsWith('users/') && v !== blocker.userName);
+      if (picked.length === 0) return dialogError('Pick at least one person other than the one who raised it.');
+      const mentions = await Promise.all(picked.map(async (userName) => ({ userName, displayName: (await this.repo.displayNameFor(userName)) ?? 'A teammate' })));
+      const standup = (await this.repo.getStandupById(blocker.standupId))!;
+      return dialogOk(await this.blockers.tag(standup, blocker.id, mentions, user));
     }
 
     if (fn === VOTE_POLL_FN && this.polls) {
@@ -365,7 +407,12 @@ function getParameter(event: any, key: string): string | undefined {
 }
 
 function getFormValue(event: any, name: string): string {
-  return event.common?.formInputs?.[name]?.stringInputs?.value?.[0] ?? '';
+  return getFormValues(event, name)[0] ?? '';
+}
+
+/** Every value of a form input, e.g. the people picked in a multi-select. */
+function getFormValues(event: any, name: string): string[] {
+  return event.common?.formInputs?.[name]?.stringInputs?.value ?? [];
 }
 
 function dialogOk(message: string): object {
