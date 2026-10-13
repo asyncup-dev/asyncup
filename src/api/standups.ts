@@ -1,13 +1,13 @@
 import type { Router } from 'express';
 import { createStandup } from '../core/create-standup.js';
+import { nudgeToday } from './actions.js';
 import { buildCsv } from '../core/export.js';
 import { weeklySeries } from '../core/insights.js';
-import { runProgress } from '../core/progress.js';
 import { validateStandupConfig } from '../core/standup-config.js';
 import type { Standup } from '../core/types.js';
 import { clampExportDays, LIMITS } from '../core/validation.js';
 import { apiError, canManage, clampInt, loadStandup, principalOf, summarise, visibleStandups, type ApiContext } from './shared.js';
-import { person, runsView, runView, todayView } from './views.js';
+import { runsView, runView, standupDetailView, todayView } from './views.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -21,17 +21,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
     res.json({ standups });
   });
 
-  const detail = async (standup: Standup, manage: boolean) => ({
-    ...(await summarise(repo, standup, ctx.now(), manage)),
-    participants: (await repo.listParticipants(standup.id)).map((x) => ({
-      userName: x.userName,
-      displayName: x.displayName,
-      mandatory: x.mandatory,
-      timezone: x.timezone,
-      onVacation: x.onVacation,
-    })),
-    admins: (await repo.listAdmins(standup.id)).map(person),
-  });
+  const detail = (standup: Standup, manage: boolean) => standupDetailView(repo, standup, ctx.now(), manage);
 
   api.get('/standups/:id', async (req, res) => {
     const standup = await loadStandup(ctx, req, res);
@@ -94,14 +84,9 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   api.post('/standups/:id/nudge', async (req, res) => {
     const standup = await loadStandup(ctx, req, res, { manage: true });
     if (!standup) return;
-    const run = await repo.getRun(standup.id, ctx.now().setZone(standup.timezone).toISODate()!);
-    if (!run || run.status !== 'open') {
-      apiError(res, 409, 'no_open_run', 'There is no open run today — use run-now first.');
-      return;
-    }
-    const progress = runProgress(await repo.listRunParticipants(run.id), await repo.listSubmissions(run.id));
-    for (const rp of progress.pending) await ctx.adapter.sendReminder(rp.userName, standup, run);
-    res.json({ nudged: progress.pending.map(person) });
+    const result = await nudgeToday(repo, ctx.adapter, standup, ctx.now());
+    if (!result.ok) return apiError(res, result.status, result.code, result.message);
+    res.json({ nudged: result.nudged });
   });
 
   api.get('/standups/:id/runs', async (req, res) => {

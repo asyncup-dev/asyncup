@@ -55,9 +55,15 @@ export function useRevokeMcpToken() {
   return useMutation({ mutationFn: (id: number) => api<undefined>(`/mcp/tokens/${id}`, { method: 'DELETE' }), onSuccess: () => client.invalidateQueries({ queryKey: ['mcp-tokens'] }) });
 }
 
+export type McpClient = 'claude-code' | 'claude-code-project' | 'cursor' | 'generic';
+
 /** Ready-to-paste MCP client configs. */
-export function clientSnippet(kind: 'claude-desktop' | 'claude-code' | 'cursor' | 'generic', url: string, token = '<your token>'): string {
-  if (kind === 'claude-code') return `claude mcp add --transport http asyncup ${url} --header "Authorization: Bearer ${token}"`;
+export function clientSnippet(kind: McpClient, url: string, token = '<your token>'): string {
+  if (kind === 'claude-code') return `claude mcp add --transport http --scope user asyncup ${url} --header "Authorization: Bearer ${token}"`;
+  // A project's .mcp.json is committed, so each person keeps their own token in the environment.
+  if (kind === 'claude-code-project') {
+    return JSON.stringify({ mcpServers: { asyncup: { type: 'http', url, headers: { Authorization: 'Bearer ${ASYNCUP_TOKEN}' } } } }, null, 2);
+  }
   if (kind === 'generic') return `POST ${url}\nAuthorization: Bearer ${token}\nContent-Type: application/json\nAccept: application/json, text/event-stream`;
   return JSON.stringify({ mcpServers: { asyncup: { url, headers: { Authorization: `Bearer ${token}` } } } }, null, 2);
 }

@@ -1,5 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import { AWAY_LABEL, describeWorkingDays, isIsoDate, type Actor, type ScheduleService } from '../core/schedule.js';
+import type { ScheduleOverride } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
 import { apiError, canManage, principalOf, type ApiContext } from './shared.js';
@@ -235,7 +236,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
   }
 }
 
-export function overrideView(o: { id: number; userName: string; displayName: string; date: string; working: boolean; reason: string; status: string; setByDisplayName: string; channel: string; decidedByDisplayName: string | null; decisionNote: string | null; createdAt: string }) {
+export function overrideView(o: ScheduleOverride) {
   return {
     id: o.id,
     userName: o.userName,

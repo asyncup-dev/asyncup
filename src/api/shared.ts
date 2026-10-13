@@ -10,7 +10,7 @@ import type { Scheduler } from '../core/scheduler.js';
 import type { SettingsService } from '../core/settings.js';
 import type { StandupService } from '../core/standup-service.js';
 import type { ScheduleService } from '../core/schedule.js';
-import { standupQuestions, type Standup } from '../core/types.js';
+import { standupQuestions, type Standup, type Weekday } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
 
@@ -109,6 +109,11 @@ export async function loadStandup(
   return found.standup;
 }
 
+/** The standup's days; stored only through parseDays, so every entry is a weekday. */
+export function standupDays(s: Standup): Weekday[] {
+  return s.days.split(',').filter(Boolean) as Weekday[];
+}
+
 export async function summarise(repo: Repo, s: Standup, now: DateTime, manage: boolean) {
   const participants = await repo.listParticipants(s.id);
   const date = now.setZone(s.timezone).toISODate()!;
@@ -139,7 +144,7 @@ export async function summarise(repo: Repo, s: Standup, now: DateTime, manage: b
       promptTime: s.promptTime,
       deadlineTime: s.deadlineTime,
       timezone: s.timezone,
-      days: s.days.split(',').filter(Boolean),
+      days: standupDays(s),
       reminderMinutesBefore: s.reminderMinutesBefore,
     },
     questions: standupQuestions(s),

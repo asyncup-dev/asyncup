@@ -40,6 +40,7 @@ export default defineConfig({
           { text: 'Web app', link: '/guide/web-app' },
           { text: 'Enterprise SSO (SAML + SCIM)', link: '/guide/enterprise-sso' },
           { text: 'JSON API', link: '/guide/api' },
+          { text: 'Claude Code and MCP', link: '/guide/mcp' },
           { text: 'Deployment', link: '/guide/deployment' },
         ],
       },

@@ -1,7 +1,7 @@
 import type { Request, Response, Router } from 'express';
-import { memberStandups, setMemberTimezone, setMemberVacation } from '../core/member.js';
-import { runProgress } from '../core/progress.js';
+import { skipToday, updateMe } from './actions.js';
 import { apiError, clampInt, findVisibleStandup, principalOf, type ApiContext } from './shared.js';
+import { myStandupsView } from './views.js';
 
 /** The signed-in person's own view: their standups, answers and settings. */
 export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
@@ -22,40 +22,7 @@ export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
   };
 
   api.get('/me/standups', async (req, res) => {
-    const userName = principalOf(req).user?.userName ?? null;
-    if (!userName) {
-      res.json({ linked: false, standups: [] });
-      return;
-    }
-    const mine = await memberStandups(repo, userName, ctx.now());
-    const standups = [];
-    for (const m of mine) {
-      // How far the team has got today, so the console can say "7 of 9 have posted".
-      const run = m.today ? await repo.getRun(m.standup.id, ctx.now().setZone(m.standup.timezone).toISODate()!) : null;
-      const progress = run ? runProgress(await repo.listRunParticipants(run.id), await repo.listSubmissions(run.id)) : null;
-      standups.push({
-        id: m.standup.id,
-        name: m.standup.name,
-        schedule: {
-          promptTime: m.standup.promptTime,
-          deadlineTime: m.standup.deadlineTime,
-          timezone: m.standup.timezone,
-          days: m.standup.days.split(','),
-        },
-        today: m.today,
-        progress: progress ? { submitted: progress.submitted, expected: progress.expected } : null,
-        mandatory: m.mandatory,
-        onVacation: m.onVacation,
-      });
-    }
-    const dmSpace = await repo.getDmSpace(userName);
-    res.json({
-      linked: true,
-      timezone: await repo.getUserTimezone(userName),
-      // Answers stay in Chat: the console deep-links to the bot's DM once one exists.
-      chat: { dmUrl: dmSpace ? `https://chat.google.com/dm/${dmSpace.replace(/^spaces\//, '')}` : null },
-      standups,
-    });
+    res.json(await myStandupsView(repo, principalOf(req).user?.userName ?? null, ctx.now()));
   });
 
   api.get('/me/submissions', async (req, res) => {
@@ -87,15 +54,9 @@ export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 404, 'not_found', 'No such standup.');
       return;
     }
-    const run = await repo.getRun(found.standup.id, ctx.now().setZone(found.standup.timezone).toISODate()!);
-    if (!run || run.status !== 'open') {
-      apiError(res, 409, 'no_open_run', run ? 'Today’s run has already closed.' : 'Today’s run has not opened yet.');
-      return;
-    }
-    const result = await ctx.service.skipToday(run.id, userName);
-    if (result === 'already_submitted') return apiError(res, 409, 'already_submitted', 'You already answered today — edit your answers in Chat instead.');
-    if (result === 'not_found') return apiError(res, 404, 'not_found', 'You are not on today’s run.');
-    res.json({ result, date: run.date });
+    const result = await skipToday(repo, ctx.service, found.standup, userName, ctx.now());
+    if (!result.ok) return apiError(res, result.status, result.code, result.message);
+    res.json({ result: result.result, date: result.date });
   });
 
   api.patch('/me', async (req, res) => {
@@ -106,18 +67,8 @@ export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 400, 'invalid', 'Must be true or false.', 'onVacation');
       return;
     }
-    if (body.timezone !== undefined) {
-      const result = await setMemberTimezone(repo, userName, body.timezone === null ? '' : String(body.timezone));
-      if (!result.ok) {
-        apiError(res, 400, 'invalid', result.message, 'timezone');
-        return;
-      }
-    }
-    if (body.onVacation !== undefined) await setMemberVacation(repo, userName, body.onVacation);
-    const mine = await memberStandups(repo, userName, ctx.now());
-    res.json({
-      timezone: await repo.getUserTimezone(userName),
-      onVacation: mine.length > 0 && mine.every((m) => m.onVacation),
-    });
+    const result = await updateMe(repo, userName, { timezone: body.timezone === undefined ? undefined : body.timezone === null ? null : String(body.timezone), onVacation: body.onVacation }, ctx.now());
+    if (!result.ok) return apiError(res, result.status, result.code, result.message, result.field);
+    res.json({ timezone: result.timezone, onVacation: result.onVacation });
   });
 }

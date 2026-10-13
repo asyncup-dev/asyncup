@@ -18,9 +18,11 @@ describe('people helpers', () => {
   });
 
   it('builds client snippets', () => {
-    expect(JSON.parse(clientSnippet('claude-desktop', 'https://x/mcp', 'amcp_1'))).toEqual({ mcpServers: { asyncup: { url: 'https://x/mcp', headers: { Authorization: 'Bearer amcp_1' } } } });
+    expect(JSON.parse(clientSnippet('cursor', 'https://x/mcp', 'amcp_1'))).toEqual({ mcpServers: { asyncup: { url: 'https://x/mcp', headers: { Authorization: 'Bearer amcp_1' } } } });
+    // the committed project file never carries the token itself
+    expect(JSON.parse(clientSnippet('claude-code-project', 'https://x/mcp', 'amcp_1'))).toEqual({ mcpServers: { asyncup: { type: 'http', url: 'https://x/mcp', headers: { Authorization: 'Bearer ${ASYNCUP_TOKEN}' } } } });
     expect(clientSnippet('cursor', 'https://x/mcp')).toContain('<your token>');
-    expect(clientSnippet('claude-code', 'https://x/mcp', 't')).toBe('claude mcp add --transport http asyncup https://x/mcp --header "Authorization: Bearer t"');
+    expect(clientSnippet('claude-code', 'https://x/mcp', 't')).toBe('claude mcp add --transport http --scope user asyncup https://x/mcp --header "Authorization: Bearer t"');
     expect(clientSnippet('generic', 'https://x/mcp', 't')).toContain('Authorization: Bearer t');
   });
 });

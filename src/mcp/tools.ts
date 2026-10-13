@@ -2,14 +2,18 @@ import { McpServer } from '@modelcontextprotocol/server';
 import type { CallToolResult, ToolCallback } from '@modelcontextprotocol/server';
 import type { DateTime } from 'luxon';
 import { z } from 'zod';
+import { nudgeToday, skipToday, updateMe, type Refusal } from '../api/actions.js';
 import type { Principal } from '../api/principal.js';
-import { findVisibleStandup, summarise, visibleStandups } from '../api/shared.js';
-import { BLOCKER_STATUSES, blockersView, peopleView, runsView, runView, visibleBlocker } from '../api/views.js';
 import { actorFor, displayNameOf, managesPerson, overrideView, scheduleView } from '../api/schedule.js';
-import { isIsoDate, type ScheduleService } from '../core/schedule.js';
+import { findVisibleStandup, summarise, visibleStandups } from '../api/shared.js';
+import * as S from '../api/spec/schemas.js';
+import { BLOCKER_STATUSES, blockersView, linkedStandupsView, peopleView, runsView, runView, standupDetailView, visibleBlocker } from '../api/views.js';
+import type { ChatAdapter } from '../core/adapter.js';
 import type { BlockerService } from '../core/blocker-service.js';
 import { weeklySeries } from '../core/insights.js';
-import { parseScopes, type McpScope } from '../core/mcp-scopes.js';
+import { MCP_SCOPES, parseScopes, type McpScope } from '../core/mcp-scopes.js';
+import { isIsoDate, type ScheduleService } from '../core/schedule.js';
+import type { Scheduler } from '../core/scheduler.js';
 import type { StandupService } from '../core/standup-service.js';
 import { MOODS, standupQuestions, type McpToken } from '../core/types.js';
 import { LIMITS } from '../core/validation.js';
@@ -18,10 +22,12 @@ import type { Repo } from '../db/repo.js';
 export interface McpToolDeps {
   repo: Repo;
   blockers: BlockerService;
-  /** Absent when the server was built without the standup service; submit_answers is then not offered. */
+  /** Absent when the server was built without the standup service; submit_answers and skip_today are then not offered. */
   service: StandupService | null;
   /** Absent when the server was built without personal schedules; the schedule tools then refuse. */
   schedule: ScheduleService | null;
+  scheduler: Scheduler;
+  adapter: ChatAdapter;
   now: () => DateTime;
   version: string;
 }
@@ -35,11 +41,28 @@ class ToolRefused extends Error {
 }
 
 const ID = z.number().int().positive();
+const ISO_DATE = z.string().refine(isIsoDate, 'Use a real date as YYYY-MM-DD.');
+
+// Outputs that only the MCP tools return; everything else reuses the JSON API's schemas.
+const McpMe = S.Me.extend({ scopes: z.array(z.enum(MCP_SCOPES)) });
+const Submitted = z.strictObject({ result: z.literal('submitted'), date: z.iso.date() });
+const WeekSet = z.strictObject({ message: z.string(), schedule: S.Schedule });
 
 function summariseArgs(args: unknown): string {
   const text = JSON.stringify(args ?? {});
   return text.length > 200 ? `${text.slice(0, 197)}…` : text;
 }
+
+function refuse(r: Refusal): never {
+  throw new ToolRefused(r.message);
+}
+
+/**
+ * How a write behaves when the model calls it: `destructive` when it
+ * overwrites or withdraws something, `idempotent` when repeating it changes
+ * nothing more. Every write may message people in Google Chat.
+ */
+type WriteHints = { destructive: boolean; idempotent: boolean };
 
 /**
  * One McpServer per request, holding only the tools the token's scopes
@@ -53,30 +76,40 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     { name: 'asyncup', version: deps.version },
     {
       instructions:
-        'AsyncUp runs asynchronous standups in Google Chat. Read tools return JSON for the standups this token’s owner can see. ' +
-        'Write tools act as the owner. Dates are YYYY-MM-DD in the standup’s timezone.',
+        'AsyncUp runs asynchronous standups in Google Chat. Start with get_me to see who this token acts as and what it may do, then list_standups. ' +
+        'Read tools return JSON for the standups the token’s owner can see. Write tools act as the owner and may message people in Google Chat. ' +
+        'Dates are YYYY-MM-DD in the standup’s timezone; people are Chat user names like users/123.',
     },
   );
 
-  const register = <Args extends z.ZodObject<any>>(
+  const register = <Args extends z.ZodObject<any>, Out extends z.ZodObject<any>>(
     name: string,
     scope: McpScope,
-    config: { description: string; inputSchema: Args; readOnly: boolean },
-    handler: (args: z.infer<Args>) => Promise<unknown>,
+    config: { title: string; description: string; inputSchema: Args; outputSchema: Out; write?: WriteHints },
+    handler: (args: z.infer<Args>) => Promise<z.infer<Out>>,
   ) => {
     if (!scopes.includes(scope)) return;
+    const write = config.write;
     server.registerTool(
       name,
       {
+        title: config.title,
         description: config.description,
         inputSchema: config.inputSchema,
-        annotations: { readOnlyHint: config.readOnly, destructiveHint: false },
+        outputSchema: config.outputSchema,
+        annotations: {
+          title: config.title,
+          readOnlyHint: !write,
+          destructiveHint: write?.destructive ?? false,
+          idempotentHint: write?.idempotent ?? true,
+          openWorldHint: !!write,
+        },
       },
       (async (args: z.infer<Args>): Promise<CallToolResult> => {
         let ok = true;
         try {
           const result = await handler(args);
-          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+          return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
         } catch (err) {
           ok = false;
           if (err instanceof ToolRefused) return { content: [{ type: 'text', text: err.message }], isError: true };
@@ -88,26 +121,78 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     );
   };
 
-  const standupFor = async (id: number) => {
+  const visible = async (id: number) => {
     const found = await findVisibleStandup(repo, p, id);
     if (!found) throw new ToolRefused('No such standup.');
+    return found;
+  };
+  const standupFor = async (id: number) => (await visible(id)).standup;
+  const managedStandup = async (id: number) => {
+    const found = await visible(id);
+    if (!found.manage) throw new ToolRefused('Only admins and this standup’s managers can do that.');
     return found.standup;
   };
   const me = () => {
-    if (!p.user?.userName) throw new ToolRefused('This token has no person behind it; write tools need a personal token.');
+    if (!p.user?.userName) throw new ToolRefused('This token has no person behind it; this tool needs a personal token.');
     return { userName: p.user.userName, displayName: p.user.name };
   };
 
-  register('list_standups', 'read', { description: 'Standups the owner can see, with today’s progress.', inputSchema: z.object({}), readOnly: true }, async () => {
-    const standups = [];
-    for (const s of await visibleStandups(repo, p)) standups.push(await summarise(repo, s, deps.now(), p.kind === 'admin' || p.managedStandupIds.includes(s.id)));
-    return { standups };
-  });
+  // ---- reads
+
+  register(
+    'get_me',
+    'read',
+    {
+      title: 'Who am I',
+      description: 'Who this token acts as, their role (admin, manager or member), the standups they manage, and the token’s scopes.',
+      inputSchema: z.object({}),
+      outputSchema: McpMe,
+    },
+    async () => ({ kind: p.kind, via: p.via, tenantId: p.tenantId, user: p.user, managedStandupIds: p.managedStandupIds, scopes }),
+  );
+
+  register(
+    'list_standups',
+    'read',
+    { title: 'List standups', description: 'Standups the owner can see, each with its schedule, questions and today’s progress.', inputSchema: z.object({}), outputSchema: S.StandupList },
+    async () => {
+      const standups = [];
+      for (const s of await visibleStandups(repo, p)) standups.push(await summarise(repo, s, deps.now(), p.kind === 'admin' || p.managedStandupIds.includes(s.id)));
+      return { standups };
+    },
+  );
+
+  register(
+    'get_standup',
+    'read',
+    { title: 'Get a standup', description: 'One standup with its full roster (mandatory, timezone, vacation) and its admins.', inputSchema: z.object({ standupId: ID }), outputSchema: S.StandupDetail },
+    async ({ standupId }) => {
+      const found = await visible(standupId);
+      return standupDetailView(repo, found.standup, deps.now(), found.manage);
+    },
+  );
+
+  register(
+    'get_my_standups',
+    'read',
+    {
+      title: 'My standups',
+      description: 'The owner’s own standups: schedule, whether they have answered today, how far the team has got, and a link to the bot’s DM.',
+      inputSchema: z.object({}),
+      outputSchema: S.LinkedMyStandups,
+    },
+    async () => linkedStandupsView(repo, me().userName, deps.now()),
+  );
 
   register(
     'list_runs',
     'read',
-    { description: 'Recent runs of a standup with submitted/expected counts and who is missing.', inputSchema: z.object({ standupId: ID, limit: z.number().int().min(1).max(90).default(14) }), readOnly: true },
+    {
+      title: 'List runs',
+      description: 'Recent runs of a standup, newest first, with submitted and expected counts and who is missing.',
+      inputSchema: z.object({ standupId: ID, limit: z.number().int().min(1).max(90).default(14) }),
+      outputSchema: S.RunList,
+    },
     async ({ standupId, limit }) => ({ runs: await runsView(repo, await standupFor(standupId), limit) }),
   );
 
@@ -115,9 +200,10 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'get_run',
     'read',
     {
+      title: 'Get a run',
       description: 'One run with every submission and its answers. Omit date for today. Moods are withheld per person when the standup keeps them anonymous.',
-      inputSchema: z.object({ standupId: ID, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
-      readOnly: true,
+      inputSchema: z.object({ standupId: ID, date: ISO_DATE.optional() }),
+      outputSchema: S.RunDetail,
     },
     async ({ standupId, date }) => {
       const standup = await standupFor(standupId);
@@ -131,24 +217,37 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'list_blockers',
     'read',
     {
-      description: 'Blockers across every standup the owner can see, with tags and updates.',
+      title: 'List blockers',
+      description: 'Blockers across every standup the owner can see, with who is tagged and the updates so far.',
       inputSchema: z.object({ status: z.enum(BLOCKER_STATUSES).default('open'), standupId: ID.optional(), owner: z.string().optional() }),
-      readOnly: true,
+      outputSchema: S.BlockerList,
     },
     async ({ status, standupId, owner }) => ({ blockers: await blockersView(repo, p, { status, standupId: standupId ?? null, ...(owner ? { owner } : {}) }) }),
   );
 
-  register('get_team', 'read', { description: 'Everyone on a roster the owner can see (admins and managers only).', inputSchema: z.object({}), readOnly: true }, async () => {
-    if (p.kind === 'member') throw new ToolRefused('Only admins and managers can list the team.');
-    return { people: await peopleView(repo, p) };
-  });
+  register(
+    'get_team',
+    'read',
+    { title: 'Get the team', description: 'Everyone on a roster the owner can see, with their standups and roles (admins and managers only).', inputSchema: z.object({}), outputSchema: S.Team },
+    async () => {
+      if (p.kind === 'member') throw new ToolRefused('Only admins and managers can list the team.');
+      return { people: await peopleView(repo, p) };
+    },
+  );
 
   register(
     'get_insights',
     'read',
-    { description: 'Weekly participation, mood and blocker series for a standup.', inputSchema: z.object({ standupId: ID, weeks: z.number().int().min(1).max(26).default(8) }), readOnly: true },
+    {
+      title: 'Get insights',
+      description: 'Weekly participation, mood and blocker series for a standup.',
+      inputSchema: z.object({ standupId: ID, weeks: z.number().int().min(1).max(26).default(8) }),
+      outputSchema: S.Insights,
+    },
     async ({ standupId, weeks }) => ({ weeks: await weeklySeries(repo, await standupFor(standupId), deps.now(), weeks) }),
   );
+
+  // ---- blockers
 
   const blockerFor = async (blockerId: number) => {
     const who = me();
@@ -157,34 +256,54 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     return { blocker, me: who };
   };
 
-  register('acknowledge_blocker', 'blockers:write', { description: 'Acknowledge a blocker you were tagged on.', inputSchema: z.object({ blockerId: ID }), readOnly: false }, async ({ blockerId }) => {
-    const a = await blockerFor(blockerId);
-    const result = await deps.blockers.acknowledge(a.blocker.id, a.me);
-    if (result === 'not_found') throw new ToolRefused('No such open blocker.');
-    if (result === 'not_tagged') throw new ToolRefused('Only people tagged on a blocker can acknowledge it.');
-    if (result === 'already_acked') throw new ToolRefused('You already acknowledged this blocker.');
-    return { result };
-  });
+  register(
+    'acknowledge_blocker',
+    'blockers:write',
+    { title: 'Acknowledge a blocker', description: 'Acknowledge a blocker the owner was tagged on.', inputSchema: z.object({ blockerId: ID }), outputSchema: S.BlockerResult.acknowledge, write: { destructive: false, idempotent: true } },
+    async ({ blockerId }) => {
+      const a = await blockerFor(blockerId);
+      const result = await deps.blockers.acknowledge(a.blocker.id, a.me);
+      if (result === 'not_found') throw new ToolRefused('No such open blocker.');
+      if (result === 'not_tagged') throw new ToolRefused('Only people tagged on a blocker can acknowledge it.');
+      if (result === 'already_acked') throw new ToolRefused('You already acknowledged this blocker.');
+      return { result };
+    },
+  );
 
   register(
     'update_blocker',
     'blockers:write',
-    { description: 'Add a progress note to a blocker.', inputSchema: z.object({ blockerId: ID, text: z.string().trim().min(1).max(LIMITS.textMax) }), readOnly: false },
+    {
+      title: 'Update a blocker',
+      description: 'Add a progress note to a blocker; it is posted in the standup’s thread.',
+      inputSchema: z.object({ blockerId: ID, text: z.string().trim().min(1).max(LIMITS.textMax) }),
+      outputSchema: S.BlockerResult.update,
+      write: { destructive: false, idempotent: false },
+    },
     async ({ blockerId, text }) => {
       const a = await blockerFor(blockerId);
       const result = await deps.blockers.addUpdate(a.blocker.id, a.me, text);
+      if (result === 'not_found') throw new ToolRefused('No such blocker.');
       if (result === 'resolved') throw new ToolRefused('This blocker is already resolved.');
       return { result };
     },
   );
 
-  register('resolve_blocker', 'blockers:write', { description: 'Resolve a blocker you own, are tagged on, or administer.', inputSchema: z.object({ blockerId: ID }), readOnly: false }, async ({ blockerId }) => {
-    const a = await blockerFor(blockerId);
-    const result = await deps.blockers.resolve(a.blocker.id, a.me);
-    if (result === 'already_resolved') throw new ToolRefused('This blocker is already resolved.');
-    if (result === 'not_allowed') throw new ToolRefused('Only the owner, tagged people and standup admins can resolve a blocker.');
-    return { result };
-  });
+  register(
+    'resolve_blocker',
+    'blockers:write',
+    { title: 'Resolve a blocker', description: 'Resolve a blocker the owner owns, is tagged on, or administers.', inputSchema: z.object({ blockerId: ID }), outputSchema: S.BlockerResult.resolve, write: { destructive: true, idempotent: true } },
+    async ({ blockerId }) => {
+      const a = await blockerFor(blockerId);
+      const result = await deps.blockers.resolve(a.blocker.id, a.me);
+      if (result === 'not_found') throw new ToolRefused('No such blocker.');
+      if (result === 'already_resolved') throw new ToolRefused('This blocker is already resolved.');
+      if (result === 'not_allowed') throw new ToolRefused('Only the owner, tagged people and standup admins can resolve a blocker.');
+      return { result };
+    },
+  );
+
+  // ---- the owner's own standup
 
   if (deps.service) {
     const service = deps.service;
@@ -192,9 +311,11 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       'submit_answers',
       'submit',
       {
-        description: 'Submit (or edit) your own answers for today’s run. answers[] must match the standup’s questions in order.',
+        title: 'Submit my answers',
+        description: 'Submit, or replace, the owner’s answers for today’s run. answers[] must match the standup’s questions in order; get_standup lists them.',
         inputSchema: z.object({ standupId: ID, answers: z.array(z.string().trim().max(LIMITS.textMax)).min(1), mood: z.enum(MOODS).nullable().default(null) }),
-        readOnly: false,
+        outputSchema: Submitted,
+        write: { destructive: true, idempotent: true },
       },
       async ({ standupId, answers, mood }) => {
         const who = me();
@@ -205,13 +326,59 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
         if (!run) throw new ToolRefused('Today’s run has not opened yet.');
         const result = await service.submit(run.id, who.userName, who.displayName, { answers: questions.map((question, i) => ({ question, answer: answers[i]! })), mood });
         if (!result.ok) throw new ToolRefused(SUBMIT_REASONS[result.reason]);
-        return { result: 'submitted', date: run.date };
+        return { result: 'submitted' as const, date: run.date };
+      },
+    );
+
+    register(
+      'skip_today',
+      'submit',
+      { title: 'Skip today', description: 'Skip today’s run of one standup: no more reminders, and the owner shows as away.', inputSchema: z.object({ standupId: ID }), outputSchema: S.Skipped, write: { destructive: false, idempotent: true } },
+      async ({ standupId }) => {
+        const who = me();
+        const r = await skipToday(repo, service, await standupFor(standupId), who.userName, deps.now());
+        return r.ok ? { result: r.result, date: r.date } : refuse(r);
       },
     );
   }
 
+  // ---- running a standup (managers)
+
+  register(
+    'run_standup_now',
+    'manage',
+    {
+      title: 'Start today’s run',
+      description: 'Open today’s run of a standup now and prompt everyone expected, instead of waiting for its prompt time.',
+      inputSchema: z.object({ standupId: ID }),
+      outputSchema: S.RunNow,
+      write: { destructive: false, idempotent: true },
+    },
+    async ({ standupId }) => {
+      const standup = await managedStandup(standupId);
+      return { result: await deps.scheduler.runNow(standup) };
+    },
+  );
+
+  register(
+    'nudge_standup',
+    'manage',
+    {
+      title: 'Nudge the team',
+      description: 'Send a reminder to everyone still expected in today’s open run. The scheduled reminder still fires as usual.',
+      inputSchema: z.object({ standupId: ID }),
+      outputSchema: S.Nudged,
+      write: { destructive: false, idempotent: false },
+    },
+    async ({ standupId }) => {
+      const standup = await managedStandup(standupId);
+      const r = await nudgeToday(repo, deps.adapter, standup, deps.now());
+      return r.ok ? { nudged: r.nudged } : refuse(r);
+    },
+  );
+
   // ---- personal schedules: the owner's own, or someone the owner manages
-  const ISO_DATE = z.string().refine(isIsoDate, 'Use a real date as YYYY-MM-DD.');
+
   const schedule = () => {
     if (!deps.schedule) throw new ToolRefused('Personal schedules are not available on this install.');
     return deps.schedule;
@@ -242,9 +409,10 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'get_schedule',
     'read',
     {
+      title: 'Get a schedule',
       description: 'A person’s working week, the time-off policy of their standups and their upcoming days off. Omit userName for the owner.',
       inputSchema: z.object({ userName: z.string().optional() }),
-      readOnly: true,
+      outputSchema: S.Schedule,
     },
     async ({ userName }) => {
       const svc = schedule();
@@ -256,7 +424,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   register(
     'list_time_off_requests',
     'read',
-    { description: 'Time-off requests waiting for a manager’s decision, for the people the owner manages.', inputSchema: z.object({}), readOnly: true },
+    { title: 'List time-off requests', description: 'Time-off requests waiting for a decision, for the people the owner manages.', inputSchema: z.object({}), outputSchema: S.TimeOffRequests },
     async () => {
       schedule();
       managerOnly();
@@ -270,12 +438,30 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   );
 
   register(
+    'update_my_settings',
+    'schedule',
+    {
+      title: 'Update my settings',
+      description: 'Set the owner’s timezone (an IANA name; null follows the standups) and whether they are on vacation across all their standups.',
+      inputSchema: z.object({ timezone: z.string().nullable().optional(), onVacation: z.boolean().optional() }),
+      outputSchema: S.MySettings,
+      write: { destructive: true, idempotent: true },
+    },
+    async ({ timezone, onVacation }) => {
+      const r = await updateMe(repo, me().userName, { timezone, onVacation }, deps.now());
+      return r.ok ? { timezone: r.timezone, onVacation: r.onVacation } : refuse(r);
+    },
+  );
+
+  register(
     'set_working_days',
     'schedule',
     {
+      title: 'Set a working week',
       description: 'Set a personal week: "mon-thu", "mon,wed,fri", "adhoc" (only dated working days count) or "reset" to follow the standup. Omit userName for the owner.',
       inputSchema: z.object({ userName: z.string().optional(), workingDays: z.string().trim().min(1) }),
-      readOnly: false,
+      outputSchema: WeekSet,
+      write: { destructive: true, idempotent: true },
     },
     async ({ userName, workingDays }) => {
       const svc = schedule();
@@ -290,29 +476,37 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'set_days_off',
     'schedule',
     {
-      description: 'Mark dates off (or, with working=true, as extra working days) with an optional reason. Subject to the standup’s time-off policy: the result says whether it applied or became a request.',
+      title: 'Set days off',
+      description: 'Mark dates off (or, with working=true, as extra working days) with an optional reason. Subject to the standup’s time-off policy: status says whether it applied or became a request.',
       inputSchema: z.object({ userName: z.string().optional(), dates: z.array(ISO_DATE).max(31).optional(), from: ISO_DATE.optional(), to: ISO_DATE.optional(), working: z.boolean().default(false), reason: z.string().trim().max(200).default('') }),
-      readOnly: false,
+      outputSchema: S.ScheduleChange,
+      write: { destructive: false, idempotent: true },
     },
     async ({ userName, dates, from, to, working, reason }) => {
       const svc = schedule();
       const t = await targetFor(userName);
       const r = await svc.setOverride({ target: t, dates: expand(dates, from, to), working, reason, actor: t.actor, channel: 'api' });
       if (!r.ok) throw new ToolRefused(r.message);
-      return { status: r.status, message: r.message };
+      return r;
     },
   );
 
   register(
     'cancel_day_off',
     'schedule',
-    { description: 'Withdraw a day off, extra working day or pending request on a date.', inputSchema: z.object({ userName: z.string().optional(), date: ISO_DATE }), readOnly: false },
+    {
+      title: 'Cancel a day off',
+      description: 'Withdraw a day off, extra working day or pending request on a date.',
+      inputSchema: z.object({ userName: z.string().optional(), date: ISO_DATE }),
+      outputSchema: S.ScheduleChange,
+      write: { destructive: true, idempotent: false },
+    },
     async ({ userName, date }) => {
       const svc = schedule();
       const t = await targetFor(userName);
       const r = await svc.cancelOverride(t, date, t.actor);
       if (!r.ok) throw new ToolRefused(r.message);
-      return { message: r.message };
+      return r;
     },
   );
 
@@ -320,16 +514,18 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'decide_time_off_request',
     'schedule',
     {
-      description: 'Approve or decline pending time-off requests by id (one request can span several dates). A decline note is sent to the person.',
+      title: 'Decide a time-off request',
+      description: 'Approve or decline one person’s pending time-off request by id (one request can span several dates). A decline note is sent to the person.',
       inputSchema: z.object({ ids: z.array(ID).min(1), approve: z.boolean(), note: z.string().trim().max(200).optional() }),
-      readOnly: false,
+      outputSchema: S.Decision,
+      write: { destructive: true, idempotent: false },
     },
     async ({ ids, approve, note }) => {
       const svc = schedule();
       managerOnly();
       const r = await svc.decide(ids, approve, actorFor(p), note ?? null);
       if (!r.ok) throw new ToolRefused(r.message);
-      return { message: r.message };
+      return { ok: true as const, message: r.message };
     },
   );
 
