@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADMIN, renderApp, stubApi } from '../../test/harness';
@@ -185,6 +185,45 @@ describe('standup settings tab', () => {
     renderApp('/standups/1/settings');
     const select = await screen.findByLabelText('Escalation contact');
     expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['— off —', 'Alice', 'Bob', 'Lead']);
+  });
+
+  it('deletes an archived standup after the name is typed back, and only for workspace admins', async () => {
+    const live = server();
+    renderApp('/standups/1/settings');
+    const user = userEvent.setup();
+    expect(await screen.findByText(/Archive it first/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    cleanup();
+
+    const archived = server({
+      'GET /api/v1/standups/1': { body: { ...ENG, active: false } },
+      'DELETE /api/v1/standups/1': { body: { deleted: { runs: 2, submissions: 3, blockers: 0, polls: 0 } } },
+      'GET /api/v1/standups': { body: { standups: [] } },
+    });
+    renderApp('/standups/1/settings');
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('textbox'), 'Engineering');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(archived.calls).toContain('DELETE /api/v1/standups/1'));
+    expect(live.calls).not.toContain('DELETE /api/v1/standups/1');
+    cleanup();
+
+    server({
+      'GET /api/v1/standups/1': { body: { ...ENG, active: false } },
+      'DELETE /api/v1/standups/1': { status: 409, body: { error: { code: 'active', message: 'Archive the standup first; only archived standups can be deleted.' } } },
+    });
+    renderApp('/standups/1/settings');
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    const again = await screen.findByRole('dialog');
+    await user.type(within(again).getByRole('textbox'), 'Engineering');
+    await user.click(within(again).getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Archive the standup first');
+    cleanup();
+
+    server({ 'GET /api/v1/me': { body: { kind: 'manager', via: 'session', tenantId: 'default', user: { userName: 'users/bob', email: 'b@o.com', name: 'Bob' }, managedStandupIds: [1] } } });
+    renderApp('/standups/1/settings');
+    expect(await screen.findByText(/Only workspace admins can delete a standup/)).toBeInTheDocument();
   });
 
   it('surfaces a rejected save', async () => {

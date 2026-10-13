@@ -105,9 +105,10 @@ Admins and that standup's managers only (`403 forbidden` otherwise).
 | Method | Path | Body / notes |
 | --- | --- | --- |
 | `PATCH` | `/standups/:id` | Any subset of `name`, `promptTime`, `deadlineTime`, `timezone`, `reminderMinutesBefore`, `escalateAfterDays`, `days` (list or `"mon,tue"`), `timeOffPolicy` (`self` \| `approval` \| `managers`, see [Personal schedules](./schedules)), `webhookUrl` (`null` disables), `questions` (list), `moodEnabled`, `moodAnonymous`, `digestEnabled`, `escalateUserName` (`null` disables). Same rules as the chat commands; `400 invalid` names the `field`. |
-| `POST` | `/standups/:id/run-now` | `{ "result": "started" \| "already_open" \| "already_closed" \| "no_participants" }` |
+| `POST` | `/standups/:id/run-now` | `{ "result": "started" \| "already_open" \| "already_closed" \| "past_deadline" \| "no_participants" }` |
 | `POST` | `/standups/:id/nudge` | Reminds everyone still expected today; `409 no_open_run` otherwise |
 | `POST` | `/standups/:id/archive`, `/unarchive` | Stops or resumes prompts; history stays |
+| `DELETE` | `/standups/:id` | Workspace admins only. `{ "confirm": "<the standup's name>" }` removes an **archived** standup with every run, answer, blocker and poll, and returns the counts; `409 active` until it is archived, `400 invalid` for a wrong name. People's own weeks and days off stay; messages already posted in Chat are not touched |
 | `POST` | `/standups/:id/participants` | `{ userName: "users/…", displayName, mandatory? }` → `201` with `reachable` (can the bot DM them) |
 | `PATCH` | `/standups/:id/participants/:userName` | `{ mandatory?, onVacation?, admin? }`; `409 last_admin` guards the last admin. `:userName` is the Chat resource name URL-encoded (`users%2F123`) |
 | `DELETE` | `/standups/:id/participants/:userName` | `204` |

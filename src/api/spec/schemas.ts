@@ -523,6 +523,7 @@ export const SettingsPatch = named(
   'Any subset of settings. Secrets keep their value on an empty string and clear on null.',
 );
 export const DeleteHistoryBody = named('DeleteHistoryBody', z.strictObject({ confirm: z.literal('DELETE HISTORY') }));
+export const DeleteStandupBody = named('DeleteStandupBody', z.strictObject({ confirm: z.string() }), 'The standup’s exact name.');
 export const VerifyWebhookBody = named('VerifyWebhookBody', z.strictObject({ standupId: id }));
 export const CreateMcpTokenBody = named(
   'CreateMcpTokenBody',
