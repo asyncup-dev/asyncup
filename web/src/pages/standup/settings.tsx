@@ -86,6 +86,13 @@ export function StandupSettingsPage() {
               <input className="input" aria-label="Reminder minutes" style={{ width: 80 }} inputMode="numeric" value={schedule.reminderMinutesBefore} onChange={(e) => setSchedule({ ...schedule, reminderMinutesBefore: e.target.value })} />
               <span className="t-small secondary">minutes before the deadline</span>
             </SettingsRow>
+            <SettingsRow label="Time off" hint="Who can mark someone away, and whether a manager must approve. Managers can always override.">
+              <select className="input" aria-label="Time-off policy" style={{ width: 'auto' }} value={s.timeOffPolicy} disabled={patch.isPending} onChange={(e) => void save({ timeOffPolicy: e.target.value }, 'Time-off policy')}>
+                <option value="self">Self-service — managers get a daily digest</option>
+                <option value="approval">Needs a manager’s approval</option>
+                <option value="managers">Managers only</option>
+              </select>
+            </SettingsRow>
           </SectionCard>
           <SectionCard title="Questions" hint="Everyone answers all of them in one form." action={<button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending} onClick={() => void save({ questions: questions.map((q) => q.trim()).filter(Boolean) }, 'Questions')}>Save</button>}>
             <div className="settings-row" style={{ gridTemplateColumns: '1fr' }}>

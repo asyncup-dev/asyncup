@@ -12,7 +12,7 @@ describe('people helpers', () => {
   });
 
   it('derives the role from standup admin flags', () => {
-    const base = { userName: 'users/1', displayName: 'A', email: null, timezone: null, onVacation: false };
+    const base = { userName: 'users/1', displayName: 'A', email: null, timezone: null, onVacation: false, workingDays: null, workingDaysLabel: 'Follows the standup' };
     expect(roleOf({ ...base, standups: [{ id: 1, name: 'x', mandatory: true, admin: true }] })).toBe('Manager');
     expect(roleOf({ ...base, standups: [] })).toBe('Member');
   });

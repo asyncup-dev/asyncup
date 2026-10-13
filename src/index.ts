@@ -13,6 +13,7 @@ import { PollService } from './core/poll-service.js';
 import { Scheduler, type SchedulerProviders } from './core/scheduler.js';
 import { SettingsService } from './core/settings.js';
 import { chatEndpointUrl } from './adapters/gchat/addon.js';
+import { ScheduleService } from './core/schedule.js';
 import { StandupService } from './core/standup-service.js';
 import { deriveWebhookSecret } from './core/crypto.js';
 import { WebhookNotifier } from './core/webhooks.js';
@@ -43,14 +44,23 @@ const webhooks = new WebhookNotifier(undefined, undefined, undefined, (standupId
 const service = new StandupService(repo, adapter, undefined, webhooks);
 const blockerService = new BlockerService(repo, adapter);
 const pollService = new PollService(repo, adapter);
-const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter, pollService);
-const router = new EventRouter(commands, service, blockerService, repo, config.tenantId, pollService, async () =>
-  chatEndpointUrl((await settings.get()).chatAudience),
+const schedule = new ScheduleService(repo, adapter, undefined, webhooks, (msg) => console.log(`[schedule] ${msg}`));
+const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter, pollService, schedule);
+const router = new EventRouter(
+  commands,
+  service,
+  blockerService,
+  repo,
+  config.tenantId,
+  pollService,
+  async () => chatEndpointUrl((await settings.get()).chatAudience),
+  schedule,
 );
 
 // Integrations are resolved from settings per use, so settings changes
 // apply immediately — no restart.
 const providers: SchedulerProviders = {
+  schedule,
   ooo: async () => {
     const s = await settings.get();
     if (!s.calendarOoo || !s.serviceAccountJson) return null;
@@ -74,6 +84,7 @@ const app = createServer({
   adapter,
   blockers: blockerService,
   service: service,
+  schedule,
   repo,
   settings,
   dashboardToken: config.dashboardToken,

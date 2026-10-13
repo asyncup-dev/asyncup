@@ -9,6 +9,7 @@ import { runProgress } from '../core/progress.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { SettingsService } from '../core/settings.js';
 import type { StandupService } from '../core/standup-service.js';
+import type { ScheduleService } from '../core/schedule.js';
 import { standupQuestions, type Standup } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
@@ -37,6 +38,8 @@ export interface ApiContext {
   blockers: BlockerService;
   /** Submissions and skips; null when the host was built without it. */
   service: StandupService | null;
+  /** Personal weeks, days off and approvals; null when the host was built without it. */
+  schedule: ScheduleService | null;
   webhooks: WebhookNotifier;
   /** Builds a Chat API client for verification calls (tests inject a fake). */
   chatClientFactory: ChatClientFactory;
@@ -142,6 +145,7 @@ export async function summarise(repo: Repo, s: Standup, now: DateTime, manage: b
     questions: standupQuestions(s),
     mood: { enabled: s.moodEnabled, anonymous: s.moodAnonymous },
     digestEnabled: s.digestEnabled,
+    timeOffPolicy: s.timeOffPolicy,
     escalation: {
       afterDays: s.escalateAfterDays,
       contact: s.escalateUserName ? { userName: s.escalateUserName, displayName: s.escalateDisplayName } : null,

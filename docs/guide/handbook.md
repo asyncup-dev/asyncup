@@ -193,6 +193,9 @@ At the standup's prompt time (in **your** timezone) AsyncUp DMs you a card:
 | `back` | Resume prompts |
 | `timezone Asia/Kolkata` | Get prompts at the standup's time in *your* zone |
 | `timezone` / `timezone reset` | Show / clear your personal timezone |
+| `off tomorrow comp off` / `off 22 sep to 24 sep sick` / `working sat` | A day (or range) off, or an extra working day — see [Personal schedules](./schedules) |
+| `off list` / `off cancel <date>` | What's coming up / withdraw an entry |
+| `days mon-thu` / `days adhoc` / `days reset` | Your own week, or back to the standup's |
 
 ### 3.3 Your own page — `/app/me`
 
@@ -228,6 +231,8 @@ first standup exists). Everything else needs a standup admin.
 | `add @user…` / `remove @user…` | Manage the roster (add warns if the person can't be DMed yet) |
 | `mandatory @user…` / `optional @user…` | Count toward the wrap-up, or not |
 | `vacation @user…` / `back @user…` | Mark people away / back |
+| `off @user <date\|range> [reason]` / `working @user <date>` / `off @user cancel <date>` | Someone's days off or extra working days ([Personal schedules](./schedules)) |
+| `days @user mon-thu\|adhoc\|reset` | Someone's personal week |
 | `admin @user…` / `unadmin @user…` | Grant/revoke standup admin (never below one) |
 | `time HH:MM` | Prompt time — participant-local |
 | `deadline HH:MM` | Close time — standup timezone |

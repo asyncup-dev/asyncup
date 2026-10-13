@@ -17,6 +17,23 @@ export type WebhookEvent =
       standup: { id: number; name: string };
       date: string;
       summary: RunSummary;
+    }
+  | {
+      event: 'schedule_change';
+      standup: { id: number; name: string };
+      person: { userName: string; displayName: string };
+      summary: string;
+      by: string;
+      channel: string;
+    }
+  | {
+      event: 'time_off_request';
+      standup: { id: number; name: string };
+      person: { userName: string; displayName: string };
+      dates: string[];
+      working: boolean;
+      reason: string;
+      requestIds: number[];
     };
 
 /**
@@ -53,6 +70,22 @@ export class WebhookNotifier {
       standup: { id: standup.id, name: standup.name },
       date,
       summary,
+    });
+  }
+
+  async scheduleChange(standup: Standup, change: { person: { userName: string; displayName: string }; summary: string; by: string; channel: string }): Promise<void> {
+    await this.send(standup, { event: 'schedule_change', standup: { id: standup.id, name: standup.name }, ...change });
+  }
+
+  async timeOffRequest(standup: Standup, request: { ids: number[]; person: { userName: string; displayName: string }; dates: string[]; working: boolean; reason: string }): Promise<void> {
+    await this.send(standup, {
+      event: 'time_off_request',
+      standup: { id: standup.id, name: standup.name },
+      person: request.person,
+      dates: request.dates,
+      working: request.working,
+      reason: request.reason,
+      requestIds: request.ids,
     });
   }
 

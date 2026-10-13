@@ -54,6 +54,8 @@ export interface Standup {
   /** Hide per-person mood on cards; the wrap-up shows the team aggregate instead. */
   moodAnonymous: boolean;
   digestEnabled: boolean;
+  /** Who may mark people away and whether a manager must approve — see TIME_OFF_POLICIES. */
+  timeOffPolicy: TimeOffPolicy;
   /** Who gets DMed about stale blockers; null = escalation off. */
   escalateUserName: string | null;
   escalateDisplayName: string | null;
@@ -107,7 +109,55 @@ export interface Participant {
   timezone: string | null;
   mandatory: boolean;
   onVacation: boolean;
+  /**
+   * Personal week: null follows the standup's days, "adhoc" means no fixed
+   * days (only dates marked working count), otherwise a comma-separated
+   * subset of WEEKDAYS.
+   */
+  workingDays: string | null;
   active: boolean;
+}
+
+export const TIME_OFF_POLICIES = ['self', 'approval', 'managers'] as const;
+/** self: people mark themselves away, managers get a digest · approval: a manager must approve · managers: only managers can. */
+export type TimeOffPolicy = (typeof TIME_OFF_POLICIES)[number];
+
+export const AWAY_REASONS = ['vacation', 'calendar_ooo', 'day_off', 'off_day', 'skipped'] as const;
+/** Why someone is not expected on a run: day_off is a dated override, off_day a weekday outside their week. */
+export type AwayReason = (typeof AWAY_REASONS)[number];
+
+export const OVERRIDE_STATUSES = ['active', 'pending', 'declined', 'expired', 'withdrawn'] as const;
+export type OverrideStatus = (typeof OVERRIDE_STATUSES)[number];
+export type ScheduleChannel = 'chat' | 'console' | 'api';
+
+/** One date on which a person is off or working regardless of their week. */
+export interface ScheduleOverride {
+  id: number;
+  userName: string;
+  displayName: string;
+  /** ISO date in the standups' timezone. */
+  date: string;
+  working: boolean;
+  reason: string;
+  status: OverrideStatus;
+  setByUserName: string;
+  setByDisplayName: string;
+  channel: ScheduleChannel;
+  decidedByDisplayName: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A self-service schedule change waiting to be digested to managers. */
+export interface ScheduleChange {
+  id: number;
+  userName: string;
+  displayName: string;
+  summary: string;
+  byDisplayName: string;
+  channel: ScheduleChannel;
+  at: string;
 }
 
 export interface Admin {
@@ -135,6 +185,7 @@ export interface RunParticipant {
   timezone: string | null;
   mandatory: boolean;
   onVacation: boolean;
+  awayReason: AwayReason | null;
   promptedAt: string | null;
   remindedAt: string | null;
   skippedAt: string | null;
