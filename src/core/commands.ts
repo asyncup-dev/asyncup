@@ -1,3 +1,4 @@
+import type { RunNowResult } from './scheduler.js';
 import { DateTime } from 'luxon';
 import { createStandup } from './create-standup.js';
 import type { ChatAdapter } from './adapter.js';
@@ -62,7 +63,7 @@ const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'blocker'
 
 /** The slice of the scheduler `run now` needs (avoids a circular dependency). */
 export interface RunNowRunner {
-  runNow(standup: Standup): Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'>;
+  runNow(standup: Standup): Promise<RunNowResult>;
 }
 
 export class CommandHandler {
@@ -280,6 +281,7 @@ export class CommandHandler {
       started: `🚀 Today's run for *${standup.name}* is open — everyone eligible was just prompted. The wrap-up posts at the ${standup.deadlineTime} ${standup.timezone} deadline.`,
       already_open: `Today's run is already open — anyone not yet prompted was just prompted.`,
       already_closed: `Today's run already closed. The next one opens on schedule.`,
+      past_deadline: `Today's ${standup.deadlineTime} deadline has passed, so a run would close as soon as it opened. Move it with \`deadline HH:MM\` to run today.`,
       no_participants: 'No one to prompt — `add @user…` first (or everyone is on vacation).',
     };
     return messages[result];

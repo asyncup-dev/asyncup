@@ -144,9 +144,10 @@ export async function validateStandupConfig(
       fields.escalateUserName = null;
       fields.escalateDisplayName = null;
     } else {
-      // Picked from the roster — those people have Chat identities.
-      const contact = (await repo.listParticipants(standup.id)).find((p) => p.userName === userName);
-      if (!contact) return fail('escalateUserName', 'Escalation contact must be a current participant.');
+      // The roster and the standup's admins all have Chat identities.
+      const candidates = [...(await repo.listParticipants(standup.id)), ...(await repo.listAdmins(standup.id))];
+      const contact = candidates.find((p) => p.userName === userName);
+      if (!contact) return fail('escalateUserName', 'Escalation contact must be on this standup or one of its admins.');
       fields.escalateUserName = contact.userName;
       fields.escalateDisplayName = contact.displayName;
     }

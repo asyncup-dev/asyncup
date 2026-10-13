@@ -43,6 +43,8 @@ export interface SchedulerProviders {
  * All state lives in the DB (prompted_at / reminded_at / run status), so
  * ticks are idempotent and the process can restart at any point.
  */
+export type RunNowResult = 'started' | 'already_open' | 'already_closed' | 'past_deadline' | 'no_participants';
+
 export class Scheduler {
   constructor(
     private repo: Repo,
@@ -102,6 +104,8 @@ export class Scheduler {
 
     let run = await this.repo.getRun(standup.id, today);
     if (!run) {
+      // Opened after its deadline, a run would prompt everyone and close at once; it waits for the next day.
+      if (now >= deadlineAt) return;
       if (now >= promptAt.minus({ hours: 1 })) await syncRoster(10);
       const people = await this.repo.listParticipants(standup.id);
       const active = people.filter((p) => !p.onVacation);
@@ -163,13 +167,14 @@ export class Scheduler {
    * gates, and prompts everyone eligible right away. Backs `run now` and the
    * Run-now button so a fresh install can see the flow without waiting.
    */
-  async runNow(standup: Standup): Promise<'started' | 'already_open' | 'already_closed' | 'no_participants'> {
+  async runNow(standup: Standup): Promise<RunNowResult> {
     const now = this.now();
     const today = now.setZone(standup.timezone).toISODate()!;
     let run = await this.repo.getRun(standup.id, today);
     if (run?.status === 'closed') return 'already_closed';
     const existed = !!run;
     if (!run) {
+      if (now >= timeOn(today, standup.deadlineTime, standup.timezone)) return 'past_deadline';
       if (this.providers.roster?.stale(standup, 10)) await this.providers.roster.sync(standup);
       const roster = await this.repo.listParticipants(standup.id);
       if (roster.filter((p) => !p.onVacation).length === 0) return 'no_participants';

@@ -226,7 +226,7 @@ first standup exists). Everything else needs a standup admin.
 | Command | Effect |
 | --- | --- |
 | `setup [name]` | Create a standup (creator becomes admin; duplicate names refused) |
-| `run now` | Open today's run immediately and prompt everyone |
+| `run now` | Open today's run immediately and prompt everyone (not after today's deadline) |
 | `archive` | Retire the standup — prompts stop, history stays |
 | `add @user…` / `remove @user…` | Manage the roster (add warns if the person can't be DMed yet) |
 | `mandatory @user…` / `optional @user…` | Count toward the wrap-up, or not |

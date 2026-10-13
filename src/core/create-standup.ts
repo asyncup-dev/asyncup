@@ -110,8 +110,8 @@ export async function createStandup(
   // The roster is in the request, so the contact can be checked before the row exists.
   let escalation: Pick<Standup, 'escalateUserName' | 'escalateDisplayName'> | null = null;
   if (input.escalateUserName !== undefined && input.escalateUserName !== null && input.escalateUserName !== '') {
-    const contact = participants.find((p) => p.userName === String(input.escalateUserName));
-    if (!contact) return invalid('escalateUserName', 'Escalation contact must be one of the participants.');
+    const contact = [...participants, ...admins, ...(creator ? [creator] : [])].find((p) => p.userName === String(input.escalateUserName));
+    if (!contact) return invalid('escalateUserName', 'Escalation contact must be one of the participants or admins.');
     escalation = { escalateUserName: contact.userName, escalateDisplayName: contact.displayName };
   }
 

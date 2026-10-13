@@ -180,7 +180,7 @@ export function CreateStandupPage() {
         <section className="card section">
           <div>
             <h2 className="t-h3">{form.rosterGroup === null ? `People · ${form.people.length} on this standup` : 'People'}</h2>
-            <div className="t-small secondary">Ticked people get a DM at prompt time on their days. Untick “counts if missing” for people who may skip.</div>
+            <div className="t-small secondary">Ticked people get a DM at prompt time on their days. Untick “Required” for people who may skip: they still get the prompt but are never listed as missing.</div>
           </div>
           <div className="field">
             <label htmlFor="roster-source">Who is on it</label>
