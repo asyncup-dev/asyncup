@@ -137,6 +137,17 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
 
   // --- roster ---
 
+  // Roster candidates for managers, who cannot list arbitrary spaces.
+  api.get('/standups/:id/members', async (req, res) => {
+    const standup = await loadStandup(ctx, req, res, { manage: true });
+    if (!standup) return;
+    try {
+      res.json({ members: await ctx.adapter.listSpaceMembers(standup.spaceName) });
+    } catch (err) {
+      apiError(res, 502, 'chat_unavailable', `Google Chat did not answer: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+
   api.post('/standups/:id/participants', async (req, res) => {
     const standup = await loadStandup(ctx, req, res, { manage: true });
     if (!standup) return;

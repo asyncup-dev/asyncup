@@ -93,7 +93,15 @@ export const StandupDetail = named(
   'StandupDetail',
   StandupSummary.extend({
     participants: z.array(
-      z.strictObject({ userName: z.string(), displayName: z.string(), mandatory: z.boolean(), timezone: z.string().nullable(), onVacation: z.boolean() }),
+      z.strictObject({
+        userName: z.string(),
+        displayName: z.string(),
+        mandatory: z.boolean(),
+        timezone: z.string().nullable(),
+        onVacation: z.boolean(),
+        workingDays: z.string().nullable(),
+        otherStandups: count,
+      }),
     ),
     admins: z.array(Person),
   }),

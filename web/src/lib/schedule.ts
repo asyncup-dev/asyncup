@@ -49,6 +49,16 @@ export function useSaveWeek(target: ScheduleTarget) {
   });
 }
 
+/** Someone's week, set from a standup's people grid; the standup is refetched too. */
+export function useSetWeek(standupId: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userName, workingDays }: { userName: string; workingDays: string }) =>
+      api<ScheduleView>(`/people/${encodeURIComponent(userName)}/schedule`, { method: 'PATCH', body: { workingDays } }),
+    onSuccess: (_d, v) => Promise.all([invalidate(client, { userName: v.userName }), client.invalidateQueries({ queryKey: ['standup', standupId] })]),
+  });
+}
+
 export interface OverrideInput {
   date?: string;
   from?: string;

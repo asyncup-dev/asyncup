@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react';
 import { api, ApiError, type Person, type Space, type StandupSummary, type Template } from '../../lib/api';
 import { timezoneOptions, useSetupProgress } from '../../lib/setup';
 import { LogoLockup } from '../../components/logo';
+import { PeopleMatrix, type MatrixChange, type MatrixRow } from '../../components/people-matrix';
+import type { Weekday } from '../../lib/roster';
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 const DAY_LABEL: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
 const DEFAULT_QUESTIONS = ['What did you do yesterday?', 'What will you do today?', 'Any blockers?'];
 
-type Member = Person & { mandatory: boolean };
+/** `week` is the personal week to save once the standup exists; null follows the standup. */
+type Member = Person & { mandatory: boolean; week: string | null };
 
 export interface CreateForm {
   name: string;
@@ -48,6 +51,7 @@ export function CreateStandupPage() {
   const template = templates.data?.templates.find((t) => t.id === templateId);
   const tz = progress.data?.settings.workspace.defaultTimezone ?? 'UTC';
   const [form, setForm] = useState<CreateForm | null>(null);
+  const [seeded, setSeeded] = useState('');
   const [error, setError] = useState<string | null>(null);
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -61,10 +65,18 @@ export function CreateStandupPage() {
     enabled: !!form?.spaceName,
   });
 
+  // A space is usually the team, so everyone in it starts on the standup; untick to leave someone out.
+  useEffect(() => {
+    if (form && members.data && form.spaceName !== seeded) {
+      setSeeded(form.spaceName);
+      setForm({ ...form, people: members.data.members.map((m) => ({ ...m, mandatory: true, week: null })) });
+    }
+  }, [form, members.data, seeded]);
+
   const create = useMutation({
     mutationFn: async (runNow: boolean) => {
       const f = form!;
-      return api<StandupSummary & { runNow: string | null }>('/standups', {
+      const created = await api<StandupSummary & { runNow: string | null }>('/standups', {
         method: 'POST',
         body: {
           templateId: templateId === 'blank' ? null : templateId,
@@ -81,6 +93,14 @@ export function CreateStandupPage() {
           runNow,
         },
       });
+      for (const p of f.people.filter((m) => m.week !== null)) {
+        try {
+          await api(`/people/${encodeURIComponent(p.userName)}/schedule`, { method: 'PATCH', body: { workingDays: p.week } });
+        } catch (err) {
+          throw new Error(`The standup was created, but ${p.displayName}’s days did not save (${err instanceof Error ? err.message : String(err)}). Set them under the standup’s People.`);
+        }
+      }
+      return created;
     },
     onSuccess: async (created) => {
       await api('/settings', { method: 'PATCH', body: { setupComplete: true } });
@@ -96,11 +116,19 @@ export function CreateStandupPage() {
     return <p className="muted" style={{ padding: 24 }}>Loading…</p>;
   }
   const set = (patch: Partial<CreateForm>) => setForm({ ...form, ...patch });
-  const addPerson = (p: Person) => {
-    if (form.people.some((m) => m.userName === p.userName)) return;
-    set({ people: [...form.people, { ...p, mandatory: true }] });
+  const rows: MatrixRow[] = [
+    ...form.people.map((p) => ({ ...p, onStandup: true, workingDays: p.week, otherStandups: 0 })),
+    ...(members.data?.members ?? [])
+      .filter((m) => !form.people.some((p) => p.userName === m.userName))
+      .map((m) => ({ ...m, onStandup: false, mandatory: true, workingDays: null, otherStandups: 0 })),
+  ];
+  const change = (row: MatrixRow, c: MatrixChange) => {
+    const update = (patch: Partial<Member>) => set({ people: form.people.map((m) => (m.userName === row.userName ? { ...m, ...patch } : m)) });
+    if ('onStandup' in c) {
+      set({ people: c.onStandup ? [...form.people, { userName: row.userName, displayName: row.displayName, mandatory: true, week: null }] : form.people.filter((m) => m.userName !== row.userName) });
+    } else if ('mandatory' in c) update({ mandatory: c.mandatory });
+    else update({ week: c.week === 'reset' ? null : c.week });
   };
-  const suggestions = (members.data?.members ?? []).filter((m) => !form.people.some((p) => p.userName === m.userName));
   const ready = form.name.trim() && form.spaceName && form.days.length > 0 && form.questions.some((q) => q.trim());
 
   return (
@@ -139,37 +167,18 @@ export function CreateStandupPage() {
 
         <section className="card section">
           <div>
-            <h2 className="t-h3">People</h2>
-            <div className="t-small secondary">Everyone here gets a DM at prompt time. Optional people aren’t counted as missing.</div>
+            <h2 className="t-h3">People · {form.people.length} on this standup</h2>
+            <div className="t-small secondary">Ticked people get a DM at prompt time on their days. Untick “counts if missing” for people who may skip.</div>
           </div>
-          <div className="row-wrap" aria-label="Participants">
-            {form.people.map((p) => (
-              <span key={p.userName} className="chip">
-                <span className="avatar avatar-sm" aria-hidden="true">{p.displayName[0]}</span>
-                {p.displayName}
-                {!p.mandatory ? <span className="badge">optional</span> : null}
-                <button type="button" aria-label={`${p.mandatory ? 'Make optional' : 'Make mandatory'}: ${p.displayName}`} onClick={() => set({ people: form.people.map((m) => (m.userName === p.userName ? { ...m, mandatory: !m.mandatory } : m)) })}>
-                  {p.mandatory ? '◐' : '●'}
-                </button>
-                <button type="button" aria-label={`Remove ${p.displayName}`} onClick={() => set({ people: form.people.filter((m) => m.userName !== p.userName) })}>×</button>
-              </span>
-            ))}
-            {form.people.length === 0 ? <span className="t-small muted">Nobody yet — pick a space to see who is in it.</span> : null}
-          </div>
-          {form.spaceName ? (
-            <div className="t-small secondary">
-              {members.isPending ? 'Looking up members…' : members.isError ? `Could not list members: ${members.error.message}` : suggestions.length ? (
-                <>
-                  Suggested from this space:{' '}
-                  {suggestions.map((m) => (
-                    <button key={m.userName} type="button" className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} onClick={() => addPerson(m)}>+ {m.displayName}</button>
-                  ))}
-                  {' · '}
-                  <button type="button" className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} onClick={() => set({ people: [...form.people, ...suggestions.map((m) => ({ ...m, mandatory: true }))] })}>Add all</button>
-                </>
-              ) : 'Everyone in the space is on the list.'}
-            </div>
-          ) : null}
+          {!form.spaceName ? (
+            <span className="t-small muted">Pick a space to see who is in it.</span>
+          ) : members.isPending ? (
+            <span className="t-small muted">Looking up members…</span>
+          ) : members.isError ? (
+            <span className="t-small secondary">Could not list members: {members.error.message}</span>
+          ) : (
+            <PeopleMatrix rows={rows} standupDays={form.days as Weekday[]} onChange={change} />
+          )}
         </section>
 
         <section className="card section">

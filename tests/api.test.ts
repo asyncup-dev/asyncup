@@ -209,9 +209,9 @@ describe('api: standups', () => {
 
     const detail = await (await asBearer(OPERATOR, `/standups/${standup.id}`)).json() as any;
     expect(detail.participants).toEqual([
-      { userName: 'users/alice', displayName: 'Alice', mandatory: true, timezone: null, onVacation: false },
-      { userName: 'users/bob', displayName: 'Bob', mandatory: true, timezone: null, onVacation: false },
-      { userName: 'users/carol', displayName: 'Carol', mandatory: false, timezone: null, onVacation: false },
+      { userName: 'users/alice', displayName: 'Alice', mandatory: true, timezone: null, onVacation: false, workingDays: null, otherStandups: 0 },
+      { userName: 'users/bob', displayName: 'Bob', mandatory: true, timezone: null, onVacation: false, workingDays: null, otherStandups: 0 },
+      { userName: 'users/carol', displayName: 'Carol', mandatory: false, timezone: null, onVacation: false, workingDays: null, otherStandups: 0 },
     ]);
     expect(detail.admins).toEqual([{ userName: 'users/alice', displayName: 'Alice' }]);
     expect(detail.permissions.manage).toBe(true);

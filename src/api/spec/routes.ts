@@ -77,6 +77,7 @@ export const ROUTES: RouteSpec[] = [
     responses: { 200: 'csv' },
     errors: [404],
   },
+  { method: 'get', path: '/standups/:id/members', summary: 'Members of the standup’s Chat space, as roster candidates', tag: 'Roster', access: 'manager', params: standupId, responses: { 200: S.SpaceMembers }, errors: [404, 502] },
   { method: 'post', path: '/standups/:id/participants', summary: 'Add someone to the roster', tag: 'Roster', access: 'manager', params: standupId, body: S.AddParticipant, responses: { 201: S.AddedParticipant }, errors: [400, 404] },
   {
     method: 'patch',

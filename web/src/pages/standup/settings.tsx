@@ -1,10 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '../../components/confirm-dialog';
+import { PeopleMatrix, type MatrixChange, type MatrixRow } from '../../components/people-matrix';
 import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
-import { api, type Person } from '../../lib/api';
-import { useArchive, useParticipantAdd, useParticipantPatch, useParticipantRemove, useStandupPatch } from '../../lib/people';
+import type { Person } from '../../lib/api';
+import { useArchive, useParticipantAdd, useParticipantPatch, useParticipantRemove, useStandupMembers, useStandupPatch } from '../../lib/people';
+import type { Weekday } from '../../lib/roster';
+import { useSetWeek } from '../../lib/schedule';
 import { useVerifyMutation } from '../../lib/settings';
 import { timezoneOptions } from '../../lib/setup';
 import { useStandup } from '../../lib/standups';
@@ -30,8 +32,8 @@ export function StandupSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<'archive' | Person | null>(null);
-  const [adding, setAdding] = useState(false);
-  const members = useQuery({ queryKey: ['members', s?.spaceName], queryFn: () => api<{ members: Person[] }>(`/spaces/${encodeURIComponent(s!.spaceName)}/members`), enabled: adding && !!s });
+  const members = useStandupMembers(id);
+  const setWeek = useSetWeek(id);
   useEffect(() => {
     if (s && !schedule) {
       setSchedule({ promptTime: s.schedule.promptTime, deadlineTime: s.schedule.deadlineTime, timezone: s.schedule.timezone, days: s.schedule.days, reminderMinutesBefore: String(s.schedule.reminderMinutesBefore) });
@@ -59,7 +61,24 @@ export function StandupSettingsPage() {
       setError(err instanceof Error ? err.message : 'That did not work.');
     }
   };
-  const suggestions = (members.data?.members ?? []).filter((m) => !s.participants.some((p) => p.userName === m.userName));
+  const rows: MatrixRow[] = [
+    ...s.participants.map((p) => ({
+      ...p,
+      onStandup: true,
+      badges: [...(s.admins.some((a) => a.userName === p.userName) ? ['Manager'] : []), ...(p.onVacation ? ['Away'] : [])],
+    })),
+    ...(members.data ?? [])
+      .filter((m) => !s.participants.some((p) => p.userName === m.userName))
+      .map((m) => ({ ...m, onStandup: false, mandatory: true, workingDays: null, otherStandups: 0 })),
+  ];
+  const change = (row: MatrixRow, c: MatrixChange) => {
+    const person = { userName: row.userName, displayName: row.displayName };
+    if ('onStandup' in c) {
+      if (c.onStandup) void roster(() => pAdd.mutateAsync({ standupId: id, person, mandatory: true }));
+      else setConfirm(person);
+    } else if ('mandatory' in c) void roster(() => pPatch.mutateAsync({ standupId: id, userName: row.userName, patch: { mandatory: c.mandatory } }));
+    else void roster(() => setWeek.mutateAsync({ userName: row.userName, workingDays: c.week }));
+  };
   return (
     <>
       {error ? <div className="alert" role="alert">{error}</div> : null}
@@ -112,28 +131,9 @@ export function StandupSettingsPage() {
               {s.mood.enabled ? <label className="row t-small"><input type="checkbox" checked={s.mood.anonymous} onChange={(e) => void save({ moodAnonymous: e.target.checked }, 'Mood')} /> answers shown anonymously</label> : null}
             </SettingsRow>
           </SectionCard>
-          <SectionCard title={`Participants · ${s.participants.length}`} hint="Optional people aren’t counted as missing." action={<button type="button" className="btn" style={{ height: 28 }} onClick={() => setAdding(!adding)}>{adding ? 'Done' : 'Add people'}</button>}>
-            {adding ? (
-              <div className="settings-row t-small" style={{ gridTemplateColumns: '1fr' }}>
-                <div className="row-wrap">
-                  {members.isPending ? <span className="muted">Looking up the space…</span> : null}
-                  {members.isError ? <span className="alert">Could not list members: {members.error.message}</span> : null}
-                  {members.data && suggestions.length === 0 ? <span className="muted">Everyone in the space is already here.</span> : null}
-                  {suggestions.map((m) => <button key={m.userName} type="button" className="btn btn-ghost" style={{ height: 26 }} onClick={() => void roster(() => pAdd.mutateAsync({ standupId: id, person: m, mandatory: true }))}>+ {m.displayName}</button>)}
-                </div>
-              </div>
-            ) : null}
-            {s.participants.map((p) => (
-              <div key={p.userName} className="settings-row" style={{ gridTemplateColumns: '24px 1fr auto auto auto auto auto' }}>
-                <span className="avatar avatar-sm" aria-hidden="true">{p.displayName[0]}</span>
-                <span className="t-medium">{p.displayName}{s.admins.some((a) => a.userName === p.userName) ? <span className="badge badge-info" style={{ marginLeft: 8 }}>Manager</span> : null}</span>
-                <span className={`badge ${p.mandatory ? '' : 'badge-warning'}`}>{p.mandatory ? 'Mandatory' : 'Optional'}</span>
-                <span className="t-caption">{p.timezone ?? s.schedule.timezone}</span>
-                <span className={`badge ${p.onVacation ? 'badge-warning' : 'badge-success'}`}>{p.onVacation ? 'Away' : 'Active'}</span>
-                <button type="button" className="btn btn-ghost" style={{ height: 26 }} onClick={() => void roster(() => pPatch.mutateAsync({ standupId: id, userName: p.userName, patch: { mandatory: !p.mandatory } }))}>{p.mandatory ? 'Make optional' : 'Make mandatory'}</button>
-                <button type="button" className="btn btn-ghost btn-danger" style={{ height: 26 }} aria-label={`Remove ${p.displayName}`} onClick={() => setConfirm(p)}>Remove</button>
-              </div>
-            ))}
+          <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Everyone in the space. Tick who is prompted, who counts when they miss it, and which days each person works.">
+            {members.isError ? <div className="settings-row"><span className="alert">Could not list the space’s members: {members.error.message}. Showing the current roster only.</span></div> : null}
+            <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} onChange={change} />
           </SectionCard>
         </div>
         <div className="col">

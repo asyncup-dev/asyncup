@@ -235,6 +235,9 @@ a:hover {
 .table td { padding: var(--space-3); border-bottom: 1px solid var(--border-default); vertical-align: middle; }
 .table tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover { background: var(--bg-hover); }
+.people-matrix .center { text-align: center; }
+.people-matrix tr.muted td { color: var(--text-muted); }
+.people-matrix input[type='checkbox']:disabled { opacity: 0.35; }
 
 /* Sign-in */
 .signin { min-height: 100%; display: grid; place-items: center; padding: var(--space-6); }
