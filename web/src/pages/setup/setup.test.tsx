@@ -362,7 +362,17 @@ describe('setup: sign-in, template, create and live', () => {
     expect(within(existing).getByText('Engineering daily')).toBeInTheDocument();
     expect(await within(existing).findByText('Platform HQ · 3 people')).toBeInTheDocument();
     expect(within(existing).getByRole('link', { name: 'Set up people' })).toHaveAttribute('href', '/app/standups/7/settings');
-    expect(await screen.findByRole('link', { name: 'Create another with Daily standup' })).toHaveClass('btn');
+    const another = await screen.findByRole('link', { name: 'Create another with Daily standup' });
+    expect(another).toHaveClass('btn');
+    // the space names loaded here must not stand in for the create form's space list while it loads
+    const served = globalThis.fetch;
+    let release = () => {};
+    vi.stubGlobal('fetch', (input: string, init?: RequestInit) =>
+      input === '/api/v1/spaces' ? new Promise((done) => (release = () => done(served(input, init)))) : served(input, init));
+    await userEvent.setup().click(another);
+    expect(await screen.findByRole('heading', { name: 'Create a standup' })).toBeInTheDocument();
+    release();
+    expect(await screen.findByRole('option', { name: 'Platform HQ' })).toBeInTheDocument();
   });
 
   it('reports member lookup failures and create errors, and handles the blank template', async () => {
