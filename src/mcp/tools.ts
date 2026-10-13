@@ -312,8 +312,8 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       'submit',
       {
         title: 'Submit my answers',
-        description: 'Submit, or replace, the owner’s answers for today’s run. answers[] must match the standup’s questions in order; get_standup lists them.',
-        inputSchema: z.object({ standupId: ID, answers: z.array(z.string().trim().max(LIMITS.textMax)).min(1), mood: z.enum(MOODS).nullable().default(null) }),
+        description: 'Submit, or replace, the owner’s answers for today’s run. answers[] must match the standup’s questions in order (get_standup lists them), and every answer is required: answer a blockers question with "none" when there are none. mood is required when the standup asks for it.',
+        inputSchema: z.object({ standupId: ID, answers: z.array(z.string().trim().min(1).max(LIMITS.textMax)).min(1), mood: z.enum(MOODS).nullable().default(null) }),
         outputSchema: Submitted,
         write: { destructive: true, idempotent: true },
       },
@@ -322,6 +322,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
         const standup = await standupFor(standupId);
         const questions = standupQuestions(standup);
         if (answers.length !== questions.length) throw new ToolRefused(`This standup asks ${questions.length} questions: ${questions.join(' | ')}`);
+        if (standup.moodEnabled && !mood) throw new ToolRefused(`This standup asks for a mood: one of ${MOODS.join(', ')}.`);
         const run = await repo.getRun(standup.id, deps.now().setZone(standup.timezone).toISODate()!);
         if (!run) throw new ToolRefused('Today’s run has not opened yet.');
         const result = await service.submit(run.id, who.userName, who.displayName, { answers: questions.map((question, i) => ({ question, answer: answers[i]! })), mood });
@@ -333,10 +334,10 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     register(
       'skip_today',
       'submit',
-      { title: 'Skip today', description: 'Skip today’s run of one standup: no more reminders, and the owner shows as away.', inputSchema: z.object({ standupId: ID }), outputSchema: S.Skipped, write: { destructive: false, idempotent: true } },
-      async ({ standupId }) => {
+      { title: 'Skip today', description: 'Skip today’s run of one standup with a one-line reason: no more reminders, the owner shows as away, and the reason is posted in the day’s thread.', inputSchema: z.object({ standupId: ID, reason: z.string().trim().min(1).max(LIMITS.skipNoteMax) }), outputSchema: S.Skipped, write: { destructive: false, idempotent: true } },
+      async ({ standupId, reason }) => {
         const who = me();
-        const r = await skipToday(repo, service, await standupFor(standupId), who.userName, deps.now());
+        const r = await skipToday(repo, service, await standupFor(standupId), who.userName, deps.now(), reason);
         return r.ok ? { result: r.result, date: r.date } : refuse(r);
       },
     );

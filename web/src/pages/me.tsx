@@ -63,12 +63,13 @@ export function MePage() {
     onSuccess: () => client.invalidateQueries({ queryKey: ['me-standups'] }),
   });
   const skip = useMutation({
-    mutationFn: (standupId: number) => api<{ result: string; date: string }>('/me/skip', { method: 'POST', body: { standupId } }),
+    mutationFn: (v: { standupId: number; reason: string }) => api<{ result: string; date: string }>('/me/skip', { method: 'POST', body: v }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['me-standups'] }),
   });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [skipping, setSkipping] = useState<{ standupId: number; reason: string } | null>(null);
   const schedule = useSchedule('me', !!mine.data?.linked);
   const addOverride = useAddOverride('me');
   const name = me.data?.user?.name?.split(' ')[0] ?? 'there';
@@ -120,23 +121,41 @@ export function MePage() {
                 </div>
               </div>
               <a className="btn btn-primary btn-lg" href={answerHref} target="_blank" rel="noreferrer">Answer in Chat ↗</a>
-              <button
-                type="button"
-                className="btn btn-lg"
-                disabled={skip.isPending}
-                onClick={() => void (async () => {
-                  try {
-                    setError(null);
-                    await skip.mutateAsync(s.id);
-                    setNotice(`Skipped today’s ${s.name} — you won’t be counted as missing.`);
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : 'That did not work.');
-                  }
-                })()}
-              >
-                Skip today
-              </button>
+              <button type="button" className="btn btn-lg" onClick={() => setSkipping({ standupId: s.id, reason: '' })}>Skip today</button>
             </div>
+            {skipping?.standupId === s.id ? (
+              <form
+                className="row"
+                style={{ marginTop: 12, gap: 8, flexWrap: 'wrap' }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void (async () => {
+                    try {
+                      setError(null);
+                      await skip.mutateAsync({ standupId: s.id, reason: skipping.reason.trim() });
+                      setSkipping(null);
+                      setNotice(`Skipped today’s ${s.name}. Your team can see why in today’s thread.`);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'That did not work.');
+                    }
+                  })();
+                }}
+              >
+                <input
+                  className="input"
+                  style={{ flex: 1, minWidth: 220 }}
+                  aria-label="Why are you skipping today?"
+                  placeholder="Why are you skipping today?"
+                  maxLength={150}
+                  required
+                  autoFocus
+                  value={skipping.reason}
+                  onChange={(e) => setSkipping({ standupId: s.id, reason: e.target.value })}
+                />
+                <button type="submit" className="btn btn-primary" disabled={!skipping.reason.trim() || skip.isPending}>Skip</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setSkipping(null)}>Cancel</button>
+              </form>
+            ) : null}
           </div>
         );
       })}

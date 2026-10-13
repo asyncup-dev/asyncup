@@ -5,6 +5,7 @@ import { runProgress } from '../core/progress.js';
 import type { StandupService } from '../core/standup-service.js';
 import type { Standup } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
+import { cleanSkipNote } from '../core/validation.js';
 import { person } from './views.js';
 
 /**
@@ -27,12 +28,14 @@ export async function nudgeToday(repo: Repo, adapter: ChatAdapter, standup: Stan
 }
 
 /** Skips today's run of one standup for a person — the twin of the DM `skip` command. */
-export async function skipToday(repo: Repo, service: StandupService, standup: Standup, userName: string, now: DateTime): Promise<{ ok: true; result: 'skipped'; date: string } | Refusal> {
+export async function skipToday(repo: Repo, service: StandupService, standup: Standup, userName: string, now: DateTime, reason: unknown): Promise<{ ok: true; result: 'skipped'; date: string } | Refusal> {
+  const cleaned = cleanSkipNote(reason);
+  if ('error' in cleaned) return { ok: false, status: 400, code: 'invalid', message: cleaned.error, field: 'reason' };
   const run = await repo.getRun(standup.id, now.setZone(standup.timezone).toISODate()!);
   if (!run || run.status !== 'open') {
     return { ok: false, status: 409, code: 'no_open_run', message: run ? 'Today’s run has already closed.' : 'Today’s run has not opened yet.' };
   }
-  const result = await service.skipToday(run.id, userName);
+  const result = await service.skipToday(run.id, userName, cleaned.note);
   if (result === 'already_submitted') return { ok: false, status: 409, code: 'already_submitted', message: 'You already answered today — edit your answers in Chat instead.' };
   if (result === 'not_found') return { ok: false, status: 404, code: 'not_found', message: 'You are not on today’s run.' };
   return { ok: true, result, date: run.date };

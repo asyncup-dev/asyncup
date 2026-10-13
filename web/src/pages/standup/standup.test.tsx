@@ -35,7 +35,7 @@ const TODAY = {
     { userName: 'users/jun', displayName: 'Jun Tanaka', submittedAt: '2026-09-16T05:17:00Z', late: true, mood: 'meh' },
   ],
   waiting: [{ userName: 'users/asha', displayName: 'Asha Verma', mandatory: true, remindedAt: null }, { userName: 'users/rohit', displayName: 'Rohit Kumar', mandatory: false, remindedAt: '2026-09-16T05:00:00Z' }],
-  away: [{ userName: 'users/dev', displayName: 'Dev Patel', reason: 'vacation' }],
+  away: [{ userName: 'users/dev', displayName: 'Dev Patel', reason: 'vacation' }, { userName: 'users/sam', displayName: 'Sam', reason: 'skipped', reasonLabel: 'Skipped', note: 'Dentist' }],
   teamMood: null,
 };
 const RUNS = [
@@ -149,6 +149,7 @@ describe('standup overview', () => {
     expect(screen.getByText('😕 10:47 · late')).toBeInTheDocument();
     expect(screen.getByText('reminded')).toBeInTheDocument();
     expect(screen.getByText('vacation')).toBeInTheDocument();
+    expect(screen.getByText('skipped: Dentist')).toBeInTheDocument();
     expect(await screen.findByText('Tue 15 Sept')).toBeInTheDocument();
     expect(screen.getByText('1 missing')).toHaveClass('badge-warning');
     expect(screen.getByText('Complete')).toHaveClass('badge-success');

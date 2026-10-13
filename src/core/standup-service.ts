@@ -98,7 +98,7 @@ export class StandupService {
     const state: PromptState = submission
       ? { kind: 'submitted', at: submission.submittedAt, late: submission.late }
       : rp?.skippedAt
-        ? { kind: 'skipped' }
+        ? { kind: 'skipped', note: rp.skipNote }
         : { kind: 'open' };
     try {
       await this.adapter.updateStandupCards(names, standup, run, state);
@@ -133,7 +133,7 @@ export class StandupService {
     // The owner gets a card for each new blocker, the one place to pull people in from.
     for (const blocker of (await this.repo.listBlockersOpenedBy(run.id, userName)).filter((b) => texts.includes(b.text))) {
       try {
-        await this.adapter.sendBlockerCard(userName, standup, blocker, 'Your blocker is open. Tag the people who can help.', true);
+        await this.adapter.sendBlockerCard(userName, standup, blocker, 'From your standup today. Tag people who can help, add updates, or resolve it.', true);
       } catch (err) {
         this.log(`blocker card to ${userName} failed: ${err}`);
       }
@@ -144,14 +144,32 @@ export class StandupService {
     }
   }
 
-  /** Mark a participant as sitting out today's run (no effect once submitted). */
-  async skipToday(runId: number, userName: string): Promise<SkipResult> {
+  /** Mark a participant as sitting out today's run and tell the thread why (no effect once submitted). */
+  async skipToday(runId: number, userName: string, note: string): Promise<SkipResult> {
     const run = await this.repo.getRunById(runId);
     if (!run) return 'not_found';
     if (await this.repo.getSubmission(run.id, userName)) return 'already_submitted';
-    if (!(await this.repo.markSkipped(run.id, userName, this.now().toISO()!))) return 'not_found';
-    await this.refreshCards((await this.repo.getStandupById(run.standupId))!, run, userName);
+    const before = (await this.repo.listRunParticipants(run.id)).find((p) => p.userName === userName);
+    if (!before) return 'not_found';
+    await this.repo.markSkipped(run.id, userName, this.now().toISO()!, note);
+    const standup = (await this.repo.getStandupById(run.standupId))!;
+    // A second skip replaces the first reason rather than stacking replies.
+    if (before.skipMessage) await this.removeMessage(before.skipMessage);
+    try {
+      await this.repo.setSkipMessage(run.id, userName, await this.adapter.postSkip(standup, run, before.displayName, note));
+    } catch (err) {
+      this.log(`posting ${userName}'s skip for run ${run.id} failed: ${err}`);
+    }
+    await this.refreshCards(standup, run, userName);
     return 'skipped';
+  }
+
+  private async removeMessage(messageName: string): Promise<void> {
+    try {
+      await this.adapter.deleteMessage(messageName);
+    } catch (err) {
+      this.log(`deleting ${messageName} failed: ${err}`);
+    }
   }
 
   /** Today's date in the standup's timezone. */
@@ -164,7 +182,9 @@ export class StandupService {
     const run = await this.repo.getRunById(runId);
     if (!run) return 'not_found';
     if (run.status !== 'open') return 'closed';
+    const skipMessage = (await this.repo.listRunParticipants(run.id)).find((p) => p.userName === userName)?.skipMessage;
     if (!(await this.repo.clearSkipped(run.id, userName))) return 'not_skipped';
+    if (skipMessage) await this.removeMessage(skipMessage);
     await this.refreshCards((await this.repo.getStandupById(run.standupId))!, run, userName);
     return 'unskipped';
   }

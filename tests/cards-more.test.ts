@@ -89,7 +89,7 @@ describe('cards (reminder, blocker, poll, thread and summary variants)', () => {
     expect(widgets[0].textParagraph.text).toContain('11:30 Asia/Kolkata');
     const buttons = widgets[1].buttonList.buttons;
     expect(buttons.map((b: any) => b.text)).toEqual(['Fill standup now', '🏖️ Skip today']);
-    expect(actionsOf(buttons).map((a) => a.function)).toEqual(['openStandupDialog', 'skipToday']);
+    expect(actionsOf(buttons).map((a) => a.function)).toEqual(['openStandupDialog', 'openSkipDialog']);
     expect(actionsOf(buttons)[0].interaction).toBe('OPEN_DIALOG');
     for (const action of actionsOf(buttons)) {
       expect(action.parameters).toEqual([{ key: 'runId', value: '7' }]);

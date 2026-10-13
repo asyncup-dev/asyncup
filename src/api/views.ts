@@ -20,7 +20,7 @@ export function person(p: { userName: string; displayName: string }) {
 /** An away participant with the reason the run recorded (older runs only know skipped vs vacation). */
 function awayView(rp: RunParticipant) {
   const reason = rp.awayReason ?? (rp.skippedAt ? 'skipped' : 'vacation');
-  return { ...person(rp), reason, reasonLabel: AWAY_LABEL[reason] };
+  return { ...person(rp), reason, reasonLabel: AWAY_LABEL[reason], note: rp.skipNote };
 }
 
 /** Team mood for a run, rounded to one decimal; null when nobody picked one. */

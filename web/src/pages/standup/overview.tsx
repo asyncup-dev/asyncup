@@ -97,7 +97,7 @@ export function OverviewPage() {
                         <div key={p.userName} className="person-row muted">
                           <span className="avatar avatar-sm" aria-hidden="true">{p.displayName[0]}</span>
                           <span className="name">{p.displayName}</span>
-                          <span className="t-caption">{(p.reasonLabel ?? AWAY_LABEL[p.reason] ?? p.reason).toLowerCase()}</span>
+                          <span className="t-caption">{(p.reasonLabel ?? AWAY_LABEL[p.reason] ?? p.reason).toLowerCase()}{p.note ? `: ${p.note}` : ''}</span>
                         </div>
                       ))}
                       {t.waiting.length + t.away.length === 0 ? <span className="t-small muted">Everyone is in</span> : null}

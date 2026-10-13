@@ -56,7 +56,7 @@ describe('Scheduler', () => {
       'users/bob',
     ]);
 
-    await service.skipToday(run.id, 'users/bob');
+    await service.skipToday(run.id, 'users/bob', 'Out today');
     clock.set('2026-06-10T10:30');
     await scheduler.tick();
     expect(adapter.dms.filter((d) => d.kind === 'reminder').map((d) => d.userName)).toEqual([

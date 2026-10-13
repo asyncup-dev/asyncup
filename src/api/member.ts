@@ -54,8 +54,8 @@ export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 404, 'not_found', 'No such standup.');
       return;
     }
-    const result = await skipToday(repo, ctx.service, found.standup, userName, ctx.now());
-    if (!result.ok) return apiError(res, result.status, result.code, result.message);
+    const result = await skipToday(repo, ctx.service, found.standup, userName, ctx.now(), req.body?.reason);
+    if (!result.ok) return apiError(res, result.status, result.code, result.message, result.field);
     res.json({ result: result.result, date: result.date });
   });
 

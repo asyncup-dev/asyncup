@@ -2,6 +2,7 @@ import type { PromptState } from '../../core/adapter.js';
 import { describeDates, type TimeOffRequest } from '../../core/schedule.js';
 import { DateTime } from 'luxon';
 import { moodEmoji as moodEmojiFor } from '../../core/insights.js';
+import { LIMITS } from '../../core/validation.js';
 import {
   isBlockerQuestion,
   isRealBlocker,
@@ -20,6 +21,7 @@ export const OPEN_DIALOG_FN = 'openStandupDialog';
 export const SUBMIT_DIALOG_FN = 'submitStandup';
 export const SKIP_TODAY_FN = 'skipToday';
 export const UNSKIP_FN = 'unskipToday';
+export const OPEN_SKIP_FN = 'openSkipDialog';
 export const OPEN_TAG_FN = 'openTagBlocker';
 export const SUBMIT_TAG_FN = 'submitTagBlocker';
 export const ACK_BLOCKER_FN = 'ackBlocker';
@@ -42,12 +44,24 @@ type Param = { key: string; value: string };
  * carry the action name as a parameter; the interaction-event format treats
  * `function` as an opaque string, so the same shape serves both.
  */
-export function clickAction(fn: string, parameters: Param[], endpoint: string | null, interaction?: 'OPEN_DIALOG') {
+export function clickAction(fn: string, parameters: Param[], endpoint: string | null, interaction?: 'OPEN_DIALOG', requiredWidgets?: string[]) {
   return {
     function: endpoint ?? fn,
     ...(interaction ? { interaction } : {}),
     parameters: endpoint ? [{ key: 'fn', value: fn }, ...parameters] : parameters,
+    // Chat refuses to submit the form until these inputs have a value.
+    ...(requiredWidgets ? { requiredWidgets } : {}),
   };
+}
+
+/** User text inside card HTML. */
+function html(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** The thread reply announcing a skip; angle brackets are swapped so a reason cannot mention anyone. */
+export function skipText(displayName: string, note: string): string {
+  return `🏖️ *${displayName}* is skipping today: ${note.replace(/</g, '‹').replace(/>/g, '›')}`;
 }
 
 function promptButtons(runId: number, fillLabel: string, endpoint: string | null) {
@@ -56,7 +70,7 @@ function promptButtons(runId: number, fillLabel: string, endpoint: string | null
     buttonList: {
       buttons: [
         { text: fillLabel, onClick: { action: clickAction(OPEN_DIALOG_FN, param, endpoint, 'OPEN_DIALOG') } },
-        { text: '🏖️ Skip today', onClick: { action: clickAction(SKIP_TODAY_FN, param, endpoint) } },
+        { text: '🏖️ Skip today', onClick: { action: clickAction(OPEN_SKIP_FN, param, endpoint, 'OPEN_DIALOG') } },
       ],
     },
   };
@@ -75,7 +89,7 @@ function promptBody(standup: Standup, run: Run, state: PromptState, endpoint: st
   }
   if (state.kind === 'skipped') {
     return [
-      { textParagraph: { text: `🏖️ You skipped today, so you won’t be counted as missing. Changed your mind? Undo it before ${due}.` } },
+      { textParagraph: { text: `🏖️ You skipped today${state.note ? `: <i>${html(state.note)}</i>` : ''}. You won’t be counted as missing. Changed your mind? Undo it before ${due}.` } },
       { buttonList: { buttons: [{ text: '↩️ Undo skip', onClick: { action: clickAction(UNSKIP_FN, param, endpoint) } }] } },
     ];
   }
@@ -161,10 +175,11 @@ export function standupDialog(
     });
   }
 
+  const required = [...questions.map((_, i) => `q${i}`), ...(moodEnabled ? ['mood'] : [])];
   widgets.push({
     buttonList: {
       buttons: [
-        { text: 'Submit', onClick: { action: clickAction(SUBMIT_DIALOG_FN, [{ key: 'runId', value: String(runId) }], endpoint) } },
+        { text: 'Submit', onClick: { action: clickAction(SUBMIT_DIALOG_FN, [{ key: 'runId', value: String(runId) }], endpoint, undefined, required) } },
       ],
     },
   });
@@ -173,6 +188,41 @@ export function standupDialog(
     actionResponse: {
       type: 'DIALOG',
       dialogAction: { dialog: { body: { sections: [{ widgets }] } } },
+    },
+  };
+}
+
+/** Asks for a one-line reason before a skip; the reason goes to the day's thread. */
+export function skipDialog(runId: number, endpoint: string | null = null) {
+  return {
+    actionResponse: {
+      type: 'DIALOG',
+      dialogAction: {
+        dialog: {
+          body: {
+            sections: [
+              {
+                widgets: [
+                  {
+                    textInput: {
+                      name: 'reason',
+                      label: 'Why are you skipping today?',
+                      type: 'SINGLE_LINE',
+                      hintText: 'One line. Your team sees it in today’s thread.',
+                      validation: { characterLimit: LIMITS.skipNoteMax },
+                    },
+                  },
+                  {
+                    buttonList: {
+                      buttons: [{ text: 'Skip today', onClick: { action: clickAction(SKIP_TODAY_FN, [{ key: 'runId', value: String(runId) }], endpoint, undefined, ['reason']) } }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
     },
   };
 }

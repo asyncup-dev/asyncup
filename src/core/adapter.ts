@@ -18,7 +18,7 @@ export interface SpaceMember {
  * APIs directly — only this interface. New platforms = new implementation.
  */
 /** Where someone stands on a run, as their prompt cards show it. */
-export type PromptState = { kind: 'open' } | { kind: 'submitted'; at: string; late: boolean } | { kind: 'skipped' };
+export type PromptState = { kind: 'open' } | { kind: 'submitted'; at: string; late: boolean } | { kind: 'skipped'; note: string | null };
 
 export interface ChatAdapter {
   /** DM the user a prompt with a way to fill in the standup form; returns the card's message name when known. */
@@ -32,6 +32,12 @@ export interface ChatAdapter {
 
   /** Post the parent message that opens the day's thread in the report space. */
   postThreadParent(standup: Standup, run: Run): Promise<void>;
+
+  /** Tell the day's thread someone is skipping and why; returns the message name so an undo can remove it. */
+  postSkip(standup: Standup, run: Run, displayName: string, note: string): Promise<string | null>;
+
+  /** Remove a message the app posted. */
+  deleteMessage(messageName: string): Promise<void>;
 
   /**
    * Post one person's submission as a reply in the day's thread.

@@ -346,6 +346,11 @@ ALTER TABLE participants ADD COLUMN kept_off INTEGER NOT NULL DEFAULT 0;
   `
 ALTER TABLE run_participants ADD COLUMN card_messages TEXT;
 `,
+  // 15 — why someone skipped, and the thread reply that said so
+  `
+ALTER TABLE run_participants ADD COLUMN skip_note TEXT;
+ALTER TABLE run_participants ADD COLUMN skip_message TEXT;
+`,
 ];
 
 /**
@@ -615,6 +620,11 @@ ALTER TABLE participants ADD COLUMN kept_off INTEGER NOT NULL DEFAULT 0;
   `
 ALTER TABLE run_participants ADD COLUMN card_messages TEXT;
 `,
+  // 15 — why someone skipped (mirrors the SQLite migration)
+  `
+ALTER TABLE run_participants ADD COLUMN skip_note TEXT;
+ALTER TABLE run_participants ADD COLUMN skip_message TEXT;
+`,
 ];
 
 function toMcpToken(row: any): McpToken {
@@ -717,6 +727,8 @@ function toRunParticipant(row: any): RunParticipant {
     promptedAt: row.prompted_at ?? null,
     remindedAt: row.reminded_at ?? null,
     skippedAt: row.skipped_at ?? null,
+    skipNote: row.skip_note ?? null,
+    skipMessage: row.skip_message ?? null,
   };
 }
 
@@ -1374,7 +1386,7 @@ export class Repo {
   /** Undoes a skip: the person is expected again. */
   async clearSkipped(runId: number, userName: string): Promise<boolean> {
     const result = await this.db.run(
-      `UPDATE run_participants SET skipped_at = NULL, away_reason = NULL WHERE run_id = ? AND user_name = ? AND skipped_at IS NOT NULL`,
+      `UPDATE run_participants SET skipped_at = NULL, away_reason = NULL, skip_note = NULL, skip_message = NULL WHERE run_id = ? AND user_name = ? AND skipped_at IS NOT NULL`,
       [runId, userName],
     );
     return result.changes > 0;
@@ -1386,12 +1398,16 @@ export class Repo {
     return row?.display_name ?? null;
   }
 
-  async markSkipped(runId: number, userName: string, at: string): Promise<boolean> {
+  async markSkipped(runId: number, userName: string, at: string, note: string): Promise<boolean> {
     const result = await this.db.run(
-      `UPDATE run_participants SET skipped_at = ?, away_reason = 'skipped' WHERE run_id = ? AND user_name = ?`,
-      [at, runId, userName],
+      `UPDATE run_participants SET skipped_at = ?, away_reason = 'skipped', skip_note = ? WHERE run_id = ? AND user_name = ?`,
+      [at, note, runId, userName],
     );
     return result.changes > 0;
+  }
+
+  async setSkipMessage(runId: number, userName: string, messageName: string | null): Promise<void> {
+    await this.db.run('UPDATE run_participants SET skip_message = ? WHERE run_id = ? AND user_name = ?', [messageName, runId, userName]);
   }
 
   // --- submissions ---

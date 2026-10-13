@@ -149,7 +149,7 @@ export const ROUTES: RouteSpec[] = [
     query: { limit: { schema: z.number().int().min(1).max(50).default(10), description: 'How many, newest first' } },
     responses: { 200: S.MySubmissions },
   },
-  { method: 'post', path: '/me/skip', summary: 'Skip today for one standup', tag: 'Me', access: 'person', body: S.SkipBody, responses: { 200: S.Skipped }, errors: [404, 409, 503] },
+  { method: 'post', path: '/me/skip', summary: 'Skip today for one standup', tag: 'Me', access: 'person', body: S.SkipBody, responses: { 200: S.Skipped }, errors: [400, 404, 409, 503] },
   { method: 'patch', path: '/me', summary: 'My timezone and vacation', tag: 'Me', access: 'person', body: S.MyPatch, responses: { 200: S.MySettings }, errors: [400, 409] },
 
   // schedules
