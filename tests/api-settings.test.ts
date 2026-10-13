@@ -83,7 +83,7 @@ describe('api: settings', () => {
     expect(body.setup).toEqual({ complete: false, chatConfigured: false, signInConfigured: false });
     expect(JSON.stringify(body)).not.toContain('GOCSPX');
     await settings.update({ serviceAccountJson: '{"client_email":1}' });
-    expect((await (await op('/settings')).json() as any).chat.serviceAccount).toEqual({ set: true, email: 1, clientId: null });
+    expect((await (await op('/settings')).json() as any).chat.serviceAccount).toEqual({ set: true, email: '1', clientId: null });
     await settings.update({ serviceAccountJson: 'not json' });
     expect((await (await op('/settings')).json() as any).chat.serviceAccount).toEqual({ set: true, email: null, clientId: null });
   });

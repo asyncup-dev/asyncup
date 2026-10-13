@@ -19,6 +19,8 @@ import { registerPeopleRoutes } from './people.js';
 import { registerSettingsRoutes } from './settings.js';
 import { registerSpaceRoutes } from './spaces.js';
 import { resolvePrincipal } from './principal.js';
+import { contractCheck } from './spec/check.js';
+import { buildOpenApi } from './spec/openapi.js';
 import { apiError, CSRF_HEADER, CSRF_VALUE, principalOf, type ApiContext, type ApiRequest } from './shared.js';
 import { registerStandupRoutes } from './standups.js';
 
@@ -65,6 +67,13 @@ export function registerApi(app: Express, deps: ApiDeps): void {
     now: deps.now ?? (() => DateTime.utc()),
   };
   const api = express.Router();
+  if (process.env.ASYNCUP_CONTRACT_CHECK) api.use(contractCheck());
+
+  let openapi: Record<string, unknown> | null = null;
+  api.get('/openapi.json', (_req, res) => {
+    openapi ??= buildOpenApi();
+    res.json(openapi);
+  });
 
   // Public: which sign-in buttons the web app should show. No secrets, no state.
   api.get('/auth/methods', async (_req, res) => {

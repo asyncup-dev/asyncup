@@ -1,30 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type TimeOffPolicy } from './api';
 
-export interface OverrideView {
-  id: number;
-  userName: string;
-  displayName: string;
-  date: string;
-  working: boolean;
-  reason: string;
-  status: 'active' | 'pending' | 'declined' | 'expired' | 'withdrawn';
-  label: string;
-  setBy: string;
-  channel: string;
-  decidedBy: string | null;
-  decisionNote: string | null;
-  createdAt: string;
-}
+import type { Override as OverrideView, Schedule as ScheduleView } from '../../../src/api/spec/schemas.ts';
 
-export interface ScheduleView {
-  userName: string;
-  displayName: string;
-  workingDays: string | null;
-  workingDaysLabel: string;
-  policies: { standupId: number; name: string; timeOffPolicy: TimeOffPolicy }[];
-  overrides: OverrideView[];
-}
+export type { OverrideView, ScheduleView };
 
 /** Either the caller's own schedule or someone else's, by Chat user name. */
 export type ScheduleTarget = 'me' | { userName: string };

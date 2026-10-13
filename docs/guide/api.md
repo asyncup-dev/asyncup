@@ -2,7 +2,15 @@
 
 AsyncUp exposes a JSON API under `/api/v1`. It is the front door the web
 app uses; everything it does calls the same core functions as the chat
-commands. This page tracks the surface as it grows.
+commands. This page explains it; the exact contract is the OpenAPI 3.1
+document every server serves at `GET /api/v1/openapi.json` (no sign-in
+needed), also published with these docs as
+[openapi.json](https://asyncup-dev.github.io/docs/openapi.json). Load it into
+any OpenAPI tool to browse the endpoints or generate a client.
+
+The spec and the server cannot drift apart: the test suite checks every
+response, and every request the server accepts, against it, and fails when a
+route is added without being documented.
 
 ## Authentication
 
@@ -13,7 +21,9 @@ Every request needs one of:
 | Session cookie from Google or SAML sign-in | **admin** if you are a Workspace admin, **manager** if you administer at least one standup, otherwise **member** |
 | `Authorization: Bearer <DASHBOARD_TOKEN>` | **admin** (the operator token, while token sign-in is on) |
 
-Unauthenticated calls get `401` with `WWW-Authenticate: Bearer`. Browser
+`GET /api/v1/auth/methods` (which sign-in buttons to show) and
+`GET /api/v1/openapi.json` are public. Any other unauthenticated call gets
+`401` with `WWW-Authenticate: Bearer`. Browser
 sessions that change state (`POST`, `PATCH`, `DELETE`) must also send
 `X-Requested-With: asyncup`, or they get `403 csrf`. Bearer tokens are
 exempt — there is no cookie to forge.
@@ -28,7 +38,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `lockout`, `chat_unavailable`, `mcp_disabled`, `unavailable`, `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`.
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `lockout`, `chat_unavailable`, `unavailable`, `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`, `refused` (a time-off policy said no, with the reason).
 
 ## Endpoints
 
@@ -57,6 +67,7 @@ else, the standups they administer or belong to. Each entry:
   "questions": ["What did you do yesterday?", "What will you do today?", "Any blockers?"],
   "mood": { "enabled": true, "anonymous": false },
   "digestEnabled": false,
+  "timeOffPolicy": "self",
   "escalation": { "afterDays": 2, "contact": { "userName": "users/99", "displayName": "Priya" } },
   "webhook": { "configured": true },
   "people": { "total": 9, "mandatory": 8 },
@@ -155,8 +166,8 @@ Admins only.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/settings` | Grouped: `chat`, `workspace`, `signIn`, `tokens`, `setup`. Secrets are never echoed — only `{ "set": true }` (the service account also shows its `email`). |
-| `PATCH` | `/settings` | `{ key: value, … }` for any editable field: strings set, `null` clears a secret, an empty string keeps it, booleans for `calendarOoo`, `tokenSignIn`, `setupComplete`. Same rules as the dashboard; `400 invalid` names the `field`; `409 lockout` refuses a change that would leave no working sign-in method. |
+| `GET` | `/settings` | Grouped: `chat`, `workspace`, `signIn`, `tokens`, `setup`, `mcp`. Secrets are never echoed — only `{ "set": true }` (the service account also shows its `email`). |
+| `PATCH` | `/settings` | `{ key: value, … }` for any editable field: strings set, `null` clears a secret, an empty string keeps it, booleans for `calendarOoo`, `tokenSignIn`, `setupComplete`, `mcpEnabled`. Same rules as the dashboard; `400 invalid` names the `field`; `409 lockout` refuses a change that would leave no working sign-in method. |
 | `POST` | `/settings/tokens/:name` | `tick`, `export` or `scim` → `201 { token }`, shown once |
 | `DELETE` | `/settings/tokens/:name` | `204` |
 | `DELETE` | `/history` | `{ "confirm": "DELETE HISTORY" }` — removes every run, submission, blocker and poll in the workspace; standups, rosters and settings stay. Returns the counts. `400 invalid` without the phrase |

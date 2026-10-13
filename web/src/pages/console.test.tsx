@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SettingsView } from '../lib/settings';
+import type { Settings } from '../lib/api';
 import { ADMIN, MEMBER, OPERATOR, renderApp, stubApi } from '../test/harness';
 import { headline } from './reports';
 
@@ -19,14 +19,14 @@ const PEOPLE = [
   { userName: 'users/1', displayName: 'Asha Verma', email: 'asha@x.dev', timezone: 'Asia/Kolkata', onVacation: false, standups: [{ id: 1, name: 'Engineering', mandatory: true, admin: true }] },
   { userName: 'users/bob', displayName: 'Bob Mehta', email: null, timezone: null, onVacation: true, standups: [{ id: 1, name: 'Engineering', mandatory: false, admin: false }] },
 ];
-function settingsFixture(): SettingsView {
+function settingsFixture(): Settings {
   return {
     chat: { audience: '728449131907 https://x/chat/events', serviceAccount: { set: true, email: 'bot@x.iam', clientId: '104928' } },
     workspace: { defaultTimezone: 'Asia/Kolkata', calendarOoo: true, workspaceAdminEmail: '' },
     signIn: { tokenSignIn: true, google: { clientId: '', clientSecret: { set: false }, on: false }, saml: { entityId: 'https://idp', ssoUrl: 'https://idp/sso', cert: { set: true }, adminAttribute: '', adminGroup: '', on: true } },
     tokens: { tick: { set: false }, export: { set: true }, scim: { set: false } },
     setup: { complete: true, chatConfigured: true, signInConfigured: true },
-    mcp: { enabled: false, defaultScopes: ['read'], endpoint: '/mcp', scopes: { read: 'Read things', 'blockers:write': 'Work blockers', submit: 'Submit answers' } },
+    mcp: { enabled: false, defaultScopes: ['read'], endpoint: '/mcp', scopes: { read: 'Read things', 'blockers:write': 'Work blockers', submit: 'Submit answers', schedule: 'Days off' } },
   };
 }
 
@@ -64,7 +64,7 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}, m
           if (typeof p.defaultTimezone === 'string') settings.workspace.defaultTimezone = p.defaultTimezone;
           if (typeof p.calendarOoo === 'boolean') settings.workspace.calendarOoo = p.calendarOoo;
           if (typeof p.mcpEnabled === 'boolean') settings.mcp.enabled = p.mcpEnabled;
-          if (typeof p.mcpDefaultScopes === 'string') settings.mcp.defaultScopes = p.mcpDefaultScopes.split(',').filter(Boolean);
+          if (typeof p.mcpDefaultScopes === 'string') settings.mcp.defaultScopes = p.mcpDefaultScopes.split(',').filter(Boolean) as Settings['mcp']['defaultScopes'];
           if (typeof p.oauthClientId === 'string') settings.signIn.google = { clientId: p.oauthClientId, clientSecret: { set: !!p.oauthClientId }, on: !!p.oauthClientId };
           if (typeof p.workspaceAdminEmail === 'string') settings.workspace.workspaceAdminEmail = p.workspaceAdminEmail;
           if (p.serviceAccountJson === null) settings.chat.serviceAccount = { set: false, email: null, clientId: null };

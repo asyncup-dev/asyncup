@@ -54,48 +54,25 @@ export async function api<T>(path: string, init: Omit<RequestInit, 'body'> & { b
   return data as T;
 }
 
-export interface Me {
-  kind: 'admin' | 'manager' | 'member';
-  via: 'session' | 'token';
-  tenantId: string;
-  user: { userName: string | null; email: string; name: string } | null;
-  managedStandupIds: number[];
-}
-
-export interface AuthMethods {
-  google: boolean;
-  saml: boolean;
-  token: boolean;
-}
-
-export interface StandupSummary {
-  id: number;
-  name: string;
-  spaceName: string;
-  active: boolean;
-  schedule: { promptTime: string; deadlineTime: string; timezone: string; days: string[]; reminderMinutesBefore: number };
-  people: { total: number; mandatory: number };
-  today: { date: string; status: 'open' | 'closed' | null; submitted: number; expected: number; missing: { userName: string; displayName: string }[] };
-  permissions: { manage: boolean };
-}
-
-export interface Verification {
-  state: 'pass' | 'fail';
-  detail: string;
-  checkedAt: string;
-  data?: Record<string, unknown>;
-}
-
-export interface Settings {
-  chat: { audience: string; serviceAccount: { set: boolean; email: string | null; clientId: string | null } };
-  workspace: { defaultTimezone: string; calendarOoo: boolean; workspaceAdminEmail: string };
-  signIn: {
-    tokenSignIn: boolean;
-    google: { clientId: string; clientSecret: { set: boolean }; on: boolean };
-    saml: { entityId: string; ssoUrl: string; cert: { set: boolean }; adminAttribute: string; adminGroup: string; on: boolean };
-  };
-  setup: { complete: boolean; chatConfigured: boolean; signInConfigured: boolean };
-}
+// Response shapes come from the server's API schemas, the same ones that generate the OpenAPI document.
+export type {
+  AuthMethods,
+  AwayReason,
+  Blocker as BlockerView,
+  Me,
+  Person,
+  RunDetail,
+  RunListItem,
+  Settings,
+  StandupDetail,
+  StandupSummary,
+  Template,
+  TimeOffPolicy,
+  TodayRun,
+  Verification,
+  WeekPoint,
+} from '../../../src/api/spec/schemas.ts';
+import type { AwayReason } from '../../../src/api/spec/schemas.ts';
 
 export interface ChatHealth {
   audience: 'set' | 'unset';
@@ -111,94 +88,13 @@ export async function chatHealth(): Promise<ChatHealth> {
   return (await res.json()) as ChatHealth;
 }
 
-export interface Template {
-  id: string;
-  name: string;
-  description: string;
-  questions: string[] | null;
-  days: string[];
-  promptTime: string;
-  deadlineTime: string;
-  moodEnabled: boolean;
-  moodAnonymous: boolean;
-  digestEnabled: boolean;
-}
-
 export interface Space {
   name: string;
   displayName: string;
   standups: { id: number; name: string }[];
 }
 
-export interface Person {
-  userName: string;
-  displayName: string;
-}
-
-export type AwayReason = 'skipped' | 'vacation' | 'calendar_ooo' | 'day_off' | 'off_day';
 export const AWAY_LABEL: Record<AwayReason, string> = { vacation: 'Vacation', calendar_ooo: 'Calendar out of office', day_off: 'Day off', off_day: 'Not a working day', skipped: 'Skipped' };
-
-export type TimeOffPolicy = 'self' | 'approval' | 'managers';
-
-export interface TodayRun {
-  date: string;
-  status: 'open' | 'closed' | null;
-  expected: number;
-  submitted: { userName: string; displayName: string; submittedAt: string; late: boolean; mood: string | null }[];
-  waiting: { userName: string; displayName: string; mandatory: boolean; remindedAt: string | null }[];
-  away: { userName: string; displayName: string; reason: AwayReason; reasonLabel?: string }[];
-  teamMood: number | null;
-}
 
 export const MOOD_EMOJI: Record<string, string> = { great: '😄', good: '🙂', okay: '😐', meh: '😕', struggling: '😫' };
 
-export interface StandupDetail extends StandupSummary {
-  questions: string[];
-  mood: { enabled: boolean; anonymous: boolean };
-  digestEnabled: boolean;
-  timeOffPolicy: TimeOffPolicy;
-  escalation: { afterDays: number; contact: Person | null };
-  webhook: { configured: boolean };
-  participants: (Person & { mandatory: boolean; timezone: string | null; onVacation: boolean })[];
-  admins: Person[];
-}
-
-export interface RunListItem {
-  date: string;
-  status: 'open' | 'closed';
-  submitted: number;
-  expected: number;
-  missing: Person[];
-}
-
-export interface RunDetail {
-  date: string;
-  status: 'open' | 'closed';
-  submitted: number;
-  expected: number;
-  missing: Person[];
-  submissions: { userName: string; displayName: string; submittedAt: string; editedAt: string | null; late: boolean; mood: string | null; answers: { question: string; answer: string }[] }[];
-  teamMood: number | null;
-}
-
-export interface BlockerView {
-  id: number;
-  standup: { id: number; name: string };
-  owner: Person;
-  text: string;
-  openedDate: string;
-  resolvedDate: string | null;
-  resolvedBy: string | null;
-  escalatedAt: string | null;
-  status: 'open' | 'acknowledged' | 'resolved';
-  tags: (Person & { acknowledgedAt: string | null })[];
-  updates: (Person & { text: string; at: string })[];
-}
-
-export interface WeekPoint {
-  label: string;
-  participationPct: number | null;
-  mood: number | null;
-  blockersOpened: number;
-  blockersResolved: number;
-}

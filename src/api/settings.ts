@@ -13,7 +13,8 @@ function saIdentity(json: string): { email: string | null; clientId: string | nu
   if (!json) return { email: null, clientId: null };
   try {
     const parsed = JSON.parse(json);
-    return { email: parsed.client_email ?? null, clientId: parsed.client_id ?? null };
+    const str = (v: unknown) => (v === undefined || v === null ? null : String(v));
+    return { email: str(parsed.client_email), clientId: str(parsed.client_id) };
   } catch {
     return { email: null, clientId: null };
   }
