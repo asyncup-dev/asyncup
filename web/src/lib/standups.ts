@@ -40,7 +40,7 @@ export function useInsights(id: number, weeks: number) {
 /** Space display names, admin-only in the API; everyone else sees resource names. */
 export function useSpaceNames() {
   return useQuery({
-    queryKey: ['spaces'],
+    queryKey: ['space-names'],
     queryFn: async () => {
       try {
         return (await api<{ spaces: Space[] }>('/spaces')).spaces;
