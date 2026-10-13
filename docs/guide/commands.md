@@ -140,6 +140,6 @@ you skip it shows your reason with **↩️ Undo skip**. Reminders and nudges
 update the same way.
 
 On a standup whose roster follows a Google Group, `add` keeps working: people
-you add stay on. To keep a group member off, untick them in the web app's
-People grid; `remove` in Chat only lasts until the next sync adds them back
+you add stay on. `remove` keeps a group member off at later syncs, the same as
+unticking them in the web app's People grid
 ([group rosters](./directory#rosters-that-follow-a-google-group)).

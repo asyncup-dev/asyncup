@@ -4,8 +4,9 @@ services:
     # To build from source instead, comment out `image:` and uncomment:
     # build: .
     restart: unless-stopped
+    # Local only: put HTTPS in front (Caddy, nginx, a tunnel) rather than opening 8080.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     env_file:
       - path: .env
         required: false

@@ -32,7 +32,7 @@ export function GeneralSettings() {
           </select>
           <button type="button" className="btn" style={{ height: 28 }} disabled={zone === s.workspace.defaultTimezone || patch.isPending} onClick={() => void save({ defaultTimezone: zone })}>Save</button>
         </SettingsRow>
-        <SettingsRow label="Calendar out-of-office" hint="Auto-mark people away on OOO days. Needs Directory & Calendar access under Google Chat.">
+        <SettingsRow label="Calendar out-of-office" hint="Auto-mark people away on OOO days. Needs domain-wide delegation of https://www.googleapis.com/auth/calendar.events.readonly to the client ID under Google Chat.">
           <label className="row t-small">
             <input type="checkbox" checked={s.workspace.calendarOoo} onChange={(e) => void save({ calendarOoo: e.target.checked })} /> {s.workspace.calendarOoo ? 'On' : 'Off'}
           </label>

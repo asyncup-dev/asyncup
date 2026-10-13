@@ -321,10 +321,12 @@ export class CommandHandler {
     const removed: string[] = [];
     const unknown: string[] = [];
     for (const m of mentions) {
-      ((await this.repo.removeParticipant(standup.id, m.userName)) ? removed : unknown).push(m.displayName);
+      // On a group roster, kept off so the next sync doesn't add them back.
+      const done = standup.rosterGroup ? await this.repo.excludeParticipant(standup.id, m.userName) : await this.repo.removeParticipant(standup.id, m.userName);
+      (done ? removed : unknown).push(m.displayName);
     }
     const parts: string[] = [];
-    if (removed.length) parts.push(`✅ Removed ${removed.join(', ')}.`);
+    if (removed.length) parts.push(`✅ Removed ${removed.join(', ')}.${standup.rosterGroup ? ' They stay off when the group syncs.' : ''}`);
     if (unknown.length) parts.push(`⚠️ Not participants: ${unknown.join(', ')}.`);
     return parts.join(' ');
   }

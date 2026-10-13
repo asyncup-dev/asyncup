@@ -200,16 +200,18 @@ describe('setup: Google Cloud steps', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Verify stored key' })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Verify stored key' }));
 
-    await user.click(screen.getByLabelText(/Directory & Calendar access/));
+    // Calendar out-of-office shows the delegation values to copy, and saves only that switch
     expect(await screen.findByText('104928374655120039382')).toBeInTheDocument();
+    expect(screen.getByText('https://www.googleapis.com/auth/calendar.events.readonly')).toBeInTheDocument();
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(async () => undefined) }, configurable: true });
     await user.click(screen.getAllByRole('button', { name: 'Copy' })[0]!);
     expect(await screen.findByText('Copied')).toBeInTheDocument();
-    const save = screen.getByRole('button', { name: 'Save access settings' });
-    expect(save).toBeDisabled();
-    await user.type(screen.getByLabelText('Workspace admin to act as'), 'admin@example.com');
-    await user.click(save);
-    await waitFor(() => expect(state.patches.at(-1)).toEqual({ workspaceAdminEmail: 'admin@example.com', calendarOoo: true }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(state.patches.at(-1)).toEqual({ calendarOoo: true }));
+    await user.click(screen.getByLabelText(/Calendar out-of-office/));
+    expect(screen.queryByText('104928374655120039382')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(state.patches.at(-1)).toEqual({ calendarOoo: false }));
     await waitFor(() => expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('aria-disabled', 'false'));
   });
 

@@ -50,7 +50,8 @@ const SETTING_DEFAULTS: AppSettings = {
   chatAudience: '',
   serviceAccountJson: '',
   defaultTimezone: 'UTC',
-  calendarOoo: true,
+  // Off until someone sets up the delegation it needs.
+  calendarOoo: false,
   workspaceAdminEmail: '',
   oauthClientId: '',
   oauthClientSecret: '',

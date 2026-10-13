@@ -43,7 +43,7 @@ export function StepRail({ progress, currentId }: { progress: SetupProgress | un
       <div className="spacer" />
       <div className="stuck card">
         <div className="t-strong">Stuck?</div>
-        <p className="t-small secondary" style={{ margin: '4px 0 8px' }}>The full Google Chat guide has screenshots for every console screen.</p>
+        <p className="t-small secondary" style={{ margin: '4px 0 8px' }}>The setup guide walks through every console screen, step by step.</p>
         <a className="t-small" href="https://asyncup-dev.github.io/docs/guide/google-chat-setup" target="_blank" rel="noreferrer">Open the guide ↗</a>
       </div>
     </aside>

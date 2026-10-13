@@ -50,14 +50,11 @@ saved anyway, and **Continue** works. Come back after section 3 and press
 Keep the service account's email (`asyncup@<project>.iam.gserviceaccount.com`):
 [step 5 of the setup path](./directory) gives it an admin role.
 
-Leave the **Directory & Calendar access** switch on that page **off**. All it
-does is set a *Workspace admin to act as*, which moves Directory lookups to
-domain-wide delegation; the [admin role](./directory#admin-role) from step 5
-of the setup path does the same job without delegation. Calendar out-of-office doesn't
-use that switch at all ([Calendar out-of-office](./directory#calendar-ooo)).
-If you press **Save access settings** with the switch off, it also turns
-Calendar out-of-office off; switch it back on under **Settings › General**
-when you set it up.
+The same page has an optional **Calendar out-of-office** switch. Leave it off
+for now: it needs domain-wide delegation, covered in
+[Calendar out-of-office](./directory#calendar-ooo). Group rosters and user
+lookups don't need delegation; they use the [admin role](./directory#admin-role)
+from step 5 of the setup path.
 
 ## 3. Configure the Chat app
 

@@ -71,7 +71,7 @@ export function SignInSettings() {
         </SettingsRow>
       </SectionCard>
       <SectionCard title="Setup token">
-        <SettingsRow label="Accept DASHBOARD_TOKEN for sign-in" hint="Switch off once Google or SAML works. Recovery is documented in the handbook if you lock yourself out.">
+        <SettingsRow label="Accept the operator token (OPERATOR_TOKEN) for sign-in" hint="Switch off once Google or SAML works. Recovery is documented in the handbook if you lock yourself out.">
           <label className="row t-small">
             <input type="checkbox" checked={s.signIn.tokenSignIn} onChange={(e) => void save({ tokenSignIn: e.target.checked })} /> {s.signIn.tokenSignIn ? 'On' : 'Off'}
           </label>

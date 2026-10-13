@@ -152,8 +152,15 @@ describe('CommandHandler', () => {
 
     expect(await commands.handle(ctx('optional @Bob', [BOB]))).toContain('Bob now optional');
     expect(await commands.handle(ctx('mandatory @Bob', [BOB]))).toContain('Bob now mandatory');
-    expect(await commands.handle(ctx('remove @Alice', [ALICE]))).toContain('Removed Alice');
+    expect(await commands.handle(ctx('remove @Alice', [ALICE]))).toBe('✅ Removed Alice.');
     expect(await repo.listParticipants(standup.id)).toHaveLength(1);
+
+    // on a group roster, someone removed in Chat stays off at the next sync, as in the People grid
+    await repo.updateStandup(standup.id, { rosterGroup: 'team@example.com' });
+    const grouped = (await repo.getStandupById(standup.id))!;
+    expect(grouped.rosterGroup).toBe('team@example.com');
+    expect(await commands.handle(ctx('remove @Bob', [BOB]))).toBe('✅ Removed Bob. They stay off when the group syncs.');
+    expect((await repo.listRosterRows(standup.id)).find((r) => r.userName === BOB.userName)).toMatchObject({ active: false, keptOff: true });
   });
 
   it('marks people on vacation and back', async () => {

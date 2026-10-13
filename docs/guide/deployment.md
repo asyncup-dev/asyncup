@@ -59,11 +59,10 @@ docker compose up -d       # pulls the GHCR image by default
 # then finish setup in https://HOST/app (sign in with the operator token)
 ```
 
-The repo's compose file publishes port `8080` on every interface, and Docker's
-port publishing bypasses host firewalls such as `ufw`. Change it to
-`"127.0.0.1:8080:8080"` in your copy when a reverse proxy runs on the same
-machine, or use [Path A](./server-setup#path-a), which publishes nothing but
-Caddy. Put it behind any HTTPS reverse proxy (Caddy, nginx, Traefik) and point
+The repo's compose file publishes port `8080` on `127.0.0.1` only, so a
+reverse proxy on the same machine reaches it and the internet doesn't. Don't
+widen it to every interface: Docker's port publishing bypasses host firewalls
+such as `ufw`. [Path A](./server-setup#path-a) publishes nothing but Caddy. Put it behind any HTTPS reverse proxy (Caddy, nginx, Traefik) and point
 the Chat app at `https://HOST/chat/events`. The SQLite data lives in the
 `standup-data` volume.
 
