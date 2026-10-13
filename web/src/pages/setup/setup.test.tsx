@@ -366,12 +366,14 @@ describe('setup: sign-in, template, create and live', () => {
     expect(another).toHaveClass('btn');
     // the space names loaded here must not stand in for the create form's space list while it loads
     const served = globalThis.fetch;
-    let release = () => {};
+    let release: (() => void) | null = null;
     vi.stubGlobal('fetch', (input: string, init?: RequestInit) =>
       input === '/api/v1/spaces' ? new Promise((done) => (release = () => done(served(input, init)))) : served(input, init));
     await userEvent.setup().click(another);
     expect(await screen.findByRole('heading', { name: 'Create a standup' })).toBeInTheDocument();
-    release();
+    // release only once the page has asked for the spaces, or the reply is never sent
+    await waitFor(() => expect(release).not.toBeNull());
+    release!();
     expect(await screen.findByRole('option', { name: 'Platform HQ' })).toBeInTheDocument();
     expect(screen.getByLabelText('Prompt at')).toHaveAttribute('type', 'time');
     // names are unique across the workspace, so a clash is flagged before Create
