@@ -54,6 +54,7 @@ export function registerBlockerRoutes(api: Router, ctx: ApiContext): void {
       return;
     }
     const result = await ctx.blockers.addUpdate(a.blocker.id, a.me, text);
+    if (result === 'not_found') return apiError(res, 404, 'not_found', 'No such blocker.');
     if (result === 'resolved') return apiError(res, 409, 'resolved', 'This blocker is already resolved.');
     res.json({ result });
   });
@@ -62,6 +63,7 @@ export function registerBlockerRoutes(api: Router, ctx: ApiContext): void {
     const a = await actor(req, res);
     if (!a) return;
     const result = await ctx.blockers.resolve(a.blocker.id, a.me);
+    if (result === 'not_found') return apiError(res, 404, 'not_found', 'No such blocker.');
     if (result === 'already_resolved') return apiError(res, 409, 'resolved', 'This blocker is already resolved.');
     if (result === 'not_allowed') return apiError(res, 403, 'not_allowed', 'Only the owner, tagged people and standup admins can resolve a blocker.');
     res.json({ result });

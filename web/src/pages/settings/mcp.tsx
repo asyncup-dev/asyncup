@@ -4,16 +4,16 @@ import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
 import { useMe } from '../../lib/auth';
 import { ago, clock } from '../../lib/format';
-import { clientSnippet, useCreateMcpToken, useMcpActivity, useMcpTokens, usePatchSettings, useRevokeMcpToken, useSettings, useVerifyMutation, type McpScope } from '../../lib/settings';
+import { clientSnippet, useCreateMcpToken, useMcpActivity, useMcpTokens, usePatchSettings, useRevokeMcpToken, useSettings, useVerifyMutation, type McpClient, type McpScope } from '../../lib/settings';
 import { copyText } from '../../lib/setup';
 import { fieldError, SettingsHeader } from './layout';
 
-const CLIENTS = [
-  ['claude-desktop', 'Claude Desktop'],
+const CLIENTS: [McpClient, string][] = [
   ['claude-code', 'Claude Code'],
+  ['claude-code-project', 'Claude Code project (.mcp.json)'],
   ['cursor', 'Cursor'],
   ['generic', 'Generic'],
-] as const;
+];
 
 export function McpSettings() {
   const settings = useSettings();
@@ -27,7 +27,7 @@ export function McpSettings() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<{ name: string; kind: 'personal' | 'service'; scopes: McpScope[] } | null>(null);
   const [minted, setMinted] = useState<{ name: string; secret: string; url: string } | null>(null);
-  const [client, setClient] = useState<(typeof CLIENTS)[number][0]>('claude-desktop');
+  const [client, setClient] = useState<McpClient>('claude-code');
   const [copied, setCopied] = useState(false);
   const s = settings.data;
   if (settings.isError) return <div className="alert">Could not load settings: {settings.error.message}</div>;
@@ -79,7 +79,7 @@ export function McpSettings() {
           <div className="settings-row" style={{ gridTemplateColumns: '1fr' }}>
             <div className="field" style={{ maxWidth: 520 }}>
               <label htmlFor="token-name">Name</label>
-              <input id="token-name" className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Claude Desktop — Asha" />
+              <input id="token-name" className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Claude Code — Asha" />
               <span className="t-medium">Kind</span>
               <div className="chip-tabs">
                 <button type="button" className="chip-tab" aria-pressed={form.kind === 'personal'} disabled={!canPersonal} onClick={() => setForm({ ...form, kind: 'personal' })}>Personal — acts as you</button>
@@ -129,7 +129,7 @@ export function McpSettings() {
           </div>
         ))}
       </SectionCard>
-      <SectionCard title="Connect a client" hint="Paste this into the assistant’s MCP configuration. The token is shown once at creation.">
+      <SectionCard title="Connect a client" hint="Run the Claude Code command once to use AsyncUp in every project, or commit the .mcp.json to a repo and have each person export ASYNCUP_TOKEN. The token is shown once at creation.">
         <div className="settings-row" style={{ gridTemplateColumns: '1fr' }}>
           <div className="chip-tabs" role="tablist" aria-label="Client">
             {CLIENTS.map(([id, label]) => <button key={id} type="button" role="tab" className="chip-tab" aria-pressed={client === id} aria-selected={client === id} onClick={() => setClient(id)}>{label}</button>)}

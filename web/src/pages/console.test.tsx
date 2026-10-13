@@ -26,7 +26,7 @@ function settingsFixture(): Settings {
     signIn: { tokenSignIn: true, google: { clientId: '', clientSecret: { set: false }, on: false }, saml: { entityId: 'https://idp', ssoUrl: 'https://idp/sso', cert: { set: true }, adminAttribute: '', adminGroup: '', on: true } },
     tokens: { tick: { set: false }, export: { set: true }, scim: { set: false } },
     setup: { complete: true, chatConfigured: true, signInConfigured: true },
-    mcp: { enabled: false, defaultScopes: ['read'], endpoint: '/mcp', scopes: { read: 'Read things', 'blockers:write': 'Work blockers', submit: 'Submit answers', schedule: 'Days off' } },
+    mcp: { enabled: false, defaultScopes: ['read'], endpoint: '/mcp', scopes: { read: 'Read things', 'blockers:write': 'Work blockers', submit: 'Submit answers', schedule: 'Days off', manage: '' } },
   };
 }
 

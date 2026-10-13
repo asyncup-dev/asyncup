@@ -245,7 +245,7 @@ export const SpaceMembers = named('SpaceMembers', z.strictObject({ members: z.ar
 
 // --- the caller's own view
 
-const MyStandup = z.strictObject({
+export const MyStandup = named('MyStandup', z.strictObject({
   id,
   name: z.string(),
   schedule: z.strictObject({ promptTime: time, deadlineTime: time, timezone: z.string(), days: z.array(Weekday) }),
@@ -253,14 +253,16 @@ const MyStandup = z.strictObject({
   progress: z.strictObject({ submitted: count, expected: count }).nullable(),
   mandatory: z.boolean(),
   onVacation: z.boolean(),
-});
+}));
+
+export const LinkedMyStandups = named(
+  'LinkedMyStandups',
+  z.strictObject({ linked: z.literal(true), timezone: z.string().nullable(), chat: z.strictObject({ dmUrl: z.string().nullable() }), standups: z.array(MyStandup) }),
+);
 
 export const MyStandups = named(
   'MyStandups',
-  z.union([
-    z.strictObject({ linked: z.literal(false), standups: z.array(MyStandup).max(0) }),
-    z.strictObject({ linked: z.literal(true), timezone: z.string().nullable(), chat: z.strictObject({ dmUrl: z.string().nullable() }), standups: z.array(MyStandup) }),
-  ]),
+  z.union([z.strictObject({ linked: z.literal(false), standups: z.array(MyStandup).max(0) }), LinkedMyStandups]),
   '`linked` is false until the account is tied to a Google Chat identity.',
 );
 

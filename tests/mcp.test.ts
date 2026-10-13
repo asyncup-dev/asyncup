@@ -1,10 +1,10 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { newSession, sealSession } from '../src/auth/session.js';
 import { createServer } from '../src/server.js';
-import { makeStack, seedStandup, TENANT, withBlocker } from './helpers.js';
+import { ANSWERS, makeStack, seedStandup, TENANT, withBlocker } from './helpers.js';
 
 const SECRET = 'api-test-secret';
 const OPERATOR = 'dash-secret';
@@ -54,7 +54,10 @@ async function startServer(opts: { withoutService?: boolean; withoutSchedule?: b
   const call = async (client: Client, name: string, args: Record<string, unknown> = {}) => {
     const r = (await client.callTool({ name, arguments: args })) as any;
     const text = r.content[0].text as string;
-    return r.isError ? { error: text, json: null } : { error: null, json: JSON.parse(text) };
+    if (r.isError) return { error: text, json: null };
+    // Structured results must carry the same JSON as the text block older clients read.
+    expect(r.structuredContent).toEqual(JSON.parse(text));
+    return { error: null, json: r.structuredContent };
   };
   const raw = (headers: Record<string, string> = {}) =>
     fetch(`${url}/mcp`, {
@@ -81,7 +84,7 @@ const ALICE = { userName: 'users/alice', displayName: 'Alice' };
 /** Session names come from the cookie's sub, so token owners carry the lower-case form. */
 const ALICE_SESSION = { userName: 'users/alice', displayName: 'alice' };
 const BOB = { userName: 'users/bob', displayName: 'Bob' };
-const FULL = ['read', 'blockers:write', 'submit', 'schedule'];
+const FULL = ['read', 'blockers:write', 'submit', 'schedule', 'manage'];
 
 describe('mcp: endpoint gate', () => {
   it('is off by default and answers 503 until an admin enables it', async () => {
@@ -225,7 +228,11 @@ describe('mcp: tools', () => {
 
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: FULL })).secret);
     expect(((await alice.listTools()).tools.map((t) => t.name)).sort()).toEqual(
-      ['acknowledge_blocker', 'cancel_day_off', 'decide_time_off_request', 'get_insights', 'get_run', 'get_schedule', 'get_team', 'list_blockers', 'list_runs', 'list_standups', 'list_time_off_requests', 'resolve_blocker', 'set_days_off', 'set_working_days', 'submit_answers', 'update_blocker'].sort(),
+      [
+        'acknowledge_blocker', 'cancel_day_off', 'decide_time_off_request', 'get_insights', 'get_me', 'get_my_standups', 'get_run', 'get_schedule', 'get_standup', 'get_team',
+        'list_blockers', 'list_runs', 'list_standups', 'list_time_off_requests', 'nudge_standup', 'resolve_blocker', 'run_standup_now', 'set_days_off', 'set_working_days',
+        'skip_today', 'submit_answers', 'update_blocker', 'update_my_settings',
+      ].sort(),
     );
     const standups = (await call(alice, 'list_standups')).json.standups;
     expect(standups).toHaveLength(1);
@@ -247,7 +254,7 @@ describe('mcp: tools', () => {
     expect((await call(alice, 'list_standups')).json.standups[0].permissions.manage).toBe(true);
 
     const root = await connect((await mint(cookieFor('root', true), { name: 'r' })).secret);
-    expect((await root.listTools()).tools).toHaveLength(8);
+    expect((await root.listTools()).tools).toHaveLength(11);
     expect((await call(root, 'get_team')).json.people).toHaveLength(3);
   });
 
@@ -301,7 +308,7 @@ describe('mcp: tools', () => {
     const s = await seedStandup(repo);
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['submit'] })).secret);
     const dave = await connect((await mint(cookieFor('dave'), { name: 'd', scopes: ['submit'] })).secret);
-    expect((await alice.listTools()).tools.map((t) => t.name)).toEqual(['submit_answers']);
+    expect((await alice.listTools()).tools.map((t) => t.name)).toEqual(['submit_answers', 'skip_today']);
 
     expect((await call(alice, 'submit_answers', { standupId: s.id, answers: ['one'] })).error).toContain('asks 3 questions');
     const three = { standupId: s.id, answers: ['Shipped', 'Billing', 'none'] };
@@ -395,7 +402,7 @@ describe('schedule tools', () => {
     const root = await connect((await mint(cookieFor('root', true), { name: 'r', scopes: ['read', 'schedule'] })).secret);
     expect((await call(root, 'list_time_off_requests')).json.requests).toEqual([]);
     const service = await connect((await mint(null, { name: 'ci', kind: 'service', scopes: ['read', 'schedule'] })).secret);
-    expect((await call(service, 'get_schedule')).error).toContain('need a personal token');
+    expect((await call(service, 'get_schedule')).error).toContain('needs a personal token');
     expect((await call(service, 'get_schedule', { userName: 'users/alice' })).json.userName).toBe('users/alice');
   });
 
@@ -406,5 +413,99 @@ describe('schedule tools', () => {
     for (const [name, args] of [['get_schedule', {}], ['list_time_off_requests', {}], ['set_working_days', { workingDays: 'mon' }], ['set_days_off', { dates: ['2026-06-22'] }], ['cancel_day_off', { date: '2026-06-22' }], ['decide_time_off_request', { ids: [1], approve: true }]] as const) {
       expect((await call(alice, name, args as Record<string, unknown>)).error).toBe('Personal schedules are not available on this install.');
     }
+  });
+});
+
+describe('mcp: ready for Claude Code', () => {
+  it('refuses browser origins, which no MCP client sends', async () => {
+    const { raw, mint, cookieFor } = await startServer();
+    const t = await mint(cookieFor('root', true));
+    expect((await raw({ authorization: `Bearer ${t.secret}`, origin: 'https://evil.example' })).status).toBe(403);
+    expect((await raw({ authorization: `Bearer ${t.secret}` })).status).toBe(200);
+  });
+
+  it('describes every tool for the model: a title, all four hints and an output schema', async () => {
+    const { mint, cookieFor, connect } = await startServer();
+    const root = await connect((await mint(cookieFor('root', true), { name: 'r', scopes: FULL })).secret);
+    const tools = (await root.listTools()).tools;
+    expect(tools).toHaveLength(23);
+    for (const t of tools) {
+      expect(t.title).toBeTruthy();
+      expect(t.outputSchema?.type).toBe('object');
+      expect(Object.keys(t.annotations ?? {}).sort()).toEqual(['destructiveHint', 'idempotentHint', 'openWorldHint', 'readOnlyHint', 'title']);
+      // Every write may message people in Chat; reads never do.
+      expect(t.annotations!.openWorldHint).toBe(!t.annotations!.readOnlyHint);
+    }
+    const hints = Object.fromEntries(tools.map((t) => [t.name, t.annotations]));
+    expect(hints.list_standups).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
+    expect(hints.cancel_day_off).toMatchObject({ readOnlyHint: false, destructiveHint: true, idempotentHint: false });
+    expect(hints.nudge_standup).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false });
+  });
+
+  it('tells the model who it acts as and what that person can see', async () => {
+    const { mint, cookieFor, connect, call, repo, openRun, service } = await startServer();
+    const s = await seedStandup(repo);
+    await repo.addAdmin(s.id, BOB.userName, BOB.displayName);
+    const run = await openRun(s.id);
+    await service.submit(run.id, BOB.userName, BOB.displayName, ANSWERS);
+
+    const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['read'] })).secret);
+    expect((await call(alice, 'get_me')).json).toEqual({ kind: 'member', via: 'token', tenantId: TENANT, user: { userName: 'users/alice', email: '', name: 'alice' }, managedStandupIds: [], scopes: ['read'] });
+    const detail = (await call(alice, 'get_standup', { standupId: s.id })).json;
+    expect(detail.participants.map((x: any) => x.userName)).toEqual(['users/alice', 'users/bob', 'users/carol']);
+    expect(detail).toMatchObject({ admins: [BOB], permissions: { manage: false } });
+    expect((await call(alice, 'get_standup', { standupId: 999 })).error).toBe('No such standup.');
+    expect((await call(alice, 'get_my_standups')).json).toMatchObject({ linked: true, standups: [{ id: s.id, today: 'waiting', progress: { submitted: 1 } }] });
+
+    const ci = await connect((await mint(null, { name: 'ci', kind: 'service' })).secret);
+    expect((await call(ci, 'get_me')).json).toMatchObject({ kind: 'admin', user: null, scopes: ['read'] });
+    expect((await call(ci, 'get_my_standups')).error).toContain('needs a personal token');
+  });
+
+  it('lets the owner skip today and set their own timezone and vacation', async () => {
+    const { mint, cookieFor, connect, call, repo, openRun, service } = await startServer();
+    const s = await seedStandup(repo);
+    const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['submit', 'schedule'] })).secret);
+    expect((await call(alice, 'skip_today', { standupId: s.id })).error).toBe('Today’s run has not opened yet.');
+    const run = await openRun(s.id);
+    expect((await call(alice, 'skip_today', { standupId: s.id })).json).toEqual({ result: 'skipped', date: '2026-06-10' });
+    await service.submit(run.id, BOB.userName, BOB.displayName, ANSWERS);
+    const bob = await connect((await mint(cookieFor('bob'), { name: 'b', scopes: ['submit'] })).secret);
+    expect((await call(bob, 'skip_today', { standupId: s.id })).error).toContain('already answered');
+
+    expect((await call(alice, 'update_my_settings', { timezone: 'Europe/London' })).json).toEqual({ timezone: 'Europe/London', onVacation: false });
+    expect((await call(alice, 'update_my_settings', { timezone: 'Mars/Base' })).error).toBe('Invalid IANA timezone: Mars/Base');
+    expect((await call(alice, 'update_my_settings', { timezone: null, onVacation: true })).json).toEqual({ timezone: null, onVacation: true });
+  });
+
+  it('lets a standup’s managers start today’s run and nudge, and nobody else', async () => {
+    const { mint, cookieFor, connect, call, repo, clock, adapter } = await startServer();
+    const s = await seedStandup(repo);
+    await repo.addAdmin(s.id, BOB.userName, BOB.displayName);
+    clock.set('2026-06-10T08:00');
+    const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['manage'] })).secret);
+    const bob = await connect((await mint(cookieFor('bob'), { name: 'b', scopes: ['manage'] })).secret);
+    expect((await alice.listTools()).tools.map((t) => t.name)).toEqual(['run_standup_now', 'nudge_standup']);
+    expect((await call(alice, 'run_standup_now', { standupId: s.id })).error).toBe('Only admins and this standup’s managers can do that.');
+    expect((await call(bob, 'nudge_standup', { standupId: s.id })).error).toBe('There is no open run today — use run-now first.');
+    expect((await call(bob, 'run_standup_now', { standupId: s.id })).json).toEqual({ result: 'started' });
+    expect((await call(bob, 'run_standup_now', { standupId: s.id })).json).toEqual({ result: 'already_open' });
+    const before = adapter.dms.length;
+    const nudged = (await call(bob, 'nudge_standup', { standupId: s.id })).json.nudged;
+    expect(nudged.map((x: any) => x.userName)).toEqual(['users/alice', 'users/bob', 'users/carol']);
+    expect(adapter.dms.length - before).toBe(3);
+  });
+
+  it('refuses a blocker that disappears between the lookup and the change', async () => {
+    const { mint, cookieFor, connect, call, repo, openRun, service, blockers } = await startServer();
+    const s = await seedStandup(repo);
+    const run = await openRun(s.id);
+    await service.submit(run.id, ALICE.userName, ALICE.displayName, withBlocker('Waiting on API keys'));
+    const id = (await repo.listBlockers({ tenantId: TENANT, status: 'open', standupIds: [s.id] }))[0]!.id;
+    const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['blockers:write'] })).secret);
+    spyOn(blockers, 'addUpdate').mockResolvedValue('not_found');
+    spyOn(blockers, 'resolve').mockResolvedValue('not_found');
+    expect((await call(alice, 'update_blocker', { blockerId: id, text: 'still waiting' })).error).toBe('No such blocker.');
+    expect((await call(alice, 'resolve_blocker', { blockerId: id })).error).toBe('No such blocker.');
   });
 });

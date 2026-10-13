@@ -1,3 +1,4 @@
+import { memberStandups } from '../core/member.js';
 import { AWAY_LABEL, describeWorkingDays } from '../core/schedule.js';
 import type { RunParticipant } from '../core/types.js';
 import type { DateTime } from 'luxon';
@@ -5,7 +6,7 @@ import { runProgress } from '../core/progress.js';
 import { MOOD_SCORE, type Blocker, type Standup, type Submission } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
-import { findVisibleStandup, visibleStandups } from './shared.js';
+import { findVisibleStandup, standupDays, summarise, visibleStandups } from './shared.js';
 
 /**
  * Read models shared by the JSON API and the MCP tools, so both surfaces
@@ -53,7 +54,7 @@ export async function blockerView(repo: Repo, b: Blocker, standupName: string) {
     resolvedDate: b.resolvedDate,
     resolvedBy: b.resolvedBy,
     escalatedAt: b.escalatedAt,
-    status: b.resolvedDate ? 'resolved' : tags.some((t) => t.acknowledgedAt) ? 'acknowledged' : 'open',
+    status: (b.resolvedDate ? 'resolved' : tags.some((t) => t.acknowledgedAt) ? 'acknowledged' : 'open') as 'open' | 'acknowledged' | 'resolved',
     tags: tags.map((t) => ({ userName: t.userName, displayName: t.displayName, acknowledgedAt: t.acknowledgedAt })),
     updates: updates.map((u) => ({ userName: u.userName, displayName: u.displayName, text: u.text, at: u.createdAt })),
   };
@@ -143,6 +144,53 @@ export async function runView(repo: Repo, standup: Standup, date: string) {
     missing: progress.missingMandatory.map(person),
     submissions: submissions.map((s) => submissionView(standup, s)),
     teamMood: standup.moodAnonymous ? averageMood(submissions) : null,
+  };
+}
+
+/** One standup with its roster and admins. */
+export async function standupDetailView(repo: Repo, standup: Standup, now: DateTime, manage: boolean) {
+  return {
+    ...(await summarise(repo, standup, now, manage)),
+    participants: (await repo.listParticipants(standup.id)).map((x) => ({
+      userName: x.userName,
+      displayName: x.displayName,
+      mandatory: x.mandatory,
+      timezone: x.timezone,
+      onVacation: x.onVacation,
+    })),
+    admins: (await repo.listAdmins(standup.id)).map(person),
+  };
+}
+
+/** A person's standups with how far today has got, or `linked: false` before they have a Chat identity. */
+export async function myStandupsView(repo: Repo, userName: string | null, now: DateTime) {
+  return userName ? linkedStandupsView(repo, userName, now) : { linked: false as const, standups: [] };
+}
+
+/** The standups of a person with a Chat identity. */
+export async function linkedStandupsView(repo: Repo, userName: string, now: DateTime) {
+  const standups = [];
+  for (const m of await memberStandups(repo, userName, now)) {
+    // How far the team has got today, so the console can say "7 of 9 have posted".
+    const run = m.today ? await repo.getRun(m.standup.id, now.setZone(m.standup.timezone).toISODate()!) : null;
+    const progress = run ? runProgress(await repo.listRunParticipants(run.id), await repo.listSubmissions(run.id)) : null;
+    standups.push({
+      id: m.standup.id,
+      name: m.standup.name,
+      schedule: { promptTime: m.standup.promptTime, deadlineTime: m.standup.deadlineTime, timezone: m.standup.timezone, days: standupDays(m.standup) },
+      today: m.today,
+      progress: progress ? { submitted: progress.submitted, expected: progress.expected } : null,
+      mandatory: m.mandatory,
+      onVacation: m.onVacation,
+    });
+  }
+  const dmSpace = await repo.getDmSpace(userName);
+  return {
+    linked: true as const,
+    timezone: await repo.getUserTimezone(userName),
+    // Answers stay in Chat: the console deep-links to the bot's DM once one exists.
+    chat: { dmUrl: dmSpace ? `https://chat.google.com/dm/${dmSpace.replace(/^spaces\//, '')}` : null },
+    standups,
   };
 }
 

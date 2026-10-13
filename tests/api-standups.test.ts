@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { EventRouter } from '../src/adapters/gchat/events.js';
 import { newSession, sealSession } from '../src/auth/session.js';
 import { createServer } from '../src/server.js';
@@ -242,6 +242,17 @@ describe('api: blockers', () => {
     await t.blockers.tag(s, aliceB!.id, [{ userName: 'users/bob', displayName: 'Bob' }], { userName: 'users/alice', displayName: 'Alice' });
     return { s, aliceB: aliceB!, bobB: bobB! };
   }
+
+  it('answers 404 when a blocker disappears between the lookup and the change', async () => {
+    const t = await startServer();
+    const { aliceB } = await seedBlockers(t);
+    spyOn(t.blockers, 'addUpdate').mockResolvedValue('not_found');
+    spyOn(t.blockers, 'resolve').mockResolvedValue('not_found');
+    const alice = t.cookieFor('alice', 'Alice');
+    const update = await t.as(alice, `/blockers/${aliceB.id}/update`, { method: 'POST', body: JSON.stringify({ text: 'still waiting' }) });
+    expect(update.status).toBe(404);
+    expect((await t.as(alice, `/blockers/${aliceB.id}/resolve`, { method: 'POST' })).status).toBe(404);
+  });
 
   it('lists blockers across the tenant with status, standup and owner filters', async () => {
     const t = await startServer();

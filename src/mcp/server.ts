@@ -1,13 +1,15 @@
 import { createMcpHandler, type AuthInfo } from '@modelcontextprotocol/server';
-import { toNodeHandler } from '@modelcontextprotocol/node';
+import { originValidation, toNodeHandler } from '@modelcontextprotocol/node';
 import type { Express, Request, Response } from 'express';
 import type { DateTime } from 'luxon';
 import type { Principal } from '../api/principal.js';
+import type { ChatAdapter } from '../core/adapter.js';
 import type { BlockerService } from '../core/blocker-service.js';
 import { bearerToken } from '../core/http.js';
 import type { SettingsService } from '../core/settings.js';
 import type { StandupService } from '../core/standup-service.js';
 import type { ScheduleService } from '../core/schedule.js';
+import type { Scheduler } from '../core/scheduler.js';
 import type { McpToken } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import { authenticateMcpToken } from './tokens.js';
@@ -19,6 +21,8 @@ export interface McpDeps {
   blockers: BlockerService;
   service: StandupService | null;
   schedule: ScheduleService | null;
+  scheduler: Scheduler;
+  adapter: ChatAdapter;
   tenantId: string;
   version: string;
   now: () => DateTime;
@@ -45,8 +49,11 @@ export function registerMcp(app: Express, deps: McpDeps): void {
     { legacy: 'stateless' },
   );
   const node = toNodeHandler(handler);
+  // MCP clients are not browsers; a request carrying an Origin header is a web page, possibly via DNS rebinding.
+  const noBrowsers = originValidation([]);
 
   app.all('/mcp', async (req: Request, res: Response) => {
+    if (!noBrowsers(req, res)) return;
     if (!(await deps.settings.get()).mcpEnabled) {
       res.status(503).json({ error: { code: 'mcp_disabled', message: 'The MCP server is switched off. An admin can enable it under Settings › MCP server.' } });
       return;

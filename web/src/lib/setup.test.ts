@@ -8,7 +8,7 @@ const settings = (over: Partial<Settings['chat']> = {}, setup: Partial<Settings[
   signIn: { tokenSignIn: true, google: { clientId: '', clientSecret: { set: false }, on: false }, saml: { entityId: '', ssoUrl: '', cert: { set: false }, adminAttribute: '', adminGroup: '', on: false } },
   tokens: { tick: { set: false }, export: { set: false }, scim: { set: false } },
   setup: { complete: false, chatConfigured: false, signInConfigured: false, ...setup },
-  mcp: { enabled: false, defaultScopes: ['read'], endpoint: '/mcp', scopes: { read: '', 'blockers:write': '', submit: '', schedule: '' } },
+  mcp: { enabled: false, defaultScopes: ['read'], endpoint: '/mcp', scopes: { read: '', 'blockers:write': '', submit: '', schedule: '', manage: '' } },
 });
 const progress = (s: Settings, lastEventAt: string | null = null, standups = 0): SetupProgress => ({
   settings: s,
