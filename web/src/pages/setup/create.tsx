@@ -129,6 +129,8 @@ export function CreateStandupPage() {
     } else if ('mandatory' in c) update({ mandatory: c.mandatory });
     else update({ week: c.week === 'reset' ? null : c.week });
   };
+  // A space that already has a standup was usually set up with `setup` in Chat; point at it before a duplicate is made.
+  const taken = spaces.data?.spaces.find((s) => s.name === form.spaceName)?.standups ?? [];
   const ready = form.name.trim() && form.spaceName && form.days.length > 0 && form.questions.some((q) => q.trim());
 
   return (
@@ -161,6 +163,11 @@ export function CreateStandupPage() {
                 ))}
               </select>
               <div className="t-caption">{spaces.isError ? `Could not list spaces: ${spaces.error.message}` : 'Spaces the bot has been added to'}</div>
+              {taken.map((s) => (
+                <div key={s.id} className="notice t-small" role="status">
+                  This space already has <strong>{s.name}</strong>. <Link to="/standups/$id/settings" params={{ id: String(s.id) }}>Set it up instead</Link>, or carry on to create a second one.
+                </div>
+              ))}
             </div>
           </div>
         </section>

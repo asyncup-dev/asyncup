@@ -335,6 +335,19 @@ describe('setup: sign-in, template, create and live', () => {
     expect(screen.getByRole('link', { name: 'Go to the console' })).toHaveAttribute('href', '/app/standups');
   });
 
+  it('leads with standups that already exist, so nobody makes a duplicate by accident', async () => {
+    const { state } = fakeServer();
+    state.standups = [FULL_STANDUP];
+    renderApp('/setup/template');
+    expect(await screen.findByRole('heading', { name: 'Your standups' })).toBeInTheDocument();
+    const existing = screen.getByRole('region', { name: 'Your standups' });
+    expect(within(existing).getByText('You already have a standup')).toBeInTheDocument();
+    expect(within(existing).getByText('Engineering daily')).toBeInTheDocument();
+    expect(await within(existing).findByText('Platform HQ · 3 people')).toBeInTheDocument();
+    expect(within(existing).getByRole('link', { name: 'Set up people' })).toHaveAttribute('href', '/app/standups/7/settings');
+    expect(await screen.findByRole('link', { name: 'Create another with Daily standup' })).toHaveClass('btn');
+  });
+
   it('reports member lookup failures and create errors, and handles the blank template', async () => {
     const { state } = fakeServer();
     renderApp('/setup/create');
@@ -343,6 +356,10 @@ describe('setup: sign-in, template, create and live', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('');
     await user.selectOptions(screen.getByLabelText('Post in space'), 'spaces/busy');
     expect(await screen.findByText(/Could not list members: Google Chat did not answer: quota/)).toBeInTheDocument();
+    // the space already has a standup: point at it before a duplicate is made
+    const taken = screen.getByRole('status');
+    expect(taken).toHaveTextContent('This space already has Old.');
+    expect(within(taken).getByRole('link', { name: 'Set it up instead' })).toHaveAttribute('href', '/app/standups/1/settings');
     await user.type(screen.getByLabelText('Name'), 'Old');
     state.posted.length = 0;
     vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
