@@ -150,7 +150,7 @@ describe('api: runs', () => {
     let today = await (await op(`/standups/${s.id}/runs/today`)).json() as any;
     expect(today.waiting).toEqual([{ userName: 'users/bob', displayName: 'Bob', mandatory: true, remindedAt: null }]);
 
-    await service.skipToday(run.id, 'users/bob');
+    await service.skipToday(run.id, 'users/bob', 'Out today');
     today = await (await op(`/standups/${s.id}/runs/today`)).json() as any;
     expect(today.status).toBe('open');
     expect(today.expected).toBe(1);
@@ -410,23 +410,26 @@ describe('api: member', () => {
     const s = await seedStandup(repo);
     const alice = cookieFor('alice');
     const skip = (who: string, body: unknown) => as(who, '/me/skip', { method: 'POST', body: json(body) });
-    expect(((await (await op('/me/skip', { method: 'POST', body: json({ standupId: s.id }) })).json()) as any).error.code).toBe('not_linked');
-    expect((await skip(alice, { standupId: 999 })).status).toBe(404);
-    let res = await skip(alice, { standupId: s.id });
+    expect(((await (await op('/me/skip', { method: 'POST', body: json({ standupId: s.id, reason: 'Dentist' }) })).json()) as any).error.code).toBe('not_linked');
+    expect((await skip(alice, { standupId: 999, reason: 'Dentist' })).status).toBe(404);
+    let res = await skip(alice, { standupId: s.id, reason: 'Dentist' });
     expect(res.status).toBe(409);
     expect(((await res.json()) as any).error.message).toContain('not opened yet');
 
     const run = await openRun(s.id);
-    expect((await skip(cookieFor('dave'), { standupId: s.id })).status).toBe(404);
-    expect(await (await skip(alice, { standupId: s.id })).json()).toEqual({ result: 'skipped', date: '2026-06-10' });
-    expect((await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')!.skippedAt).not.toBeNull();
+    res = await skip(alice, { standupId: s.id, reason: ' ' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as any).error).toMatchObject({ code: 'invalid', field: 'reason', message: 'Say in a line why you are skipping today.' });
+    expect((await skip(cookieFor('dave'), { standupId: s.id, reason: 'Dentist' })).status).toBe(404);
+    expect(await (await skip(alice, { standupId: s.id, reason: 'Dentist' })).json()).toEqual({ result: 'skipped', date: '2026-06-10' });
+    expect((await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')!).toMatchObject({ awayReason: 'skipped', skipNote: 'Dentist' });
     await service.submit(run.id, 'users/bob', 'Bob', ANSWERS);
-    res = await skip(cookieFor('bob'), { standupId: s.id });
+    res = await skip(cookieFor('bob'), { standupId: s.id, reason: 'Dentist' });
     expect(res.status).toBe(409);
     expect(((await res.json()) as any).error.code).toBe('already_submitted');
     // carol is optional and never prompted differently — she can skip too; then the run closes.
-    expect((await skip(cookieFor('carol'), { standupId: s.id })).status).toBe(200);
+    expect((await skip(cookieFor('carol'), { standupId: s.id, reason: 'Dentist' })).status).toBe(200);
     await repo.closeRun(run.id);
-    expect(((await (await skip(alice, { standupId: s.id })).json()) as any).error.message).toContain('already closed');
+    expect(((await (await skip(alice, { standupId: s.id, reason: 'Dentist' })).json()) as any).error.message).toContain('already closed');
   });
 });

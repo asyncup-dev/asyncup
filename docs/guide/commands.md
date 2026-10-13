@@ -105,8 +105,11 @@ Anyone can DM the bot directly:
 
 - **Editing:** re-open *Fill standup* before the deadline to edit — the posted
   card updates in place and is marked *edited*.
-- **Skip today:** the prompt card has a 🏖️ *Skip today* button; skipped people
-  are listed as away, not missing.
+- **Skip today:** the prompt card has a 🏖️ *Skip today* button. It asks for a
+  one-line reason, posts it in the day's thread, and lists you as away, not
+  missing. *Undo skip* removes that thread reply.
+- **Every field is required:** each question and the mood must be filled in.
+  Answer the blockers question with "none" when there are none.
 - **Pre-fill:** the "yesterday" answer is pre-filled from your previous
   "today" answer.
 - **Late submissions** after the deadline still post, flagged *late*; the

@@ -18,10 +18,11 @@ describe('EventRouter action parameters', () => {
 
     const reply: any = await router.handle({
       type: 'CARD_CLICKED',
-      common: { invokedFunction: 'skipToday', parameters: [{ key: 'runId', value: String(run.id) }] },
+      isDialogEvent: true,
+      common: { invokedFunction: 'skipToday', parameters: [{ key: 'runId', value: String(run.id) }], formInputs: { reason: { stringInputs: { value: ['Dentist'] } } } },
       user: ALICE,
     });
-    expect(reply.cardsV2[0].card.sections[0].widgets[0].textParagraph.text).toContain('You skipped today');
+    expect(reply.actionResponse.dialogAction.actionStatus.statusCode).toBe('OK');
     expect(
       (await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')?.skippedAt,
     ).not.toBeNull();

@@ -57,13 +57,13 @@ describe('EventRouter', () => {
     const submit = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets.at(-1).buttonList.buttons[0];
     expect(submit.onClick.action.function).toBe(url);
     expect(submit.onClick.action.parameters[0]).toEqual({ key: 'fn', value: 'submitStandup' });
-    const skipped: any = await router.handle({
+    const skip: any = await router.handle({
       type: 'CARD_CLICKED',
-      common: { invokedFunction: url, parameters: { fn: 'skipToday', runId: String(run.id) } },
+      common: { invokedFunction: url, parameters: { fn: 'openSkipDialog', runId: String(run.id) } },
       user: { name: 'users/alice', displayName: 'Alice' },
       space: { name: 'spaces/dm-alice', spaceType: 'DIRECT_MESSAGE' },
     });
-    expect(skipped.cardsV2[0].card.sections[0].widgets[0].textParagraph.text).toContain('You skipped today');
+    expect(skip.actionResponse.dialogAction.dialog.body.sections[0].widgets[1].buttonList.buttons[0].onClick.action.parameters[0]).toEqual({ key: 'fn', value: 'skipToday' });
   });
 
   it('routes space messages to the command handler with sender and mentions', async () => {
@@ -219,10 +219,11 @@ describe('EventRouter', () => {
     );
     expect(badMood.actionResponse.dialogAction.actionStatus.statusCode).toBe('INVALID_ARGUMENT');
 
-    // blockers (q2) may be empty; defaults to "none"
-    const ok: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', mood: 'good' }));
+    // blockers must be answered too, with "none" when there are none
+    const noBlockers: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', q2: ' ', mood: 'good' }));
+    expect(noBlockers.actionResponse.dialogAction.actionStatus.userFacingMessage).toBe('Please answer: "Any blockers?" (write "none" if you have no blockers)');
+    const ok: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', q2: 'none', mood: 'good' }));
     expect(ok.actionResponse.dialogAction.actionStatus.statusCode).toBe('OK');
-    expect((await repo.getSubmission(run.id, 'users/alice'))!.answers[2]!.answer).toBe('none');
   });
 
   it('skips mood validation when the mood question is disabled', async () => {
@@ -231,23 +232,23 @@ describe('EventRouter', () => {
     await repo.updateStandup(standup.id, { moodEnabled: false });
     const run = await repo.createRun(standup.id, '2026-06-10', 'key');
 
-    const reply: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y' }));
+    const reply: any = await router.handle(dialogSubmitEvent(run.id, { q0: 'x', q1: 'y', q2: 'none' }));
     expect(reply.actionResponse.dialogAction.actionStatus.statusCode).toBe('OK');
     expect((await repo.getSubmission(run.id, 'users/alice'))!.mood).toBeNull();
   });
 
-  it('handles the skip button with a card update', async () => {
+  it('skips from the reason dialog', async () => {
     const { router, repo } = await makeRouter();
     const standup = await seedStandup(repo);
     const run = await repo.createRun(standup.id, '2026-06-10', 'key');
 
     const reply: any = await router.handle({
       type: 'CARD_CLICKED',
-      common: { invokedFunction: 'skipToday', parameters: { runId: String(run.id) } },
+      isDialogEvent: true,
+      common: { invokedFunction: 'skipToday', parameters: { runId: String(run.id) }, formInputs: { reason: { stringInputs: { value: ['Dentist'] } } } },
       user: { name: 'users/alice', displayName: 'Alice' },
     });
-    expect(reply.actionResponse.type).toBe('UPDATE_MESSAGE');
-    expect(reply.cardsV2[0].card.sections[0].widgets[0].textParagraph.text).toContain('You skipped today');
+    expect(reply.actionResponse.dialogAction.actionStatus.statusCode).toBe('OK');
     expect(
       (await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')?.skippedAt,
     ).not.toBeNull();

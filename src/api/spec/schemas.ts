@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MCP_SCOPES } from '../../core/mcp-scopes.js';
 import { AWAY_REASONS, MOODS, OVERRIDE_STATUSES, TIME_OFF_POLICIES, WEEKDAYS } from '../../core/types.js';
+import { LIMITS } from '../../core/validation.js';
 
 /**
  * The JSON API's request and response shapes. They generate the OpenAPI
@@ -140,7 +141,7 @@ export const TodayRun = named(
     expected: count,
     submitted: z.array(z.strictObject({ userName: z.string(), displayName: z.string(), submittedAt: timestamp, late: z.boolean(), mood: Mood.nullable() })),
     waiting: z.array(z.strictObject({ userName: z.string(), displayName: z.string(), mandatory: z.boolean(), remindedAt: timestamp.nullable() })),
-    away: z.array(z.strictObject({ userName: z.string(), displayName: z.string(), reason: AwayReason, reasonLabel: z.string() })),
+    away: z.array(z.strictObject({ userName: z.string(), displayName: z.string(), reason: AwayReason, reasonLabel: z.string(), note: z.string().nullable() })),
     teamMood: z.number().nullable(),
   }),
   'Today’s run for polling. `status` is null before the run opens; `teamMood` is only set when moods are anonymous.',
@@ -481,7 +482,7 @@ export const CreateStandup = named(
 export const AddParticipant = named('AddParticipant', z.strictObject({ userName: z.string().startsWith('users/'), displayName: text.min(1), mandatory: z.boolean().optional() }));
 export const UpdateParticipant = named('UpdateParticipant', z.strictObject({ mandatory: z.boolean(), onVacation: z.boolean(), admin: z.boolean() }).partial());
 export const BlockerUpdateBody = named('BlockerUpdateBody', z.strictObject({ text: text.min(1) }));
-export const SkipBody = named('SkipBody', z.strictObject({ standupId: id }));
+export const SkipBody = named('SkipBody', z.strictObject({ standupId: id, reason: z.string().min(1).max(LIMITS.skipNoteMax) }), 'The reason is one line, posted in the day’s thread.');
 export const MyPatch = named('MyPatch', z.strictObject({ timezone: z.string().nullable(), onVacation: z.boolean() }).partial(), 'A null or empty timezone follows the standups’ zones again.');
 export const WorkingDaysBody = named('WorkingDaysBody', z.strictObject({ workingDays: z.string().optional() }), '"mon-thu", "mon,wed,fri", "adhoc", or "reset" (the default) to follow the standup.');
 export const OverrideBody = named(

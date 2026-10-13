@@ -183,8 +183,12 @@ At the standup's prompt time (in **your** timezone) AsyncUp DMs you a card:
 3. Change of plans? Reopen **Fill standup** before the deadline — your
    posted card updates in place, marked *edited*. After the deadline a
    first submission still posts, marked *late*.
-4. Not today? Tap **🏖️ Skip today** — you're listed as away, never as
-   missing.
+4. Not today? Tap **🏖️ Skip today** and say why in one line. The reason
+   goes in the day's thread, and you're listed as away, never as missing.
+
+Every question and the mood are required; answer the blockers question with
+"none" when there are none. Any other blockers answer opens a blocker, and
+you get a card for it to tag people, add updates or resolve it.
 
 ### 3.2 DM commands (message the bot directly)
 

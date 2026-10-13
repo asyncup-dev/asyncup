@@ -254,7 +254,7 @@ describe('CommandHandler', () => {
     const standup = (await repo.listStandupsBySpace(TENANT, SPACE))[0]!;
     const run = (await repo.getRun(standup.id, '2026-06-10'))!;
     await service.submit(run.id, ALICE.userName, ALICE.displayName, ANSWERS);
-    await service.skipToday(run.id, BOB.userName);
+    await service.skipToday(run.id, BOB.userName, 'Out today');
 
     const status = await commands.handle(ctx('status'));
     expect(status).toContain('1/1 submitted');

@@ -100,11 +100,11 @@ describe('StandupService', () => {
     const standup = await seedStandup(repo);
     const run = await repo.createRun(standup.id, '2026-06-10', 'key');
 
-    expect(await service.skipToday(run.id, 'users/alice')).toBe('skipped');
+    expect(await service.skipToday(run.id, 'users/alice', 'Out today')).toBe('skipped');
     expect(
       (await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')?.skippedAt,
     ).not.toBeNull();
-    expect(await service.skipToday(999, 'users/alice')).toBe('not_found');
+    expect(await service.skipToday(999, 'users/alice', 'Out today')).toBe('not_found');
   });
 
   it('prefills yesterday from the previous today, and full answers when editing', async () => {
@@ -138,7 +138,7 @@ describe('StandupService', () => {
 
     await service.submit(run.id, 'users/alice', 'Alice', withBlocker('Stuck on infra'));
     await service.submit(run.id, 'users/carol', 'Carol', ANSWERS); // optional
-    await service.skipToday(run.id, 'users/bob');
+    await service.skipToday(run.id, 'users/bob', 'Out today');
 
     const summary = await service.buildSummary(run.id);
     expect(summary.mandatoryTotal).toBe(1); // bob skipped + dave on vacation excluded

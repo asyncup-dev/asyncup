@@ -14,6 +14,7 @@ import {
   submissionMessage,
   summaryText,
   threadParentText,
+  skipText,
 } from './cards.js';
 
 export type ChatAuth = InstanceType<typeof chatAuth.GoogleAuth>;
@@ -72,6 +73,14 @@ export class GoogleChatAdapter implements ChatAdapter {
 
   async postThreadParent(standup: Standup, run: Run): Promise<void> {
     await this.postInThread(standup.spaceName, run.threadKey, { text: threadParentText(standup, run) });
+  }
+
+  async postSkip(standup: Standup, run: Run, displayName: string, note: string): Promise<string | null> {
+    return this.postInThread(standup.spaceName, run.threadKey, { text: skipText(displayName, note) });
+  }
+
+  async deleteMessage(messageName: string): Promise<void> {
+    await (await this.getClient()).spaces.messages.delete({ name: messageName });
   }
 
   async postSubmission(standup: Standup, run: Run, submission: Submission): Promise<string | null> {

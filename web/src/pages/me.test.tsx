@@ -57,9 +57,16 @@ describe('member console', () => {
     expect(screen.getByText('Your recent answers: mostly 🙂')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'View all' })).not.toBeInTheDocument();
 
+    // a skip needs a one-line reason, and can be called off
     await user.click(screen.getByRole('button', { name: 'Skip today' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Skipped today’s Engineering');
-    expect(patches).toContainEqual({ standupId: 1 });
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByLabelText('Why are you skipping today?')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Skip today' }));
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeDisabled();
+    await user.type(screen.getByLabelText('Why are you skipping today?'), '  Dentist ');
+    await user.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Skipped today’s Engineering. Your team can see why in today’s thread.');
+    expect(patches).toContainEqual({ standupId: 1, reason: 'Dentist' });
 
     await user.selectOptions(screen.getByLabelText('My timezone'), 'UTC');
     await waitFor(() => expect(patches).toContainEqual({ timezone: 'UTC' }));
@@ -97,6 +104,8 @@ describe('member console', () => {
     await user.selectOptions(await screen.findByLabelText('My timezone'), 'UTC');
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid IANA timezone');
     await user.click(screen.getByRole('button', { name: 'Skip today' }));
+    await user.type(screen.getByLabelText('Why are you skipping today?'), 'Ill');
+    await user.click(screen.getByRole('button', { name: 'Skip' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('You already answered today');
 
     vi.unstubAllGlobals();

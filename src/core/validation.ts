@@ -17,7 +17,16 @@ export const LIMITS = {
   /** Max length for questions, poll questions and poll options. */
   textMax: 200,
   exportDaysMax: 365,
+  skipNoteMax: 150,
 } as const;
+
+/** A skip reason as one trimmed line, or an error message. */
+export function cleanSkipNote(raw: unknown): { note: string } | { error: string } {
+  const note = String(raw ?? '').replace(/\s+/g, ' ').trim();
+  if (!note) return { error: 'Say in a line why you are skipping today.' };
+  if (note.length > LIMITS.skipNoteMax) return { error: `Keep the reason to ${LIMITS.skipNoteMax} characters.` };
+  return { note };
+}
 
 export function isValidTime(value: string): boolean {
   return TIME_RE.test(value);

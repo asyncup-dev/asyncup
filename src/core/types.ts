@@ -196,6 +196,10 @@ export interface RunParticipant {
   promptedAt: string | null;
   remindedAt: string | null;
   skippedAt: string | null;
+  /** Why they skipped, as they put it; null on older runs. */
+  skipNote: string | null;
+  /** The thread reply that announced the skip, removed on undo. */
+  skipMessage: string | null;
 }
 
 export interface Answer {

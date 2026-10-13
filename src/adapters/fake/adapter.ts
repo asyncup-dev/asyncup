@@ -15,7 +15,7 @@ interface SentDm {
 }
 
 interface PostedMessage {
-  kind: 'parent' | 'submission' | 'summary' | 'update' | 'text' | 'poll';
+  kind: 'parent' | 'submission' | 'summary' | 'update' | 'text' | 'poll' | 'skip';
   spaceName: string;
   threadKey?: string;
   messageName?: string;
@@ -97,6 +97,20 @@ export class FakeAdapter implements ChatAdapter {
       `Summary → ${standup.spaceName} [${run.threadKey}]: ${summary.mandatorySubmitted}/${summary.mandatoryTotal}` +
         (summary.missingMandatory.length ? ` missing: ${summary.missingMandatory.join(', ')}` : ''),
     );
+  }
+
+  async postSkip(standup: Standup, run: Run, displayName: string, note: string): Promise<string | null> {
+    const messageName = `messages/fake-${++this.messageCounter}`;
+    this.posts.push({ kind: 'skip', spaceName: standup.spaceName, threadKey: run.threadKey, messageName, text: `${displayName}: ${note}` });
+    this.log?.(`Skip by ${displayName} → ${standup.spaceName} [${run.threadKey}]: ${note}`);
+    return messageName;
+  }
+
+  /** Message names removed with deleteMessage, oldest first. */
+  deleted: string[] = [];
+
+  async deleteMessage(messageName: string): Promise<void> {
+    this.deleted.push(messageName);
   }
 
   async postText(spaceName: string, text: string, threadKey?: string): Promise<void> {

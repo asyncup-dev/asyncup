@@ -121,7 +121,7 @@ Anyone who can see the standup.
 | Path | Returns |
 | --- | --- |
 | `GET /standups/:id/runs?limit=14` | Recent runs with `submitted`, `expected`, `missing` |
-| `GET /standups/:id/runs/today` | Shaped for polling: `status`, `submitted[]` (with `submittedAt`, `late`, `mood`), `waiting[]`, `away[]` (`skipped` or `vacation`), `teamMood` when moods are anonymous |
+| `GET /standups/:id/runs/today` | Shaped for polling: `status`, `submitted[]` (with `submittedAt`, `late`, `mood`), `waiting[]`, `away[]` (with `reason`, and `note` holding a skip's reason), `teamMood` when moods are anonymous |
 | `GET /standups/:id/runs/:date` | One run with full submissions and answers |
 | `GET /standups/:id/insights?weeks=8` | Weekly participation, mood and blocker series |
 
@@ -159,7 +159,7 @@ Schedules of others — admins, and managers of a standup the person is on:
 | `PATCH` | `/me/schedule` | `{ workingDays: "mon-thu" \| "adhoc" \| "reset" }` — the same words the DM `days` command takes; `400 invalid` otherwise |
 | `POST` | `/me/overrides` | `{ date }`, `{ dates: [] }` or `{ from, to }` (ISO, ≤ 31 days), `working?: boolean`, `reason?` — a day off or an extra working day; `403 refused` when the standup's time-off policy says so, with the reason |
 | `DELETE` | `/me/overrides/:date` | Withdraw an entry |
-| `POST` | `/me/skip` | `{ standupId }` — skip today's run, as the DM `skip` command does; `409 no_open_run` before it opens or after it closes, `409 already_submitted` once answered |
+| `POST` | `/me/skip` | `{ standupId, reason }` — skip today's run with a one-line reason (up to 150 characters), posted in the day's thread; `400 invalid` on `reason` when it is missing or too long, `409 no_open_run` before it opens or after it closes, `409 already_submitted` once answered |
 
 ### Workspace settings
 

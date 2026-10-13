@@ -41,7 +41,7 @@ describe('cards', () => {
     const json = JSON.stringify(promptMessage(standup, run));
     expect(json).toContain('"openStandupDialog"');
     expect(json).toContain('"OPEN_DIALOG"');
-    expect(json).toContain('"skipToday"');
+    expect(json).toContain('"openSkipDialog"');
     expect(json).toContain('{"key":"runId","value":"7"}');
   });
 
@@ -56,9 +56,11 @@ describe('cards', () => {
         { key: 'runId', value: '7' },
       ],
     });
-    expect(buttons[1].onClick.action).toEqual({ function: url, parameters: [{ key: 'fn', value: 'skipToday' }, { key: 'runId', value: '7' }] });
+    expect(buttons[1].onClick.action).toEqual({ function: url, interaction: 'OPEN_DIALOG', parameters: [{ key: 'fn', value: 'openSkipDialog' }, { key: 'runId', value: '7' }] });
     const submit = (standupDialog(7, QUESTIONS, false, [], url) as any).actionResponse.dialogAction.dialog.body.sections[0].widgets.at(-1).buttonList.buttons[0];
-    expect(submit.onClick.action).toEqual({ function: url, parameters: [{ key: 'fn', value: 'submitStandup' }, { key: 'runId', value: '7' }] });
+    expect(submit.onClick.action).toEqual({ function: url, parameters: [{ key: 'fn', value: 'submitStandup' }, { key: 'runId', value: '7' }], requiredWidgets: ['q0', 'q1', 'q2'] });
+    const withMood = (standupDialog(7, QUESTIONS, true, [], url) as any).actionResponse.dialogAction.dialog.body.sections[0].widgets.at(-1).buttonList.buttons[0];
+    expect(withMood.onClick.action.requiredWidgets).toEqual(['q0', 'q1', 'q2', 'mood']);
   });
 
   it('dialog is built from the question list with prefill values', () => {

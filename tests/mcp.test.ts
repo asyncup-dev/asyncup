@@ -311,7 +311,10 @@ describe('mcp: tools', () => {
     expect((await alice.listTools()).tools.map((t) => t.name)).toEqual(['submit_answers', 'skip_today']);
 
     expect((await call(alice, 'submit_answers', { standupId: s.id, answers: ['one'] })).error).toContain('asks 3 questions');
-    const three = { standupId: s.id, answers: ['Shipped', 'Billing', 'none'] };
+    const three = { standupId: s.id, answers: ['Shipped', 'Billing', 'none'], mood: 'good' };
+    // every answer and the mood are required, as in the Chat form
+    expect((await call(alice, 'submit_answers', { ...three, mood: null })).error).toBe('This standup asks for a mood: one of great, good, okay, meh, struggling.');
+    expect((await call(alice, 'submit_answers', { ...three, answers: ['Shipped', 'Billing', ' '] })).error).toBeDefined();
     expect((await call(alice, 'submit_answers', three)).error).toContain('not opened yet');
     await openRun(s.id);
     expect((await call(dave, 'submit_answers', three)).error).toBe('No such standup.');
@@ -466,12 +469,12 @@ describe('mcp: ready for Claude Code', () => {
     const { mint, cookieFor, connect, call, repo, openRun, service } = await startServer();
     const s = await seedStandup(repo);
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['submit', 'schedule'] })).secret);
-    expect((await call(alice, 'skip_today', { standupId: s.id })).error).toBe('Today’s run has not opened yet.');
+    expect((await call(alice, 'skip_today', { standupId: s.id, reason: 'Dentist' })).error).toBe('Today’s run has not opened yet.');
     const run = await openRun(s.id);
-    expect((await call(alice, 'skip_today', { standupId: s.id })).json).toEqual({ result: 'skipped', date: '2026-06-10' });
+    expect((await call(alice, 'skip_today', { standupId: s.id, reason: 'Dentist' })).json).toEqual({ result: 'skipped', date: '2026-06-10' });
     await service.submit(run.id, BOB.userName, BOB.displayName, ANSWERS);
     const bob = await connect((await mint(cookieFor('bob'), { name: 'b', scopes: ['submit'] })).secret);
-    expect((await call(bob, 'skip_today', { standupId: s.id })).error).toContain('already answered');
+    expect((await call(bob, 'skip_today', { standupId: s.id, reason: 'Dentist' })).error).toContain('already answered');
 
     expect((await call(alice, 'update_my_settings', { timezone: 'Europe/London' })).json).toEqual({ timezone: 'Europe/London', onVacation: false });
     expect((await call(alice, 'update_my_settings', { timezone: 'Mars/Base' })).error).toBe('Invalid IANA timezone: Mars/Base');

@@ -6,6 +6,7 @@ import type { PollService } from '../../core/poll-service.js';
 import type { StandupService } from '../../core/standup-service.js';
 import { describeDates, parseDateSpec, type ScheduleService } from '../../core/schedule.js';
 import type { Repo } from '../../db/repo.js';
+import { cleanSkipNote } from '../../core/validation.js';
 import {
   isBlockerQuestion,
   MOODS,
@@ -26,6 +27,8 @@ import {
   RESOLVE_BLOCKER_FN,
   SKIP_TODAY_FN,
   UNSKIP_FN,
+  OPEN_SKIP_FN,
+  skipDialog,
   OPEN_TAG_FN,
   SUBMIT_TAG_FN,
   promptMessage,
@@ -225,6 +228,8 @@ export class EventRouter {
       return this.onDialogSubmit(event, runId, user);
     }
 
+    if (fn === OPEN_SKIP_FN) return skipDialog(runId, await this.endpoint());
+
     if (fn === SKIP_TODAY_FN || fn === UNSKIP_FN) {
       const run = Number.isInteger(runId) ? await this.repo.getRunById(runId) : null;
       if (!run) return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: 'This standup prompt is no longer valid.' };
@@ -235,13 +240,14 @@ export class EventRouter {
         if (result === 'closed') return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: `Today's ${standup.name} has closed, so the skip stays.` };
         return card({ kind: 'open' })();
       }
-      const result = await this.service.skipToday(runId, user.userName);
-      if (result === 'already_submitted') {
-        const submission = (await this.repo.getSubmission(run.id, user.userName))!;
-        return card({ kind: 'submitted', at: submission.submittedAt, late: submission.late })();
-      }
-      if (result === 'not_found') return { actionResponse: { type: 'UPDATE_MESSAGE' }, text: 'This standup prompt is no longer valid.' };
-      return card({ kind: 'skipped' })();
+      // Cards sent before skips needed a reason skip straight from the button; redraw them so the next click asks why.
+      if (!event.isDialogEvent) return card({ kind: 'open' })();
+      const cleaned = cleanSkipNote(getFormValue(event, 'reason'));
+      if ('error' in cleaned) return dialogError(cleaned.error);
+      const result = await this.service.skipToday(runId, user.userName, cleaned.note);
+      if (result === 'already_submitted') return dialogError('You already answered today. Edit your answers instead.');
+      if (result === 'not_found') return dialogError('This standup prompt is no longer valid.');
+      return dialogOk('🏖️ Skipped. Your team can see why in today’s thread.');
     }
 
     if (fn === OPEN_TAG_FN || fn === SUBMIT_TAG_FN) {
@@ -337,10 +343,8 @@ export class EventRouter {
     for (let i = 0; i < questions.length; i++) {
       const question = questions[i]!;
       const value = getFormValue(event, `q${i}`).trim();
-      if (!value && !isBlockerQuestion(question)) {
-        return dialogError(`Please answer: "${question}"`);
-      }
-      answers.push({ question, answer: value || 'none' });
+      if (!value) return dialogError(`Please answer: "${question}"${isBlockerQuestion(question) ? ' (write "none" if you have no blockers)' : ''}`);
+      answers.push({ question, answer: value });
     }
 
     let mood: Mood | null = null;
