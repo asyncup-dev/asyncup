@@ -256,6 +256,7 @@ export class CommandHandler {
     if (!result.ok) {
       if (result.code !== 'duplicate') return `⚠️ ${result.message}`;
       const { duplicate } = result;
+      if (duplicate.spaceName !== ctx.spaceName || !duplicate.active) return `⚠️ ${result.message} Nothing was created — try \`setup <name>\`.`;
       return (
         `⚠️ This space already has a standup named *${duplicate.name}* (#${duplicate.id}) — nothing was created.\n` +
         `Configure it with \`#${duplicate.id} <command>\`, pick a different name (\`setup <name>\`), or retire it first with \`#${duplicate.id} archive\`.`

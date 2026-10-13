@@ -871,6 +871,13 @@ export class Repo {
     ).map(toStandup);
   }
 
+  /** Any standup in the tenant, archived ones too, whose name matches ignoring case. */
+  async findStandupNamed(tenantId: string, name: string, exceptId = 0): Promise<Standup | null> {
+    const wanted = name.trim().toLowerCase();
+    const rows = (await this.db.all('SELECT * FROM standups WHERE tenant_id = ? AND id <> ? ORDER BY active DESC, id', [tenantId, exceptId])).map(toStandup);
+    return rows.find((s) => s.name.trim().toLowerCase() === wanted) ?? null;
+  }
+
   /** Active standups this person administers — the manager role is derived from this. */
   async listStandupsAdministeredBy(userName: string): Promise<Standup[]> {
     return (

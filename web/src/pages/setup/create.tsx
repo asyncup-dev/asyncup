@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { api, ApiError, type Person, type Space, type StandupSummary, type Template } from '../../lib/api';
 import { timezoneOptions, useSetupProgress } from '../../lib/setup';
+import { useStandups } from '../../lib/standups';
 import { LogoLockup } from '../../components/logo';
 import { PeopleMatrix, type MatrixChange, type MatrixRow } from '../../components/people-matrix';
 import type { Weekday } from '../../lib/roster';
@@ -51,6 +52,7 @@ export function CreateStandupPage() {
   const progress = useSetupProgress();
   const templates = useQuery({ queryKey: ['templates'], queryFn: () => api<{ templates: Template[] }>('/templates') });
   const spaces = useQuery({ queryKey: ['spaces'], queryFn: () => api<{ spaces: Space[] }>('/spaces') });
+  const standups = useStandups();
   const template = templates.data?.templates.find((t) => t.id === templateId);
   const tz = progress.data?.settings.workspace.defaultTimezone ?? 'UTC';
   const [form, setForm] = useState<CreateForm | null>(null);
@@ -136,7 +138,9 @@ export function CreateStandupPage() {
   };
   // A space that already has a standup was usually set up with `setup` in Chat; point at it before a duplicate is made.
   const taken = spaces.data?.spaces.find((s) => s.name === form.spaceName)?.standups ?? [];
-  const ready = form.name.trim() && form.spaceName && (form.rosterGroup === null || form.rosterGroup.trim()) && form.days.length > 0 && form.questions.some((q) => q.trim());
+  // The list holds active standups only; the server also refuses archived names.
+  const clash = standups.data?.find((s) => s.name.trim().toLowerCase() === form.name.trim().toLowerCase());
+  const ready = form.name.trim() && !clash && form.spaceName && (form.rosterGroup === null || form.rosterGroup.trim()) && form.days.length > 0 && form.questions.some((q) => q.trim());
 
   return (
     <div>
@@ -157,7 +161,8 @@ export function CreateStandupPage() {
           <div className="grid-2">
             <div className="field">
               <label htmlFor="name">Name</label>
-              <input id="name" className="input" value={form.name} onChange={(e) => set({ name: e.target.value })} />
+              <input id="name" className="input" value={form.name} onChange={(e) => set({ name: e.target.value })} aria-invalid={!!clash} aria-describedby={clash ? 'name-taken' : undefined} />
+              {clash ? <div id="name-taken" className="t-caption field-error">A standup named {clash.name} already exists. Names are unique across the workspace.</div> : null}
             </div>
             <div className="field">
               <label htmlFor="space">Post in space</label>
@@ -211,12 +216,12 @@ export function CreateStandupPage() {
           <div className="grid-3">
             <div className="field">
               <label htmlFor="prompt">Prompt at</label>
-              <input id="prompt" className="input" value={form.promptTime} onChange={(e) => set({ promptTime: e.target.value })} placeholder="09:30" />
+              <input id="prompt" type="time" required className="input" value={form.promptTime} onChange={(e) => set({ promptTime: e.target.value })} />
               <div className="t-caption">in each person’s timezone</div>
             </div>
             <div className="field">
               <label htmlFor="deadline">Deadline</label>
-              <input id="deadline" className="input" value={form.deadlineTime} onChange={(e) => set({ deadlineTime: e.target.value })} placeholder="11:30" />
+              <input id="deadline" type="time" required className="input" value={form.deadlineTime} onChange={(e) => set({ deadlineTime: e.target.value })} />
               <div className="t-caption">standup timezone</div>
             </div>
             <div className="field">

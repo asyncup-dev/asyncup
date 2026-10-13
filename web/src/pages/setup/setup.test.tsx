@@ -373,6 +373,15 @@ describe('setup: sign-in, template, create and live', () => {
     expect(await screen.findByRole('heading', { name: 'Create a standup' })).toBeInTheDocument();
     release();
     expect(await screen.findByRole('option', { name: 'Platform HQ' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Prompt at')).toHaveAttribute('type', 'time');
+    // names are unique across the workspace, so a clash is flagged before Create
+    const name = screen.getByLabelText('Name');
+    await userEvent.setup().clear(name);
+    await userEvent.setup().type(name, ' engineering DAILY');
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText(/A standup named Engineering daily already exists/)).toBeInTheDocument();
+    await userEvent.setup().selectOptions(screen.getByLabelText('Post in space'), 'spaces/team');
+    expect(screen.getByRole('button', { name: 'Create and run it now' })).toBeDisabled();
   });
 
   it('reports member lookup failures and create errors, and handles the blank template', async () => {

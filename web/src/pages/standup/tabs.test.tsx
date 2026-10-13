@@ -1,4 +1,4 @@
-import { screen, waitFor, within, cleanup } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADMIN, renderApp, stubApi } from '../../test/harness';
@@ -61,11 +61,13 @@ describe('standup settings tab', () => {
     renderApp('/standups/1/settings');
     const user = userEvent.setup();
     expect(await screen.findByLabelText('Prompt time')).toHaveValue('09:30');
+    expect(screen.getByLabelText('Deadline time')).toHaveAttribute('type', 'time');
+    fireEvent.change(screen.getByLabelText('Deadline time'), { target: { value: '18:00' } });
     await user.click(screen.getByRole('button', { name: 'Wed' }));
     await user.clear(screen.getByLabelText('Reminder minutes'));
     await user.type(screen.getByLabelText('Reminder minutes'), '45');
     await user.click(screen.getAllByRole('button', { name: 'Save' })[0]!);
-    await waitFor(() => expect(patches[0]).toEqual({ promptTime: '09:30', deadlineTime: '11:30', timezone: 'Asia/Kolkata', days: ['mon', 'tue', 'wed'], reminderMinutesBefore: 45 }));
+    await waitFor(() => expect(patches[0]).toEqual({ promptTime: '09:30', deadlineTime: '18:00', timezone: 'Asia/Kolkata', days: ['mon', 'tue', 'wed'], reminderMinutesBefore: 45 }));
     expect(await screen.findByRole('status')).toHaveTextContent('Schedule saved');
 
     await user.click(screen.getByRole('button', { name: '+ Add question' }));
