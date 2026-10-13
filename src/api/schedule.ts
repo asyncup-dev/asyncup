@@ -1,5 +1,5 @@
 import type { Request, Response, Router } from 'express';
-import { AWAY_LABEL, describeWorkingDays, type Actor, type ScheduleService } from '../core/schedule.js';
+import { AWAY_LABEL, describeWorkingDays, isIsoDate, type Actor, type ScheduleService } from '../core/schedule.js';
 import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
 import { apiError, canManage, principalOf, type ApiContext } from './shared.js';
@@ -11,8 +11,9 @@ export async function managesPerson(repo: Repo, p: Principal, userName: string):
   return false;
 }
 
-export function actorFor(p: Principal, target: string, manager: boolean): Actor {
-  return { userName: p.user?.userName ?? 'operator', displayName: p.user?.name ?? 'Operator', self: p.user?.userName === target, manager };
+/** The caller as a schedule actor; the service decides what they may change. */
+export function actorFor(p: Principal): Actor {
+  return { userName: p.user?.userName ?? 'operator', displayName: p.user?.name ?? 'Operator', admin: p.kind === 'admin' };
 }
 
 /** A person's display name from any roster they are on, else their id. */
@@ -65,7 +66,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
     if (body.from && body.to) {
       const from = String(body.from);
       const to = String(body.to);
-      if (!ISO.test(from) || !ISO.test(to) || to < from) {
+      if (!isIsoDate(from) || !isIsoDate(to) || to < from) {
         apiError(res, 400, 'invalid', 'from/to must be ISO dates with from ≤ to.', 'from');
         return null;
       }
@@ -74,7 +75,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       raw.push(...out);
     }
     const dates = [...new Set(raw.map(String))].sort();
-    if (dates.length === 0 || dates.some((d) => !ISO.test(d))) {
+    if (dates.length === 0 || dates.some((d) => !isIsoDate(d))) {
       apiError(res, 400, 'invalid', 'Give date, dates[] or from/to as ISO dates.', 'dates');
       return null;
     }
@@ -83,6 +84,13 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       return null;
     }
     return dates;
+  };
+
+  const dateParam = (req: Request<any>, res: Response): string | null => {
+    const date = String(req.params.date);
+    if (isIsoDate(date)) return date;
+    apiError(res, 400, 'invalid', 'date must be an ISO date (YYYY-MM-DD).', 'date');
+    return null;
   };
 
   const reply = (res: Response, result: { ok: boolean; message: string; status?: string }) => {
@@ -108,7 +116,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
     const me = self(req, res);
     if (!me) return;
     const p = principalOf(req);
-    const result = await svc.setWorkingDays(me, String(req.body?.workingDays ?? 'reset'), actorFor(p, me.userName, await managerOf(p, me.userName)), 'console');
+    const result = await svc.setWorkingDays(me, String(req.body?.workingDays ?? 'reset'), actorFor(p), 'console');
     if (!result.ok) {
       apiError(res, 400, 'invalid', result.message, 'workingDays');
       return;
@@ -124,7 +132,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
     const dates = datesFrom(req.body ?? {}, res);
     if (!dates) return;
     const p = principalOf(req);
-    reply(res, await svc.setOverride({ target: me, dates, working: req.body?.working === true, reason: String(req.body?.reason ?? '').slice(0, 200), actor: actorFor(p, me.userName, await managerOf(p, me.userName)), channel: 'console' }));
+    reply(res, await svc.setOverride({ target: me, dates, working: req.body?.working === true, reason: String(req.body?.reason ?? '').slice(0, 200), actor: actorFor(p), channel: 'console' }));
   });
 
   api.delete('/me/overrides/:date', async (req, res) => {
@@ -132,8 +140,9 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
     if (!svc) return;
     const me = self(req, res);
     if (!me) return;
-    const p = principalOf(req);
-    reply(res, await svc.cancelOverride(me, String(req.params.date), actorFor(p, me.userName, await managerOf(p, me.userName))));
+    const date = dateParam(req, res);
+    if (!date) return;
+    reply(res, await svc.cancelOverride(me, date, actorFor(principalOf(req))));
   });
 
   // ---- someone else's schedule (managers and admins)
@@ -145,7 +154,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 403, 'forbidden', 'Only admins and this person’s managers can do that.');
       return null;
     }
-    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p, userName, true) };
+    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p) };
   };
 
   api.get('/people/:userName/schedule', async (req, res) => {
@@ -183,7 +192,9 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
     if (!svc) return;
     const t = await target(req, res);
     if (!t) return;
-    reply(res, await svc.cancelOverride(t, String(req.params.date), t.actor));
+    const date = dateParam(req, res);
+    if (!date) return;
+    reply(res, await svc.cancelOverride(t, date, t.actor));
   });
 
   // ---- approvals
@@ -214,7 +225,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       }
       const ids = String(req.params.id).split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
       const note = req.body?.note ? String(req.body.note).slice(0, 200) : null;
-      const result = await svc.decide(ids, decision === 'approve', { userName: p.user?.userName ?? 'operator', displayName: p.user?.name ?? 'Operator', admin: p.kind === 'admin' }, note);
+      const result = await svc.decide(ids, decision === 'approve', actorFor(p), note);
       if (!result.ok) {
         apiError(res, 409, 'refused', result.message);
         return;
@@ -223,8 +234,6 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
     });
   }
 }
-
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 export function overrideView(o: { id: number; userName: string; displayName: string; date: string; working: boolean; reason: string; status: string; setByDisplayName: string; channel: string; decidedByDisplayName: string | null; decisionNote: string | null; createdAt: string }) {
   return {

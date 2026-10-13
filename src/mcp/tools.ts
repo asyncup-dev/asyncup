@@ -6,7 +6,7 @@ import type { Principal } from '../api/principal.js';
 import { findVisibleStandup, summarise, visibleStandups } from '../api/shared.js';
 import { BLOCKER_STATUSES, blockersView, peopleView, runsView, runView, visibleBlocker } from '../api/views.js';
 import { actorFor, displayNameOf, managesPerson, overrideView, scheduleView } from '../api/schedule.js';
-import type { ScheduleService } from '../core/schedule.js';
+import { isIsoDate, type ScheduleService } from '../core/schedule.js';
 import type { BlockerService } from '../core/blocker-service.js';
 import { weeklySeries } from '../core/insights.js';
 import { parseScopes, type McpScope } from '../core/mcp-scopes.js';
@@ -211,7 +211,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   }
 
   // ---- personal schedules: the owner's own, or someone the owner manages
-  const ISO_DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+  const ISO_DATE = z.string().refine(isIsoDate, 'Use a real date as YYYY-MM-DD.');
   const schedule = () => {
     if (!deps.schedule) throw new ToolRefused('Personal schedules are not available on this install.');
     return deps.schedule;
@@ -219,10 +219,10 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   const targetFor = async (userName?: string) => {
     if (!userName || userName === p.user?.userName) {
       const who = me();
-      return { ...who, actor: actorFor(p, who.userName, await managesPerson(repo, p, who.userName)) };
+      return { ...who, actor: actorFor(p) };
     }
     if (!(await managesPerson(repo, p, userName))) throw new ToolRefused('Only admins and this person’s managers can do that.');
-    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p, userName, true) };
+    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p) };
   };
   const expand = (dates: string[] | undefined, from: string | undefined, to: string | undefined): string[] => {
     const out = new Set(dates ?? []);
@@ -327,7 +327,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     async ({ ids, approve, note }) => {
       const svc = schedule();
       managerOnly();
-      const r = await svc.decide(ids, approve, { userName: p.user?.userName ?? 'operator', displayName: p.user?.name ?? 'Operator', admin: p.kind === 'admin' }, note ?? null);
+      const r = await svc.decide(ids, approve, actorFor(p), note ?? null);
       if (!r.ok) throw new ToolRefused(r.message);
       return { message: r.message };
     },

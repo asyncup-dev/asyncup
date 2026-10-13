@@ -73,7 +73,6 @@ export class WebhookNotifier {
     });
   }
 
-  /** A signed test event, reporting the outcome instead of swallowing it. */
   async scheduleChange(standup: Standup, change: { person: { userName: string; displayName: string }; summary: string; by: string; channel: string }): Promise<void> {
     await this.send(standup, { event: 'schedule_change', standup: { id: standup.id, name: standup.name }, ...change });
   }
@@ -90,6 +89,7 @@ export class WebhookNotifier {
     });
   }
 
+  /** A signed test event, reporting the outcome instead of swallowing it. */
   async test(standup: Standup): Promise<{ ok: true; status: number } | { ok: false; error: string }> {
     const body = JSON.stringify({ event: 'test', standup: { id: standup.id, name: standup.name } });
     const secret = this.secretFor(standup.id);

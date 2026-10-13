@@ -196,15 +196,23 @@ export class CommandHandler {
     return text.replace(/\s+/g, ' ').trim();
   }
 
-  private actorFor(ctx: CommandContext, target: Mention): Actor {
-    return { userName: ctx.sender.userName, displayName: ctx.sender.displayName, self: target.userName === ctx.sender.userName, manager: true };
+  private actorFor(ctx: CommandContext): Actor {
+    return { userName: ctx.sender.userName, displayName: ctx.sender.displayName, admin: false };
+  }
+
+  /** A space only speaks for its own roster. */
+  private async notHere(standup: Standup, target: Mention): Promise<string | null> {
+    const roster = await this.repo.listParticipants(standup.id);
+    return roster.some((p) => p.userName === target.userName) ? null : `${target.displayName} isn't on *${standup.name}*.`;
   }
 
   private async personalWeek(standup: Standup, ctx: CommandContext, rest: string[]): Promise<string> {
     if (!this.schedule) return 'Personal schedules are not available on this install.';
     const target = ctx.mentions[0]!;
+    const elsewhere = await this.notHere(standup, target);
+    if (elsewhere) return elsewhere;
     const value = this.withoutMentions(rest, ctx.mentions);
-    const result = await this.schedule.setWorkingDays(target, value, this.actorFor(ctx, target), 'chat');
+    const result = await this.schedule.setWorkingDays(target, value, this.actorFor(ctx), 'chat');
     return result.message;
   }
 
@@ -212,16 +220,18 @@ export class CommandHandler {
     if (!this.schedule) return 'Personal schedules are not available on this install.';
     const target = ctx.mentions[0];
     if (!target) return `Mention the person, e.g. \`${working ? 'working' : 'off'} @Asha tomorrow${working ? '' : ' comp off'}\`.`;
+    const elsewhere = await this.notHere(standup, target);
+    if (elsewhere) return elsewhere;
     const text = this.withoutMentions(rest, ctx.mentions);
     const now = this.now().setZone(standup.timezone);
     if (/^cancel\b/i.test(text)) {
       const spec = parseDateSpec(text.replace(/^cancel\s*/i, ''), now);
       if (!spec.ok) return spec.message;
-      return (await this.schedule.cancelOverride(target, spec.dates[0]!, this.actorFor(ctx, target))).message;
+      return (await this.schedule.cancelOverride(target, spec.dates[0]!, this.actorFor(ctx))).message;
     }
     const spec = parseDateSpec(text, now);
     if (!spec.ok) return spec.message;
-    const result = await this.schedule.setOverride({ target, dates: spec.dates, working, reason: spec.rest, actor: this.actorFor(ctx, target), channel: 'chat' });
+    const result = await this.schedule.setOverride({ target, dates: spec.dates, working, reason: spec.rest, actor: this.actorFor(ctx), channel: 'chat' });
     return result.message;
   }
 

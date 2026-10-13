@@ -40,9 +40,11 @@ DM the bot:
 | `days mon-thu` · `days adhoc` · `days reset` | Your own week, or back to the standup's |
 
 Dates read naturally: `today`, `tomorrow`, a weekday name (the next one), `19 sep`,
-`sep 19`, `2026-09-19`. Only managers can change days in the past.
+`sep 19`, `2026-09-19`. A date without a year means the coming one unless it is
+under three months back, so `2 jan` in December is next January. Only managers
+can change days in the past.
 
-Managers, in the team space with an @mention:
+Managers, in the team space with an @mention of someone on that standup:
 
 | Command | Effect |
 | --- | --- |
@@ -64,8 +66,13 @@ one-word reply that undoes it.
 
 ## Who can change what: the time-off policy
 
-One setting per standup, under *Settings › Schedule*. Managers can mark
-anyone away or working in every mode.
+One setting per standup, under *Settings › Schedule*. A manager is an admin of
+a standup the person is on; managers and workspace admins can mark that person
+away or working in every mode.
+
+A person changing their own schedule is bound by the policy of every standup
+they are on and don't administer. Someone who runs one team and sits on
+another still needs the other team's approval.
 
 | Policy | A person marking themselves | Managers hear about it |
 | --- | --- | --- |
@@ -73,16 +80,25 @@ anyone away or working in every mode.
 | **Needs approval** | Becomes a request | A DM card with **Approve** / **Decline**, and the *Requests* tab under Team |
 | **Managers only** | Refused with a pointer to the managers | — |
 
-Under *Needs approval*, the first manager to act wins; workspace admins can
-act on any request. Declining asks for a one-line reason, which is sent to
-the person. A request unanswered by the run's deadline lapses — the person
-counts as expected for that run and is told so. Personal-week changes apply
-immediately under both self-service and approval; only *Managers only*
-blocks them.
+Under *Needs approval*, the first of the person's managers to act wins;
+workspace admins can act on any request, and nobody decides their own.
+Declining asks for a one-line reason, which is sent to the person. A request
+unanswered by the deadline of a standup that needs approval lapses — the
+person counts as expected for that run and is told so.
+
+| A person under *Needs approval* or *Managers only* | Allowed? |
+| --- | --- |
+| Changing their personal week | No — there is no request for a week, so managers set it |
+| Asking again for a day that is already approved | Yes — only the reason changes |
+| Asking for the opposite of an approved day | No — ask a manager |
+| Withdrawing a pending request, or giving back a day off | Yes |
+| Dropping a working day a manager set | No |
 
 Every change records who made it, when, and through which channel. Reports
 count an approved or manager-set away day as excused, never as missing; a
-declined or lapsed request counts as missing.
+declined or lapsed request counts as missing. A manager changing a past day
+corrects that day's run, except for people who submitted. Each standup's
+managers get the digest of a change once, whichever team's run closes first.
 
 ## Integrations
 

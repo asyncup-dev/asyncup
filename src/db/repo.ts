@@ -322,8 +322,13 @@ CREATE TABLE schedule_changes (
   summary TEXT NOT NULL,
   by_display_name TEXT NOT NULL,
   channel TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE TABLE schedule_change_digests (
+  change_id INTEGER NOT NULL,
+  standup_id INTEGER NOT NULL,
   at TEXT NOT NULL,
-  digested_at TEXT
+  PRIMARY KEY (change_id, standup_id)
 );
 `,
 ];
@@ -573,8 +578,13 @@ CREATE TABLE schedule_changes (
   summary TEXT NOT NULL,
   by_display_name TEXT NOT NULL,
   channel TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE TABLE schedule_change_digests (
+  change_id INTEGER NOT NULL,
+  standup_id INTEGER NOT NULL,
   at TEXT NOT NULL,
-  digested_at TEXT
+  PRIMARY KEY (change_id, standup_id)
 );
 `,
 ];
@@ -1047,11 +1057,13 @@ export class Repo {
     );
   }
 
-  /** Pending requests whose date has passed lapse to expired; returns them so people can be told. */
-  async expirePendingOverrides(upToDate: string, at: string): Promise<ScheduleOverride[]> {
-    const rows = await this.db.all(`SELECT * FROM schedule_overrides WHERE status = 'pending' AND date <= ?`, [upToDate]);
+  /** These people's pending requests up to a date lapse to expired; returns them so people can be told. */
+  async expirePendingOverrides(userNames: string[], upToDate: string, at: string): Promise<ScheduleOverride[]> {
+    if (userNames.length === 0) return [];
+    const among = `user_name IN (${userNames.map(() => '?').join(', ')})`;
+    const rows = await this.db.all(`SELECT * FROM schedule_overrides WHERE status = 'pending' AND date <= ? AND ${among}`, [upToDate, ...userNames]);
     if (rows.length) {
-      await this.db.run(`UPDATE schedule_overrides SET status = 'expired', updated_at = ? WHERE status = 'pending' AND date <= ?`, [at, upToDate]);
+      await this.db.run(`UPDATE schedule_overrides SET status = 'expired', updated_at = ? WHERE status = 'pending' AND date <= ? AND ${among}`, [at, upToDate, ...userNames]);
     }
     return rows.map(toOverride);
   }
@@ -1073,18 +1085,21 @@ export class Repo {
     );
   }
 
-  async listUndigestedChanges(userNames: string[]): Promise<ScheduleChange[]> {
+  /** Changes by these people since a time that this standup's managers haven't been sent yet. */
+  async listUndigestedChanges(standupId: number, userNames: string[], since: string): Promise<ScheduleChange[]> {
     if (userNames.length === 0) return [];
     const rows = await this.db.all(
-      `SELECT * FROM schedule_changes WHERE digested_at IS NULL AND user_name IN (${userNames.map(() => '?').join(', ')}) ORDER BY at`,
-      userNames,
+      `SELECT * FROM schedule_changes c WHERE user_name IN (${userNames.map(() => '?').join(', ')}) AND at >= ?
+         AND NOT EXISTS (SELECT 1 FROM schedule_change_digests d WHERE d.change_id = c.id AND d.standup_id = ?) ORDER BY at`,
+      [...userNames, since, standupId],
     );
     return rows.map((r: any) => ({ id: r.id, userName: r.user_name, displayName: r.display_name, summary: r.summary, byDisplayName: r.by_display_name, channel: r.channel, at: r.at }));
   }
 
-  async markChangesDigested(ids: number[], at: string): Promise<void> {
-    if (ids.length === 0) return;
-    await this.db.run(`UPDATE schedule_changes SET digested_at = ? WHERE id IN (${ids.map(() => '?').join(', ')})`, [at, ...ids]);
+  async markChangesDigested(standupId: number, ids: number[], at: string): Promise<void> {
+    for (const id of ids) {
+      await this.db.run('INSERT INTO schedule_change_digests (change_id, standup_id, at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING', [id, standupId, at]);
+    }
   }
 
   async getUserTimezone(userName: string): Promise<string | null> {

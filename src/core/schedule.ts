@@ -145,17 +145,25 @@ function takeDate(tokens: string[], i: number, today: DateTime): { date: DateTim
     consumed = 1;
   }
   if (!dm) return null;
-  let year = today.year;
   const yearTok = tokens[i + consumed];
-  if (yearTok && /^\d{4}$/.test(yearTok)) {
-    year = Number(yearTok);
-    consumed += 1;
-  }
-  let d = DateTime.fromObject({ year, month: dm.month, day: dm.day }, { zone: today.zone });
+  const explicitYear = !!yearTok && /^\d{4}$/.test(yearTok);
+  if (explicitYear) consumed += 1;
+  const d = DateTime.fromObject({ year: explicitYear ? Number(yearTok) : today.year, month: dm.month, day: dm.day }, { zone: today.zone });
   if (!d.isValid) return null;
-  // A date more than a week in the past means next year ("off 2 jan" said in December).
-  if (!yearTok && d < today.minus({ days: 7 })) d = d.plus({ years: 1 });
-  return { date: d, consumed };
+  return { date: explicitYear ? d : nearestYear(d, today), consumed };
+}
+
+/**
+ * Without a year, a date more than three months back means next year: "2 jan"
+ * said in December is next January, while "1 sep" in mid-September is a recent day.
+ */
+function nearestYear(d: DateTime, today: DateTime): DateTime {
+  return d < today.minus({ months: 3 }) ? d.plus({ years: 1 }) : d;
+}
+
+/** A real calendar date in YYYY-MM-DD form (2026-02-30 is not). */
+export function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && DateTime.fromISO(value).isValid;
 }
 
 /**
@@ -193,14 +201,10 @@ export function describeDates(dates: string[]): string {
   return `${fmt(dates[0]!)} – ${fmt(dates[dates.length - 1]!)}`;
 }
 
-/** Who is changing a schedule, and with what standing towards the person it belongs to. */
-export interface Actor {
-  userName: string;
-  displayName: string;
-  /** Changing their own schedule. */
-  self: boolean;
-  /** Manages a standup the person is on, or is a workspace admin. */
-  manager: boolean;
+/** Who is changing a schedule; whether they manage the person is worked out from the rosters. */
+export interface Actor extends Mention {
+  /** A workspace admin or the operator: manages everyone. */
+  admin: boolean;
 }
 
 export interface OverrideRequest {
@@ -225,6 +229,13 @@ export interface TimeOffRequest {
 }
 
 /**
+ * Which standups' time-off policies bind a change. A manager changing someone
+ * else's schedule is bound by none; a person changing their own is bound by
+ * every standup they are on and don't administer.
+ */
+type Authority = { ok: true; self: boolean; governed: Standup[] } | { ok: false; message: string };
+
+/**
  * Personal weeks and dated overrides, with the standup's time-off policy
  * applied: self-service (managers get a digest), approval (a manager must
  * say yes before it counts), or managers only. Managers override in any mode.
@@ -238,67 +249,81 @@ export class ScheduleService {
     private log: (msg: string) => void = () => {},
   ) {}
 
+  private async authority(target: Mention, actor: Actor, standups: Standup[]): Promise<Authority> {
+    const self = actor.userName === target.userName;
+    if (actor.admin) return { ok: true, self, governed: [] };
+    const administered = new Set<number>();
+    for (const s of standups) if (await this.repo.isAdmin(s.id, actor.userName)) administered.add(s.id);
+    if (!self) {
+      return administered.size > 0 ? { ok: true, self, governed: [] } : { ok: false, message: `Only ${target.displayName}'s managers can change their schedule.` };
+    }
+    return { ok: true, self, governed: standups.filter((s) => !administered.has(s.id)) };
+  }
+
   async setWorkingDays(target: Mention, value: string, actor: Actor, channel: ScheduleChannel): Promise<ScheduleResult> {
     const parsed = parseWorkingDays(value);
     if (!parsed.ok) return parsed;
     const standups = await this.repo.listStandupsForUser(target.userName);
     if (standups.length === 0) return { ok: false, message: notOnRoster(target, actor) };
-    if (actor.self && !actor.manager && standups.some((s) => s.timeOffPolicy === 'managers')) {
-      return { ok: false, message: 'Only your managers can change your schedule here — ask them, or DM them the days you need.' };
+    const auth = await this.authority(target, actor, standups);
+    if (!auth.ok) return auth;
+    // A week has no request flow, so under approval it is the managers' call too.
+    if (auth.governed.some((s) => s.timeOffPolicy !== 'self')) {
+      return { ok: false, message: 'Only your managers can change your week here — ask them, or DM them the days you need.' };
     }
     await this.repo.setWorkingDaysForUser(target.userName, parsed.value);
     const summary = `${target.displayName}'s week is now ${describeWorkingDays(parsed.value)}`;
-    await this.recordChange(target, summary, actor, channel, standups);
-    const today = this.today(standups[0]!);
-    await this.applyToOpenRuns(target.userName, today);
-    if (!actor.self) {
+    await this.recordChange(target, summary, actor, auth.self, channel, standups);
+    await this.applyToRuns(target.userName, [this.today(standups[0]!)], true);
+    if (!auth.self) {
       await this.dm(target.userName, `📅 ${actor.displayName} set your week to *${describeWorkingDays(parsed.value)}*. Reply \`days reset\` to follow the standup again, or \`days mon-thu\` to choose your own.`);
     }
-    const who = actor.self ? 'Your' : `${target.displayName}'s`;
+    const who = auth.self ? 'Your' : `${target.displayName}'s`;
     return { ok: true, status: 'active', message: `✅ ${who} week is now *${describeWorkingDays(parsed.value)}* across ${plural(standups.length, 'standup')}.${parsed.value === ADHOC ? ' Mark working days with `working <date>`.' : ''}` };
   }
 
   async setOverride(input: OverrideRequest): Promise<ScheduleResult> {
-    const { target, dates, working, reason, actor, channel } = input;
+    const { target, working, reason, actor, channel } = input;
     const standups = await this.repo.listStandupsForUser(target.userName);
     if (standups.length === 0) return { ok: false, message: notOnRoster(target, actor) };
+    const auth = await this.authority(target, actor, standups);
+    if (!auth.ok) return auth;
+    const { self, governed } = auth;
     const today = this.today(standups[0]!);
-    const selfService = actor.self && !actor.manager;
-    if (selfService && standups.some((s) => s.timeOffPolicy === 'managers')) {
+    if (governed.some((s) => s.timeOffPolicy === 'managers')) {
       return { ok: false, message: 'Only your managers can mark you away here — ask them, or DM them the dates.' };
     }
-    if (selfService && dates.some((d) => d < today)) {
+    if (governed.length > 0 && input.dates.some((d) => d < today)) {
       return { ok: false, message: 'Past days can only be changed by a manager.' };
     }
-    const needsApproval = selfService && standups.some((s) => s.timeOffPolicy === 'approval');
-    const status = needsApproval ? 'pending' : 'active';
-    const at = this.now().toISO()!;
-    const saved: ScheduleOverride[] = [];
-    for (const date of dates) {
-      saved.push(
-        await this.repo.upsertOverride({
-          userName: target.userName,
-          displayName: target.displayName,
-          date,
-          working,
-          reason,
-          status,
-          setByUserName: actor.userName,
-          setByDisplayName: actor.displayName,
-          channel,
-          at,
-        }),
-      );
+    const approvers = governed.filter((s) => s.timeOffPolicy === 'approval');
+    let dates = input.dates;
+    if (approvers.length > 0) {
+      // An approved day stays approved: repeating it only updates the reason, changing it needs a manager.
+      const kept: string[] = [];
+      for (const date of dates) {
+        const existing = await this.repo.getOverride(target.userName, date);
+        if (existing?.status !== 'active') continue;
+        if (existing.working !== working) {
+          return { ok: false, message: `${describeDates([date])} is already set as ${existing.working ? 'working' : 'off'} — ask your managers to change it.` };
+        }
+        kept.push(date);
+      }
+      for (const date of kept) await this.save(target, date, working, reason, 'active', actor, channel);
+      dates = dates.filter((d) => !kept.includes(d));
+      if (dates.length === 0) return { ok: true, status: 'active', message: `✅ ${describeDates(input.dates)} was already approved — reason updated.` };
     }
+    const status = approvers.length > 0 ? 'pending' : 'active';
+    const saved: ScheduleOverride[] = [];
+    for (const date of dates) saved.push(await this.save(target, date, working, reason, status, actor, channel));
     const what = `${working ? 'working' : 'off'} ${describeDates(dates)}${reason ? ` (${reason})` : ''}`;
     if (status === 'pending') {
-      const approvers = standups.filter((s) => s.timeOffPolicy === 'approval');
       const request: Omit<TimeOffRequest, 'standup'> = { ids: saved.map((o) => o.id), person: target, dates, working, reason };
       const told = new Set<string>();
       for (const standup of approvers) {
         await this.webhooks?.timeOffRequest(standup, request);
         for (const admin of await this.repo.listAdmins(standup.id)) {
-          if (told.has(admin.userName) || admin.userName === target.userName) continue;
+          if (told.has(admin.userName)) continue;
           told.add(admin.userName);
           try {
             await this.adapter.sendTimeOffRequest(admin.userName, { ...request, standup });
@@ -310,9 +335,9 @@ export class ScheduleService {
       const names = [...new Set(approvers.map((s) => s.name))].join(', ');
       return { ok: true, status, message: `📨 Sent to the managers of ${names} for approval — you'll hear back here. Withdraw with \`off cancel ${dates[0]}\`.` };
     }
-    await this.recordChange(target, `${target.displayName} is ${what}`, actor, channel, standups);
-    if (dates.includes(today)) await this.applyToOpenRuns(target.userName, today);
-    if (!actor.self) {
+    await this.recordChange(target, `${target.displayName} is ${what}`, actor, self, channel, standups);
+    await this.applyToRuns(target.userName, dates);
+    if (!self) {
       await this.dm(
         target.userName,
         working
@@ -325,22 +350,50 @@ export class ScheduleService {
       ok: true,
       status,
       message: working
-        ? `✅ ${actor.self ? 'You are' : `${target.displayName} is`} marked *working* on ${describeDates(dates)} for ${affected}.`
-        : `🏖️ ${describeDates(dates)} marked off${reason ? ` (${reason})` : ''} for ${affected} — no prompt, not counted as missing.${actor.self ? ' Your managers get today’s digest.' : ''} Undo with \`off cancel ${dates[0]}\`.`,
+        ? `✅ ${self ? 'You are' : `${target.displayName} is`} marked *working* on ${describeDates(dates)} for ${affected}.`
+        : `🏖️ ${describeDates(dates)} marked off${reason ? ` (${reason})` : ''} for ${affected} — no prompt, not counted as missing.${governed.length > 0 ? ' Your managers get today’s digest.' : ''} Undo with \`off cancel ${dates[0]}\`.`,
     };
   }
 
-  /** Withdraws an override; a manager can withdraw anyone's, a person only their own. */
+  private save(target: Mention, date: string, working: boolean, reason: string, status: 'active' | 'pending', actor: Actor, channel: ScheduleChannel): Promise<ScheduleOverride> {
+    return this.repo.upsertOverride({
+      userName: target.userName,
+      displayName: target.displayName,
+      date,
+      working,
+      reason,
+      status,
+      setByUserName: actor.userName,
+      setByDisplayName: actor.displayName,
+      channel,
+      at: this.now().toISO()!,
+    });
+  }
+
+  /**
+   * Withdraws an override. Managers can withdraw anyone's; a person can always
+   * withdraw a pending request, and otherwise only what their policy would
+   * let them set: no past days, and no dropping a working day outside self-service.
+   */
   async cancelOverride(target: Mention, date: string, actor: Actor): Promise<ScheduleResult> {
     const existing = await this.repo.getOverride(target.userName, date);
-    if (!existing || existing.status === 'withdrawn') return { ok: false, message: `Nothing is set for ${describeDates([date])}.` };
-    if (!actor.self && !actor.manager) return { ok: false, message: 'Only managers can change someone else’s schedule.' };
+    if (!existing || (existing.status !== 'active' && existing.status !== 'pending')) return { ok: false, message: `Nothing is set for ${describeDates([date])}.` };
+    const standups = await this.repo.listStandupsForUser(target.userName);
+    const auth = await this.authority(target, actor, standups);
+    if (!auth.ok) return auth;
+    if (auth.governed.length > 0 && existing.status === 'active') {
+      if (date < this.today(auth.governed[0]!)) return { ok: false, message: 'Past days can only be changed by a manager.' };
+      if (existing.working && auth.governed.some((s) => s.timeOffPolicy !== 'self')) {
+        return { ok: false, message: 'Only your managers can drop a working day here — ask them.' };
+      }
+    }
     const wasActive = existing.status === 'active';
     await this.repo.setOverrideStatus(existing.id, 'withdrawn', this.now().toISO()!);
-    const standups = await this.repo.listStandupsForUser(target.userName);
-    if (wasActive && standups.length > 0 && date === this.today(standups[0]!)) await this.applyToOpenRuns(target.userName, date);
-    if (wasActive) await this.recordChange(target, `${target.displayName} cancelled ${existing.working ? 'working' : 'off'} ${describeDates([date])}`, actor, 'chat', standups);
-    return { ok: true, status: 'active', message: `✅ ${describeDates([date])} is back to ${target.displayName === actor.displayName ? 'your' : `${target.displayName}'s`} usual week.` };
+    if (wasActive) {
+      await this.applyToRuns(target.userName, [date]);
+      await this.recordChange(target, `${target.displayName} cancelled ${existing.working ? 'working' : 'off'} ${describeDates([date])}`, actor, auth.self, 'chat', standups);
+    }
+    return { ok: true, status: 'active', message: `✅ ${describeDates([date])} is back to ${auth.self ? 'your' : `${target.displayName}'s`} usual week.` };
   }
 
   /** Overrides from today on, every status, for the "off list" view. */
@@ -348,14 +401,16 @@ export class ScheduleService {
     return this.repo.listOverridesForUser(userName, this.now().setZone(zone).toISODate()!);
   }
 
-  /** A manager approves or declines pending requests (all ids in the batch share one decision). */
-  async decide(ids: number[], approve: boolean, actor: Mention & { admin: boolean }, note: string | null): Promise<ScheduleResult> {
+  /** A manager approves or declines one person's pending request (all ids in the batch share one decision). */
+  async decide(ids: number[], approve: boolean, actor: Actor, note: string | null): Promise<ScheduleResult> {
     const overrides = (await Promise.all(ids.map((id) => this.repo.getOverrideById(id)))).filter((o): o is ScheduleOverride => !!o);
     const pending = overrides.filter((o) => o.status === 'pending');
     if (pending.length === 0) return { ok: false, message: 'That request was already decided or withdrawn.' };
+    if (new Set(pending.map((o) => o.userName)).size > 1) return { ok: false, message: 'Decide one person’s request at a time.' };
     const person = { userName: pending[0]!.userName, displayName: pending[0]!.displayName };
     const standups = await this.repo.listStandupsForUser(person.userName);
     if (!actor.admin) {
+      if (person.userName === actor.userName) return { ok: false, message: 'Your own requests go to your managers.' };
       let manages = false;
       for (const s of standups) if (await this.repo.isAdmin(s.id, actor.userName)) manages = true;
       if (!manages) return { ok: false, message: `Only ${person.displayName}'s managers can decide this.` };
@@ -364,8 +419,7 @@ export class ScheduleService {
     for (const o of pending) await this.repo.setOverrideStatus(o.id, approve ? 'active' : 'declined', at, { byDisplayName: actor.displayName, note });
     const dates = pending.map((o) => o.date).sort();
     const working = pending[0]!.working;
-    const today = standups.length ? this.today(standups[0]!) : null;
-    if (approve && today && dates.includes(today)) await this.applyToOpenRuns(person.userName, today);
+    if (approve) await this.applyToRuns(person.userName, dates);
     for (const standup of standups) await this.webhooks?.scheduleChange(standup, { person, summary: `${approve ? 'approved' : 'declined'}: ${working ? 'working' : 'off'} ${describeDates(dates)}`, by: actor.displayName, channel: 'chat' });
     await this.dm(
       person.userName,
@@ -386,14 +440,19 @@ export class ScheduleService {
     }
   }
 
-  /** At run close: lapse requests for that date and send managers the digest of self-service changes. */
+  /**
+   * At run close: lapse this roster's requests that were waiting on this
+   * standup's deadline (or are simply past), then send its managers the
+   * self-service changes they haven't seen yet.
+   */
   async onRunClosed(standup: Standup, run: Run): Promise<void> {
     const at = this.now().toISO()!;
-    for (const o of await this.repo.expirePendingOverrides(run.date, at)) {
+    const names = (await this.repo.listParticipants(standup.id)).map((p) => p.userName);
+    const lapseUpTo = standup.timeOffPolicy === 'approval' ? run.date : DateTime.fromISO(run.date).minus({ days: 1 }).toISODate()!;
+    for (const o of await this.repo.expirePendingOverrides(names, lapseUpTo, at)) {
       await this.dm(o.userName, `⌛ Your ${o.working ? 'working' : 'time off'} request for ${describeDates([o.date])} wasn't answered before the deadline, so it lapsed — you were counted as expected.`);
     }
-    const roster = await this.repo.listParticipants(standup.id);
-    const changes = await this.repo.listUndigestedChanges(roster.map((p) => p.userName));
+    const changes = await this.repo.listUndigestedChanges(standup.id, names, this.now().minus({ days: 7 }).toISO()!);
     if (changes.length === 0) return;
     const text = digestText(standup, changes);
     for (const admin of await this.repo.listAdmins(standup.id)) {
@@ -403,22 +462,29 @@ export class ScheduleService {
         this.log(`schedule digest to ${admin.userName} failed: ${err}`);
       }
     }
-    await this.repo.markChangesDigested(changes.map((c) => c.id), at);
+    await this.repo.markChangesDigested(standup.id, changes.map((c) => c.id), at);
   }
 
-  /** Re-evaluates today's open runs after a schedule change (only schedule-driven reasons move). */
-  async applyToOpenRuns(userName: string, date: string): Promise<void> {
-    const override = await this.repo.getOverride(userName, date);
-    for (const standup of await this.repo.listStandupsForUser(userName)) {
-      const run = await this.repo.getRun(standup.id, date);
-      if (!run || run.status !== 'open') continue;
-      const participant = (await this.repo.listParticipants(standup.id)).find((p) => p.userName === userName);
-      const rp = (await this.repo.listRunParticipants(run.id)).find((p) => p.userName === userName);
-      if (!participant || !rp) continue;
-      const status = dayStatus(participant, date, override);
-      const movable = rp.awayReason === null || rp.awayReason === 'day_off' || rp.awayReason === 'off_day';
-      if (!status.expected && movable && rp.awayReason !== status.reason) await this.repo.setRunAway(run.id, userName, status.reason);
-      if (status.expected && rp.awayReason !== null && movable) await this.repo.setRunAway(run.id, userName, null);
+  /**
+   * Re-evaluates the person's runs on these dates after a schedule change.
+   * Only schedule-driven reasons move, and a closed run keeps anyone who submitted.
+   */
+  async applyToRuns(userName: string, dates: string[], openOnly = false): Promise<void> {
+    const standups = await this.repo.listStandupsForUser(userName);
+    for (const date of dates) {
+      const override = await this.repo.getOverride(userName, date);
+      for (const standup of standups) {
+        const run = await this.repo.getRun(standup.id, date);
+        if (!run || (openOnly && run.status !== 'open')) continue;
+        const participant = (await this.repo.listParticipants(standup.id)).find((p) => p.userName === userName);
+        const rp = (await this.repo.listRunParticipants(run.id)).find((p) => p.userName === userName);
+        if (!participant || !rp) continue;
+        if (run.status !== 'open' && (await this.repo.getSubmission(run.id, userName))) continue;
+        const status = dayStatus(participant, date, override);
+        const movable = rp.awayReason === null || rp.awayReason === 'day_off' || rp.awayReason === 'off_day';
+        if (!status.expected && movable && rp.awayReason !== status.reason) await this.repo.setRunAway(run.id, userName, status.reason);
+        if (status.expected && rp.awayReason !== null && movable) await this.repo.setRunAway(run.id, userName, null);
+      }
     }
   }
 
@@ -431,8 +497,8 @@ export class ScheduleService {
     return this.now().setZone(standup.timezone).toISODate()!;
   }
 
-  private async recordChange(target: Mention, summary: string, actor: Actor, channel: ScheduleChannel, standups: Standup[]): Promise<void> {
-    if (actor.self) {
+  private async recordChange(target: Mention, summary: string, actor: Actor, self: boolean, channel: ScheduleChannel, standups: Standup[]): Promise<void> {
+    if (self) {
       await this.repo.logScheduleChange({ userName: target.userName, displayName: target.displayName, summary, byDisplayName: actor.displayName, channel, at: this.now().toISO()! });
     }
     for (const standup of standups) await this.webhooks?.scheduleChange(standup, { person: target, summary, by: actor.displayName, channel });
@@ -448,7 +514,7 @@ export class ScheduleService {
 }
 
 function notOnRoster(target: Mention, actor: Actor): string {
-  return actor.self ? "You're not on any standup roster yet." : `${target.displayName} isn't on any standup roster.`;
+  return actor.userName === target.userName ? "You're not on any standup roster yet." : `${target.displayName} isn't on any standup roster.`;
 }
 
 function plural(n: number, noun: string): string {

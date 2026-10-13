@@ -90,6 +90,11 @@ describe('schedule space commands', () => {
     expect(reply.text).toContain('Say when');
     reply = await router.handle(spaceMsg('off @Alice cancel xyz', [{ name: 'users/alice', displayName: 'Alice' }]));
     expect(reply.text).toContain('Say when');
+    // a space only speaks for its own roster
+    reply = await router.handle(spaceMsg('off @Dan tomorrow', [{ name: 'users/dan', displayName: 'Dan' }]));
+    expect(reply.text).toBe("Dan isn't on *Daily Standup*.");
+    reply = await router.handle(spaceMsg('days @Dan mon', [{ name: 'users/dan', displayName: 'Dan' }]));
+    expect(reply.text).toBe("Dan isn't on *Daily Standup*.");
     // days without a mention still configures the standup
     reply = await router.handle(spaceMsg('days mon,tue'));
     expect(reply.text).toContain('Standup runs on: mon, tue');
@@ -193,9 +198,9 @@ describe('schedule webhooks', () => {
     const standup = await seedStandup(stack.repo);
     stack.clock.set('2026-06-10T10:00');
     await stack.repo.updateStandup(standup.id, { webhookUrl: 'https://hooks.example/asyncup' });
-    await stack.schedule.setOverride({ target: { userName: 'users/alice', displayName: 'Alice' }, dates: ['2026-06-12'], working: false, reason: 'comp off', actor: { userName: 'users/alice', displayName: 'Alice', self: true, manager: false }, channel: 'chat' });
+    await stack.schedule.setOverride({ target: { userName: 'users/alice', displayName: 'Alice' }, dates: ['2026-06-12'], working: false, reason: 'comp off', actor: { userName: 'users/alice', displayName: 'Alice', admin: false }, channel: 'chat' });
     await stack.repo.updateStandup(standup.id, { timeOffPolicy: 'approval' });
-    await stack.schedule.setOverride({ target: { userName: 'users/bob', displayName: 'Bob' }, dates: ['2026-06-15'], working: true, reason: '', actor: { userName: 'users/bob', displayName: 'Bob', self: true, manager: false }, channel: 'console' });
+    await stack.schedule.setOverride({ target: { userName: 'users/bob', displayName: 'Bob' }, dates: ['2026-06-15'], working: true, reason: '', actor: { userName: 'users/bob', displayName: 'Bob', admin: false }, channel: 'console' });
     expect(calls.map((c) => c.body.event)).toEqual(['schedule_change', 'time_off_request']);
     expect(calls[0]!.body).toMatchObject({ standup: { id: standup.id, name: 'Daily Standup' }, person: { userName: 'users/alice' }, summary: 'Alice is off Fri 12 Jun (comp off)', by: 'Alice', channel: 'chat' });
     expect(calls[1]!.body).toMatchObject({ person: { userName: 'users/bob' }, dates: ['2026-06-15'], working: true, reason: '', requestIds: [expect.any(Number)] });

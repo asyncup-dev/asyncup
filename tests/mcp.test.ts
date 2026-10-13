@@ -371,6 +371,7 @@ describe('schedule tools', () => {
     expect((await call(alice, 'set_days_off', { from: '2026-06-23', to: '2026-06-22' })).error).toBe('from must be on or before to.');
     expect((await call(alice, 'set_days_off', { from: '2026-06-01', to: '2026-07-31' })).error).toBe('At most 31 days at a time.');
     expect((await call(alice, 'set_days_off', { dates: ['2026-06-01'] })).error).toBe('Past days can only be changed by a manager.');
+    expect((await call(alice, 'set_days_off', { dates: ['2026-02-30'] })).error).toContain('Use a real date as YYYY-MM-DD.');
 
     // other people: only their managers
     expect((await call(alice, 'get_schedule', { userName: 'users/bob' })).error).toContain('Only admins and this person’s managers');

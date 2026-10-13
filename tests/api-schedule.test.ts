@@ -78,12 +78,14 @@ describe('schedule API — the caller’s own schedule', () => {
   it('validates the date inputs', async () => {
     const { as, cookieFor, json } = await startServer();
     const alice = cookieFor('alice', 'Alice');
-    for (const body of [{}, { date: 'tomorrow' }, { dates: ['2026-06-12', 'x'] }, { from: '2026-06-12', to: '2026-06-11' }, { from: 'x', to: '2026-06-11' }]) {
+    for (const body of [{}, { date: 'tomorrow' }, { dates: ['2026-06-12', 'x'] }, { from: '2026-06-12', to: '2026-06-11' }, { from: 'x', to: '2026-06-11' }, { date: '2026-02-30' }, { from: '2026-02-27', to: '2026-02-30' }]) {
       const res = await as(alice, '/me/overrides', { method: 'POST', body: json(body) });
       expect(res.status).toBe(400);
     }
     const long = await as(alice, '/me/overrides', { method: 'POST', body: json({ from: '2026-06-12', to: '2026-08-12' }) });
     expect(await long.json()).toMatchObject({ error: { message: 'At most 31 days at a time.' } });
+    const bad = await as(alice, '/me/overrides/2026-02-30', { method: 'DELETE' });
+    expect(await bad.json()).toMatchObject({ error: { code: 'invalid', field: 'date' } });
     const dup = await as(alice, '/me/overrides', { method: 'POST', body: json({ dates: ['2026-06-12', '2026-06-12'], reason: 'x'.repeat(300) }) });
     expect(dup.status).toBe(200);
   });
@@ -158,7 +160,7 @@ describe('schedule API — managers and admins', () => {
     await repo.upsertParticipant({ standupId: other.id, userName: 'users/dan', displayName: 'Dan' });
     await repo.updateStandup(other.id, { timeOffPolicy: 'approval' });
     await repo.addAdmin(other.id, 'users/ops', 'Ops');
-    const self = (m: { userName: string; displayName: string }) => ({ ...m, self: true, manager: false });
+    const self = (m: { userName: string; displayName: string }) => ({ ...m, admin: false });
     await schedule.setOverride({ target: { userName: 'users/alice', displayName: 'Alice' }, dates: ['2026-06-22', '2026-06-23'], working: false, reason: 'sick', actor: self({ userName: 'users/alice', displayName: 'Alice' }), channel: 'chat' });
     await schedule.setOverride({ target: { userName: 'users/dan', displayName: 'Dan' }, dates: ['2026-06-24'], working: true, reason: '', actor: self({ userName: 'users/dan', displayName: 'Dan' }), channel: 'chat' });
 
@@ -187,7 +189,7 @@ describe('schedule API — managers and admins', () => {
   it('exposes away reasons on today’s run, weeks on the team list, and the policy on the standup', async () => {
     const { op, json, repo, standup, schedule, scheduler } = await startServer();
     await repo.setWorkingDaysForUser('users/alice', 'mon,tue');
-    await schedule.setOverride({ target: { userName: 'users/bob', displayName: 'Bob' }, dates: ['2026-06-10'], working: false, reason: 'dentist', actor: { userName: 'users/bob', displayName: 'Bob', self: true, manager: false }, channel: 'chat' });
+    await schedule.setOverride({ target: { userName: 'users/bob', displayName: 'Bob' }, dates: ['2026-06-10'], working: false, reason: 'dentist', actor: { userName: 'users/bob', displayName: 'Bob', admin: false }, channel: 'chat' });
     await scheduler.tick();
     const today: any = await (await op(`/standups/${standup.id}/runs/today`)).json();
     expect(today.away.map((a: any) => [a.displayName, a.reason, a.reasonLabel])).toEqual([['Alice', 'off_day', 'Not a working day'], ['Bob', 'day_off', 'Day off']]);

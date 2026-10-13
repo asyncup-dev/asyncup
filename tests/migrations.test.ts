@@ -102,6 +102,7 @@ describe('migration 12 — personal schedules', () => {
       expect(migrations[11]).toContain("ADD COLUMN time_off_policy TEXT NOT NULL DEFAULT 'self'");
       expect(migrations[11]).toContain('CREATE TABLE schedule_overrides');
       expect(migrations[11]).toContain('CREATE TABLE schedule_changes');
+      expect(migrations[11]).toContain('CREATE TABLE schedule_change_digests');
       expect(migrations[11]).toContain('UNIQUE (user_name, date)');
     }
   });

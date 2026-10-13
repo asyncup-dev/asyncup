@@ -137,7 +137,7 @@ export class EventRouter {
     const standups = await this.repo.listStandupsForUser(user.userName);
     const zone = standups[0]?.timezone ?? 'UTC';
     const now = schedule.nowIn(zone);
-    const actor = { userName: user.userName, displayName: user.displayName, self: true, manager: (await this.repo.listStandupsAdministeredBy(user.userName)).length > 0 };
+    const actor = { userName: user.userName, displayName: user.displayName, admin: false };
     if (command === 'days') return (await schedule.setWorkingDays(user, text, actor, 'chat')).message;
     if (command === 'off' && /^list\b/i.test(text)) {
       const upcoming = await schedule.listUpcoming(user.userName, zone);
