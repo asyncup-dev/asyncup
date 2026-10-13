@@ -62,6 +62,11 @@ export interface Standup {
   escalateAfterDays: number;
   /** JSON POSTs on submissions and wrap-ups; null = off. */
   webhookUrl: string | null;
+  /** Google Group whose members make up the roster; null means people are added by hand. */
+  rosterGroup: string | null;
+  rosterSyncedAt: string | null;
+  /** Why the last roster sync failed; null after a good one. */
+  rosterSyncError: string | null;
   active: boolean;
 }
 
@@ -115,6 +120,8 @@ export interface Participant {
    * subset of WEEKDAYS.
    */
   workingDays: string | null;
+  /** "group" rows come and go with the standup's roster group; "manual" ones stay until removed. */
+  source: 'manual' | 'group';
   active: boolean;
 }
 

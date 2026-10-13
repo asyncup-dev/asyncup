@@ -75,6 +75,9 @@ export const StandupSummary = named(
       contact: z.strictObject({ userName: z.string(), displayName: z.string().nullable() }).nullable(),
     }),
     webhook: z.strictObject({ configured: z.boolean() }),
+    roster: z
+      .strictObject({ group: z.string().nullable(), syncedAt: timestamp.nullable(), error: z.string().nullable() })
+      .describe('`group` is the Google Group the roster follows, or null when people are added by hand.'),
     people: z.strictObject({ total: count, mandatory: count }),
     today: z.strictObject({
       date,
@@ -101,9 +104,11 @@ export const StandupDetail = named(
         onVacation: z.boolean(),
         workingDays: z.string().nullable(),
         otherStandups: count,
+        source: z.enum(['manual', 'group']),
       }),
     ),
     admins: z.array(Person),
+    keptOff: z.array(Person).describe('Roster-group members taken off by hand; syncs keep them off.'),
   }),
 );
 
@@ -181,6 +186,17 @@ export const WeekPoint = named(
   }),
 );
 export const Insights = named('Insights', z.strictObject({ weeks: z.array(WeekPoint) }));
+
+export const RosterSynced = named(
+  'RosterSynced',
+  z.strictObject({
+    added: z.array(z.string()),
+    removed: z.array(z.string()),
+    skipped: z.array(z.strictObject({ email: z.string(), reason: z.string() })),
+    syncedAt: timestamp,
+  }),
+  'Names added and removed by this sync, and group members who can’t be on a standup, with why.',
+);
 
 export const AddedParticipant = named(
   'AddedParticipant',
@@ -439,6 +455,7 @@ const standupConfigFields = {
   digestEnabled: z.boolean(),
   timeOffPolicy: TimeOffPolicy,
   escalateUserName: z.string().nullable().describe('A participant’s userName; empty or null switches escalation off'),
+  rosterGroup: z.string().nullable().describe('Google Group email the roster follows; empty or null means people are added by hand'),
 };
 
 export const StandupPatch = named('StandupPatch', z.strictObject(standupConfigFields).partial(), 'Any subset of the standup’s settings.');

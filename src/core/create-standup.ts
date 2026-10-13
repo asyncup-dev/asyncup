@@ -45,6 +45,9 @@ const ROW_DEFAULTS = {
   escalateDisplayName: null,
   escalateAfterDays: 2,
   webhookUrl: null,
+  rosterGroup: null,
+  rosterSyncedAt: null,
+  rosterSyncError: null,
   active: true,
 } as const;
 
@@ -60,6 +63,7 @@ const CONFIG_KEYS = [
   'moodEnabled',
   'moodAnonymous',
   'digestEnabled',
+  'rosterGroup',
 ] as const;
 
 type Person = { userName: string; displayName: string; mandatory: boolean };

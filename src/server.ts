@@ -24,6 +24,7 @@ import { NodeSamlBroker } from './auth/saml.js';
 import { LAST_EVENT_KEYS, recordChatEvent } from './core/verify.js';
 import { WebhookNotifier } from './core/webhooks.js';
 import type { StandupService } from './core/standup-service.js';
+import type { RosterSync } from './core/roster-sync.js';
 import type { ScheduleService } from './core/schedule.js';
 import { registerMcp } from './mcp/server.js';
 import { APP_VERSION } from './version.js';
@@ -61,6 +62,8 @@ export interface ServerDeps {
   service?: StandupService;
   /** Personal schedules; without it the schedule routes answer 503. */
   schedule?: ScheduleService;
+  /** Rosters drawn from a Google Group; without it standups keep people added by hand. */
+  roster?: RosterSync;
   /** Built web app (web/dist). Defaults to the checked-out path; missing = /app answers 404. */
   webDist?: string;
   now?: () => DateTime;
@@ -137,6 +140,7 @@ export function createServer(deps: ServerDeps): Express {
     blockers: deps.blockers,
     service: deps.service ?? null,
     schedule: deps.schedule ?? null,
+    roster: deps.roster ?? null,
     webhooks: new WebhookNotifier(undefined, deps.externalFetch, undefined, deps.webhookSecret),
     chatClientFactory: deps.chatClientFactory ?? createChatClient,
     samlBroker: deps.samlBroker ?? ((config) => new NodeSamlBroker(config)),

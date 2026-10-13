@@ -4,7 +4,8 @@ import { PeopleMatrix, type MatrixChange, type MatrixRow } from '../../component
 import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
 import type { Person } from '../../lib/api';
-import { useArchive, useParticipantAdd, useParticipantPatch, useParticipantRemove, useStandupMembers, useStandupPatch } from '../../lib/people';
+import { ago } from '../../lib/format';
+import { useArchive, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
 import type { Weekday } from '../../lib/roster';
 import { useSetWeek } from '../../lib/schedule';
 import { useVerifyMutation } from '../../lib/settings';
@@ -32,8 +33,12 @@ export function StandupSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<'archive' | Person | null>(null);
-  const members = useStandupMembers(id);
   const setWeek = useSetWeek(id);
+  const sync = useRosterSync(id);
+  const [groupDraft, setGroupDraft] = useState<string | null>(null);
+  const [synced, setSynced] = useState<RosterSynced | null>(null);
+  const followsGroup = !!standup.data?.roster.group;
+  const members = useStandupMembers(id, !!standup.data && !followsGroup);
   useEffect(() => {
     if (s && !schedule) {
       setSchedule({ promptTime: s.schedule.promptTime, deadlineTime: s.schedule.deadlineTime, timezone: s.schedule.timezone, days: s.schedule.days, reminderMinutesBefore: String(s.schedule.reminderMinutesBefore) });
@@ -61,16 +66,28 @@ export function StandupSettingsPage() {
       setError(err instanceof Error ? err.message : 'That did not work.');
     }
   };
+  // A group roster lists the group's people (and anyone kept off); otherwise the space's members are the candidates.
+  const offRows = followsGroup
+    ? s.keptOff.map((m) => ({ ...m, badges: ['from group'] }))
+    : (members.data ?? []).filter((m) => !s.participants.some((p) => p.userName === m.userName));
   const rows: MatrixRow[] = [
     ...s.participants.map((p) => ({
       ...p,
       onStandup: true,
-      badges: [...(s.admins.some((a) => a.userName === p.userName) ? ['Manager'] : []), ...(p.onVacation ? ['Away'] : [])],
+      badges: [
+        ...(followsGroup ? [p.source === 'group' ? 'from group' : 'added by hand'] : []),
+        ...(s.admins.some((a) => a.userName === p.userName) ? ['Manager'] : []),
+        ...(p.onVacation ? ['Away'] : []),
+      ],
     })),
-    ...(members.data ?? [])
-      .filter((m) => !s.participants.some((p) => p.userName === m.userName))
-      .map((m) => ({ ...m, onStandup: false, mandatory: true, workingDays: null, otherStandups: 0 })),
+    ...offRows.map((m) => ({ ...m, onStandup: false, mandatory: true, workingDays: null, otherStandups: 0 })),
   ];
+  const runSync = () =>
+    void roster(async () => {
+      setSynced(null);
+      setSynced(await sync.mutateAsync());
+    });
+  const draft = groupDraft ?? s.roster.group ?? '';
   const change = (row: MatrixRow, c: MatrixChange) => {
     const person = { userName: row.userName, displayName: row.displayName };
     if ('onStandup' in c) {
@@ -131,7 +148,41 @@ export function StandupSettingsPage() {
               {s.mood.enabled ? <label className="row t-small"><input type="checkbox" checked={s.mood.anonymous} onChange={(e) => void save({ moodAnonymous: e.target.checked }, 'Mood')} /> answers shown anonymously</label> : null}
             </SettingsRow>
           </SectionCard>
-          <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Everyone in the space. Tick who is prompted, who counts when they miss it, and which days each person works.">
+          <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Tick who is prompted, who counts when they miss it, and which days each person works.">
+            <SettingsRow label="Roster" hint={followsGroup ? 'Follows a Google Group: joiners get the default setup, leavers drop off, and people you untick stay off.' : 'People you pick from the space’s members.'}>
+              <select
+                className="input"
+                aria-label="Roster source"
+                style={{ width: 'auto' }}
+                value={groupDraft !== null || followsGroup ? 'group' : 'space'}
+                disabled={patch.isPending}
+                onChange={(e) => (e.target.value === 'group' ? setGroupDraft(s.roster.group ?? '') : void save({ rosterGroup: null }, 'Roster').then(() => setGroupDraft(null)))}
+              >
+                <option value="space">Picked from the space</option>
+                <option value="group">Everyone in a Google Group</option>
+              </select>
+              {groupDraft !== null || followsGroup ? (
+                <>
+                  <input className="input" aria-label="Roster group email" style={{ width: 240 }} placeholder="team@example.com" value={draft} onChange={(e) => setGroupDraft(e.target.value)} />
+                  <button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending || !draft.trim() || draft.trim().toLowerCase() === s.roster.group} onClick={() => void save({ rosterGroup: draft.trim() }, 'Roster group').then(() => setGroupDraft(null))}>Save</button>
+                </>
+              ) : null}
+            </SettingsRow>
+            {followsGroup ? (
+              <SettingsRow label="Last sync" hint="Also syncs hourly and in the hour before each run.">
+                <span className="t-small">{s.roster.syncedAt ? `Synced ${ago(Date.now() - Date.parse(s.roster.syncedAt))}` : 'Not synced yet'}</span>
+                <button type="button" className="btn" style={{ height: 28 }} disabled={sync.isPending} onClick={runSync}>Sync now</button>
+                {s.roster.error ? <div className="alert" style={{ flexBasis: '100%' }}>{s.roster.error}</div> : null}
+                {synced ? (
+                  <div className="notice t-small" role="status" style={{ flexBasis: '100%' }}>
+                    {synced.added.length ? `Added ${synced.added.join(', ')}. ` : ''}
+                    {synced.removed.length ? `Removed ${synced.removed.join(', ')}. ` : ''}
+                    {!synced.added.length && !synced.removed.length ? 'Already up to date. ' : ''}
+                    {synced.skipped.length ? `Skipped ${synced.skipped.map((x) => `${x.email} (${x.reason})`).join(', ')}.` : ''}
+                  </div>
+                ) : null}
+              </SettingsRow>
+            ) : null}
             {members.isError ? <div className="settings-row"><span className="alert">Could not list the space’s members: {members.error.message}. Showing the current roster only.</span></div> : null}
             <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} onChange={change} />
           </SectionCard>

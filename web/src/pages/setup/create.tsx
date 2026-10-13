@@ -18,6 +18,8 @@ export interface CreateForm {
   name: string;
   spaceName: string;
   people: Member[];
+  /** A Google Group the roster follows instead of people picked from the space; null picks from the space. */
+  rosterGroup: string | null;
   promptTime: string;
   deadlineTime: string;
   timezone: string;
@@ -32,6 +34,7 @@ export function formFromTemplate(t: Template | undefined, timezone: string): Cre
     name: t && t.id !== 'blank' ? t.name : '',
     spaceName: '',
     people: [],
+    rosterGroup: null,
     promptTime: t?.promptTime ?? '09:30',
     deadlineTime: t?.deadlineTime ?? '11:30',
     timezone,
@@ -82,7 +85,9 @@ export function CreateStandupPage() {
           templateId: templateId === 'blank' ? null : templateId,
           name: f.name,
           spaceName: f.spaceName,
-          participants: f.people.map((p) => ({ userName: p.userName, displayName: p.displayName, mandatory: p.mandatory })),
+          ...(f.rosterGroup !== null
+            ? { rosterGroup: f.rosterGroup.trim() }
+            : { participants: f.people.map((p) => ({ userName: p.userName, displayName: p.displayName, mandatory: p.mandatory })) }),
           promptTime: f.promptTime,
           deadlineTime: f.deadlineTime,
           timezone: f.timezone,
@@ -93,7 +98,7 @@ export function CreateStandupPage() {
           runNow,
         },
       });
-      for (const p of f.people.filter((m) => m.week !== null)) {
+      for (const p of f.rosterGroup !== null ? [] : f.people.filter((m) => m.week !== null)) {
         try {
           await api(`/people/${encodeURIComponent(p.userName)}/schedule`, { method: 'PATCH', body: { workingDays: p.week } });
         } catch (err) {
@@ -131,7 +136,7 @@ export function CreateStandupPage() {
   };
   // A space that already has a standup was usually set up with `setup` in Chat; point at it before a duplicate is made.
   const taken = spaces.data?.spaces.find((s) => s.name === form.spaceName)?.standups ?? [];
-  const ready = form.name.trim() && form.spaceName && form.days.length > 0 && form.questions.some((q) => q.trim());
+  const ready = form.name.trim() && form.spaceName && (form.rosterGroup === null || form.rosterGroup.trim()) && form.days.length > 0 && form.questions.some((q) => q.trim());
 
   return (
     <div>
@@ -174,10 +179,23 @@ export function CreateStandupPage() {
 
         <section className="card section">
           <div>
-            <h2 className="t-h3">People · {form.people.length} on this standup</h2>
+            <h2 className="t-h3">{form.rosterGroup === null ? `People · ${form.people.length} on this standup` : 'People'}</h2>
             <div className="t-small secondary">Ticked people get a DM at prompt time on their days. Untick “counts if missing” for people who may skip.</div>
           </div>
-          {!form.spaceName ? (
+          <div className="field">
+            <label htmlFor="roster-source">Who is on it</label>
+            <select id="roster-source" className="input" value={form.rosterGroup === null ? 'space' : 'group'} onChange={(e) => set({ rosterGroup: e.target.value === 'group' ? '' : null })}>
+              <option value="space">People I pick from the space</option>
+              <option value="group">Everyone in a Google Group</option>
+            </select>
+          </div>
+          {form.rosterGroup !== null ? (
+            <div className="field">
+              <label htmlFor="roster-group">Google Group email</label>
+              <input id="roster-group" className="input" placeholder="team@example.com" value={form.rosterGroup} onChange={(e) => set({ rosterGroup: e.target.value })} />
+              <div className="t-caption">Everyone in the group is added when the standup is created, and joiners later get the same setup. Adjust anyone’s days or take people off under the standup’s Settings › People.</div>
+            </div>
+          ) : !form.spaceName ? (
             <span className="t-small muted">Pick a space to see who is in it.</span>
           ) : members.isPending ? (
             <span className="t-small muted">Looking up members…</span>

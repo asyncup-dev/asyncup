@@ -48,6 +48,22 @@ export function useParticipantAdd() {
   });
 }
 
+export interface RosterSynced {
+  added: string[];
+  removed: string[];
+  skipped: { email: string; reason: string }[];
+  syncedAt: string;
+}
+
+/** Pull the roster group's members now instead of waiting for the hourly sync. */
+export function useRosterSync(id: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<RosterSynced>(`/standups/${id}/roster/sync`, { method: 'POST' }),
+    onSettled: () => invalidateRoster(client, id),
+  });
+}
+
 /** Members of the standup's Chat space — the rows of its people grid. */
 export function useStandupMembers(id: number, enabled = true) {
   return useQuery({ queryKey: ['standup-members', id], queryFn: () => api<{ members: Person[] }>(`/standups/${id}/members`), select: (d) => d.members, enabled });

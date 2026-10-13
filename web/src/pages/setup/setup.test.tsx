@@ -335,6 +335,23 @@ describe('setup: sign-in, template, create and live', () => {
     expect(screen.getByRole('link', { name: 'Go to the console' })).toHaveAttribute('href', '/app/standups');
   });
 
+  it('creates a standup that follows a Google Group instead of picked people', async () => {
+    const { state } = fakeServer();
+    renderApp('/setup/create?template=daily-standup');
+    const user = userEvent.setup();
+    expect(await screen.findByLabelText('Who is on it')).toHaveValue('space');
+    await user.selectOptions(screen.getByLabelText('Post in space'), 'spaces/team');
+    await user.selectOptions(screen.getByLabelText('Who is on it'), 'group');
+    expect(screen.queryByRole('table', { name: 'People and their days' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create without running' })).toBeDisabled();
+    await user.type(screen.getByLabelText('Google Group email'), ' devs@example.com ');
+    await user.click(screen.getByRole('button', { name: 'Create without running' }));
+    await waitFor(() => expect(state.posted).toHaveLength(1));
+    expect(state.posted[0]).toMatchObject({ rosterGroup: 'devs@example.com' });
+    expect(state.posted[0]).not.toHaveProperty('participants');
+    expect(state.weeks).toEqual([]);
+  });
+
   it('leads with standups that already exist, so nobody makes a duplicate by accident', async () => {
     const { state } = fakeServer();
     state.standups = [FULL_STANDUP];

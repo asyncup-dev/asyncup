@@ -7,7 +7,7 @@ const ENG = {
   id: 1, name: 'Engineering', spaceName: 'spaces/A', active: true,
   schedule: { promptTime: '09:30', deadlineTime: '11:30', timezone: 'Asia/Kolkata', days: ['mon', 'tue'], reminderMinutesBefore: 30 },
   questions: ['Q1?', 'Q2?'], mood: { enabled: true, anonymous: false }, digestEnabled: false, timeOffPolicy: 'self',
-  escalation: { afterDays: 2, contact: null }, webhook: { configured: true },
+  escalation: { afterDays: 2, contact: null }, webhook: { configured: true }, roster: { group: null, syncedAt: null, error: null },
   people: { total: 2, mandatory: 1 },
   today: { date: '2026-09-16', status: 'closed', submitted: 2, expected: 2, missing: [] },
   permissions: { manage: true },
@@ -16,6 +16,7 @@ const ENG = {
     { userName: 'users/bob', displayName: 'Bob', mandatory: false, timezone: 'Europe/Berlin', onVacation: true, workingDays: 'tue,sat', otherStandups: 0 },
   ],
   admins: [{ userName: 'users/alice', displayName: 'Alice' }],
+  keptOff: [],
 };
 const RUNS = [
   { date: '2026-09-16', status: 'closed', submitted: 2, expected: 2, missing: [] },
@@ -130,6 +131,53 @@ describe('standup settings tab', () => {
     await user.type(within(dialog).getByRole('textbox'), 'ARCHIVE');
     await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
     await waitFor(() => expect(calls).toContain('POST /api/v1/standups/1/archive'));
+  });
+
+  it('follows a Google Group: shows where people came from, syncs on demand and can stop following', async () => {
+    const GROUP_ENG = {
+      ...ENG,
+      roster: { group: 'devs@example.com', syncedAt: new Date(Date.now() - 5 * 60_000).toISOString(), error: 'AsyncUp can’t read devs@example.com.' },
+      participants: [{ ...ENG.participants[0], source: 'group' }, { ...ENG.participants[1], source: 'manual' }],
+      keptOff: [{ userName: 'users/carol', displayName: 'Carol' }],
+    };
+    const { patches, calls } = server({
+      'GET /api/v1/standups/1': { body: GROUP_ENG },
+      'POST /api/v1/standups/1/roster/sync': { body: { added: ['Meera'], removed: [], skipped: [{ email: 'guest@other.com', reason: 'outside your Workspace' }], syncedAt: 'x' } },
+    });
+    renderApp('/standups/1/settings');
+    const user = userEvent.setup();
+    expect(await screen.findByLabelText('Roster source')).toHaveValue('group');
+    expect(screen.getByLabelText('Roster group email')).toHaveValue('devs@example.com');
+    expect(screen.getByText('Synced 5m ago')).toBeInTheDocument();
+    expect(screen.getByText('AsyncUp can’t read devs@example.com.')).toBeInTheDocument();
+    const grid = screen.getByRole('table', { name: 'People and their days' });
+    expect(within(grid).getAllByText('from group')).toHaveLength(2); // Alice, and Carol who is kept off
+    expect(within(grid).getByText('added by hand')).toBeInTheDocument();
+    expect(screen.getByLabelText('Carol on this standup')).not.toBeChecked();
+    // the space's members are not fetched for a group roster
+    expect(calls).not.toContain('GET /api/v1/standups/1/members');
+
+    await user.click(screen.getByRole('button', { name: 'Sync now' }));
+    expect(await screen.findByText('Added Meera. Skipped guest@other.com (outside your Workspace).')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Roster group email'));
+    await user.type(screen.getByLabelText('Roster group email'), 'team@example.com');
+    await user.click(within(screen.getByLabelText('Roster group email').parentElement!).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(patches).toContainEqual({ rosterGroup: 'team@example.com' }));
+    await user.selectOptions(screen.getByLabelText('Roster source'), 'space');
+    await waitFor(() => expect(patches).toContainEqual({ rosterGroup: null }));
+  });
+
+  it('switches a hand-picked roster to a Google Group', async () => {
+    const { patches } = server();
+    renderApp('/standups/1/settings');
+    const user = userEvent.setup();
+    expect(await screen.findByLabelText('Roster source')).toHaveValue('space');
+    expect(screen.queryByLabelText('Roster group email')).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Roster source'), 'group');
+    await user.type(screen.getByLabelText('Roster group email'), 'devs@example.com');
+    await user.click(within(screen.getByLabelText('Roster group email').parentElement!).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(patches).toContainEqual({ rosterGroup: 'devs@example.com' }));
   });
 
   it('surfaces a rejected save', async () => {

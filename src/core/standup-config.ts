@@ -1,6 +1,6 @@
 import type { Repo } from '../db/repo.js';
 import { TIME_OFF_POLICIES, type Standup, type TimeOffPolicy } from './types.js';
-import { HTTPS_URL_RE, LIMITS, isEscalateDays, isReminderMinutes, isValidTime, isValidZone, parseDays } from './validation.js';
+import { HTTPS_URL_RE, LIMITS, isEscalateDays, isReminderMinutes, isValidTime, isValidZone, looksLikeEmail, parseDays } from './validation.js';
 
 /**
  * The one place a standup's configuration is validated for the web
@@ -27,6 +27,8 @@ export interface StandupConfigInput {
   timeOffPolicy?: unknown;
   /** Participant userName, or empty/null to switch escalation off. */
   escalateUserName?: unknown;
+  /** Google Group email whose members make up the roster, or empty/null for people added by hand. */
+  rosterGroup?: unknown;
 }
 
 export type StandupConfigFields = Partial<
@@ -45,6 +47,7 @@ export type StandupConfigFields = Partial<
     | 'moodAnonymous'
     | 'digestEnabled'
     | 'timeOffPolicy'
+    | 'rosterGroup'
     | 'escalateUserName'
     | 'escalateDisplayName'
   >
@@ -103,6 +106,11 @@ export async function validateStandupConfig(
     const policy = String(input.timeOffPolicy);
     if (!(TIME_OFF_POLICIES as readonly string[]).includes(policy)) return fail('timeOffPolicy', 'Time-off policy must be self, approval or managers.');
     fields.timeOffPolicy = policy as TimeOffPolicy;
+  }
+  if (has('rosterGroup')) {
+    const group = input.rosterGroup === null ? '' : String(input.rosterGroup).trim().toLowerCase();
+    if (group && !looksLikeEmail(group)) return fail('rosterGroup', 'The roster group is the Google Group’s email address, e.g. team@example.com.');
+    fields.rosterGroup = group || null;
   }
   if (has('days')) {
     const raw = Array.isArray(input.days) ? input.days.join(',') : String(input.days);

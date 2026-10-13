@@ -9,6 +9,7 @@ import type { WebhookNotifier } from '../core/webhooks.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { SettingsService } from '../core/settings.js';
 import type { StandupService } from '../core/standup-service.js';
+import type { RosterSync } from '../core/roster-sync.js';
 import type { ScheduleService } from '../core/schedule.js';
 import type { Repo } from '../db/repo.js';
 import { registerBlockerRoutes } from './blockers.js';
@@ -39,6 +40,7 @@ export interface ApiDeps {
   blockers: BlockerService;
   service: StandupService | null;
   schedule?: ScheduleService | null;
+  roster?: RosterSync | null;
   webhooks: WebhookNotifier;
   chatClientFactory: ChatClientFactory;
   samlBroker: (config: SamlConfig) => SamlBroker;
@@ -60,6 +62,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
     blockers: deps.blockers,
     service: deps.service,
     schedule: deps.schedule ?? null,
+    roster: deps.roster ?? null,
     webhooks: deps.webhooks,
     chatClientFactory: deps.chatClientFactory,
     samlBroker: deps.samlBroker,
