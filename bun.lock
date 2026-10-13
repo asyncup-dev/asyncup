@@ -5,7 +5,7 @@
     "": {
       "name": "asyncup",
       "dependencies": {
-        "@googleapis/chat": "^50.0.0",
+        "@googleapis/chat": "^51.0.0",
         "@modelcontextprotocol/node": "^2.0.0",
         "@modelcontextprotocol/server": "^2.0.0",
         "@node-saml/node-saml": "^5.1.0",
@@ -177,7 +177,7 @@
 
     "@exodus/bytes": ["@exodus/bytes@1.15.1", "", { "peerDependencies": { "@noble/hashes": "^1.8.0 || ^2.0.0" }, "optionalPeers": ["@noble/hashes"] }, "sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q=="],
 
-    "@googleapis/chat": ["@googleapis/chat@50.0.0", "", { "dependencies": { "googleapis-common": "^9.0.0" } }, "sha512-1abvI0cyhgsDSHtC/VXl9vq+Epy4mLaYgDohR1Ni7R2h5s5GZhf2ZaXAVddrQtC77AH1vLbc01o9y6Cd6NLxgA=="],
+    "@googleapis/chat": ["@googleapis/chat@51.0.0", "", { "dependencies": { "googleapis-common": "^9.0.0" } }, "sha512-e2tBhpUk8vt5cFcbZ5XQPJqhAddW6WL/ZopZTORshV6s9dgUp6XcHadzKbs9VfEb1QH3j+ITu5dxW/YR4RwtAg=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 
