@@ -60,13 +60,12 @@ export function toAddonResponse(reply: any, event: any): object {
 
   if (actionResponse?.type === 'DIALOG') {
     const dialogAction = actionResponse.dialogAction ?? {};
-    if (dialogAction.dialog) return { action: { navigations: [{ pushCard: dialogAction.dialog.body }] } };
+    // A dialog answered from inside a dialog is redrawn in place; anything else opens one.
+    if (dialogAction.dialog) return { action: { navigations: [event?.isDialogEvent ? { updateCard: dialogAction.dialog.body } : { pushCard: dialogAction.dialog.body }] } };
     const status = dialogAction.actionStatus ?? {};
     const notification = status.userFacingMessage ? { notification: { text: status.userFacingMessage } } : {};
-    if (status.statusCode === 'OK') {
-      return { action: { navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }], ...notification } };
-    }
-    return { action: notification };
+    // Chat rejects a bare notification as an invalid response, so errors close the dialog too, as Google's examples do.
+    return { action: { navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }], ...notification } };
   }
 
   if (Object.keys(message).length === 0) return {};

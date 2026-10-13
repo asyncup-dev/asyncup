@@ -123,11 +123,18 @@ describe('skip and undo from Chat', () => {
     const { router, run, service, adapter, clock, scheduler } = await promptedRun();
     const dialog: any = await router.handle(click('openSkipDialog', run.id));
     const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;
-    expect(widgets[0].textInput).toEqual({ name: 'reason', label: 'Why are you skipping today?', type: 'SINGLE_LINE', hintText: 'One line, up to 150 characters. Your team sees it in today’s thread.' });
+    expect(widgets[0].textInput).toEqual({ name: 'reason', label: 'Why are you skipping today? (required)', type: 'SINGLE_LINE', hintText: 'One line, up to 150 characters. Your team sees it in today’s thread.' });
     expect(widgets[1].buttonList.buttons[0].onClick.action).toEqual({ function: 'skipToday', parameters: [{ key: 'runId', value: String(run.id) }] });
 
-    expect(status(await router.handle(skipWith(run.id, '   ')))).toMatchObject({ statusCode: 'INVALID_ARGUMENT', userFacingMessage: 'Say in a line why you are skipping today.' });
-    expect(status(await router.handle(skipWith(run.id, 'x'.repeat(151)))).userFacingMessage).toBe('Keep the reason to 150 characters.');
+    // an empty or long reason redraws the dialog with the problem on top and the text kept
+    const redrawn = (reply: any) => reply.actionResponse.dialogAction.dialog.body.sections[0].widgets;
+    const empty = redrawn(await router.handle(skipWith(run.id, '   ')));
+    expect(empty[0].textParagraph.text).toBe('<font color="#d93025"><b>⚠️ Say in a line why you are skipping today.</b></font>');
+    expect(empty[1].textInput.value).toBe('   ');
+    const long = redrawn(await router.handle(skipWith(run.id, 'x'.repeat(151))));
+    expect(long[0].textParagraph.text).toContain('Keep the reason to 150 characters.');
+    expect(long[1].textInput.value).toBe('x'.repeat(151));
+    expect(adapter.posts.filter((p) => p.kind === 'skip')).toHaveLength(0);
     expect(status(await router.handle(skipWith(run.id, 'Dentist\nthen school')))).toMatchObject({ statusCode: 'OK', userFacingMessage: '🏖️ Skipped. Your team can see why in today’s thread.' });
     expect(adapter.posts.at(-1)).toMatchObject({ kind: 'skip', text: 'Alice: Dentist then school' });
     expect(adapter.cardUpdates.at(-1)!.state).toEqual({ kind: 'skipped', note: 'Dentist then school' });

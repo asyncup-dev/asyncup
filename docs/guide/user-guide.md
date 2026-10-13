@@ -9,8 +9,9 @@ At the standup's prompt time, in **your** timezone, AsyncUp sends you a card
 in a Google Chat DM.
 
 1. Press **Fill standup**. One form, all the questions, one submit. Every
-   question and the mood are required; answer the blockers question with
-   "none" when there are none.
+   question and the mood are required: if one is empty, the form comes back
+   with a red line naming it and your answers kept. Answer the blockers
+   question with "none" when there are none.
 2. Your answers post as your card under today's thread in the team space.
    "Yesterday" comes pre-filled from your previous "today".
 3. Plans changed? Your DM card now shows *Submitted at …* with **Edit

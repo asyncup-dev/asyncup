@@ -108,17 +108,24 @@ describe('toAddonResponse', () => {
     });
   });
 
-  it('closes the dialog with a notification on OK, keeps it open with the message on a validation error', () => {
+  it('closes the dialog with a notification, whether it succeeded or failed', () => {
     expect(
       toAddonResponse({ actionResponse: { type: 'DIALOG', dialogAction: { actionStatus: { statusCode: 'OK', userFacingMessage: 'Submitted' } } } }, event),
     ).toEqual({ action: { navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }], notification: { text: 'Submitted' } } });
     expect(
       toAddonResponse({ actionResponse: { type: 'DIALOG', dialogAction: { actionStatus: { statusCode: 'INVALID_ARGUMENT', userFacingMessage: 'Please answer' } } } }, event),
-    ).toEqual({ action: { notification: { text: 'Please answer' } } });
+    ).toEqual({ action: { navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }], notification: { text: 'Please answer' } } });
     expect(toAddonResponse({ actionResponse: { type: 'DIALOG', dialogAction: { actionStatus: { statusCode: 'OK' } } } }, event)).toEqual({
       action: { navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }] },
     });
-    expect(toAddonResponse({ actionResponse: { type: 'DIALOG' } }, event)).toEqual({ action: {} });
+    expect(toAddonResponse({ actionResponse: { type: 'DIALOG' } }, event)).toEqual({ action: { navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }] } });
+  });
+
+  it('opens a dialog from a message, and redraws it in place when answered from inside one', () => {
+    const body = { sections: [] };
+    const reply = { actionResponse: { type: 'DIALOG', dialogAction: { dialog: { body } } } };
+    expect(toAddonResponse(reply, event)).toEqual({ action: { navigations: [{ pushCard: body }] } });
+    expect(toAddonResponse(reply, { ...event, isDialogEvent: true })).toEqual({ action: { navigations: [{ updateCard: body }] } });
   });
 });
 

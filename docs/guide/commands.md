@@ -108,9 +108,11 @@ Anyone can DM the bot directly:
 - **Skip today:** the prompt card has a 🏖️ *Skip today* button. It asks for a
   one-line reason, posts it in the day's thread, and lists you as away, not
   missing. *Undo skip* removes that thread reply.
-- **Every field is required:** each question and the mood must be filled in;
-  the form says which one is missing when you submit. Answer the blockers
-  question with "none" when there are none.
+- **Every field is required:** each question and the mood is marked
+  *(required)*. Submitting with one empty brings the form back with a red line
+  naming what's missing and your answers kept; nothing posts until all are
+  filled. (Google Chat can't grey out Submit for apps yet.) Answer the blockers
+  question with "none" when there are none. The skip reason works the same way.
 - **Pre-fill:** the "yesterday" answer is pre-filled from your previous
   "today" answer.
 - **Late submissions** after the deadline still post, flagged *late*; the
