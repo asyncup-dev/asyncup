@@ -21,25 +21,31 @@ alert on anything but `200`.
 ## Upgrade {#upgrade}
 
 Images are published to `ghcr.io/asyncup-dev/asyncup` on every merge to
-`main`. Each carries the commit it was built from in the
+`main`, tagged `latest` and `sha-<short commit>` (the first seven characters of
+the commit). Each also carries the full commit in its
 `org.opencontainers.image.revision` label. Database migrations run on startup
 and only go forward, so take a backup before every upgrade.
 
 ```bash
 cd /opt/asyncup
 
-# 1. Pull, and check you got the build you expect
+# 1. Note what is running now, for a rollback
+docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+  "$(docker compose ps -q asyncup)"
+
+# 2. Pull, and check you got the build you expect
 docker compose pull asyncup
 docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
   ghcr.io/asyncup-dev/asyncup:latest
 
-# 2. Stop the app and back up the database volume
+# 3. Stop the app and back up the database volume
 docker compose stop asyncup
 BACKUP=/root/asyncup-backup-$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -m 700 "$BACKUP"
 cp -a "$(docker volume inspect --format '{{.Mountpoint}}' asyncup_standup-data)"/. "$BACKUP/"
+echo "backup at $BACKUP"
 
-# 3. Start the new image and check it
+# 4. Start the new image and check it
 docker compose up -d asyncup
 docker compose logs --since 2m asyncup | grep 'listening on'
 docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}} restarts={{.RestartCount}}' \
@@ -47,12 +53,13 @@ docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revisi
 curl -fsS https://HOST/healthz
 ```
 
-Then run the [health checks](#health-checks) above. Copying the volume while
-the app is stopped catches the SQLite write-ahead log with it, so the backup is
-consistent. The app is down for a few seconds, and anyone who clicks a card
-in that moment sees "not responding", so upgrade outside standup hours.
+Write down the revision from step 1 and the backup path from step 3. Then run
+the [health checks](#health-checks) above. Copying the volume while the app is
+stopped catches the SQLite write-ahead log with it, so the backup is
+consistent. The app is down for a few seconds, and anyone who clicks a card in
+that moment sees "not responding", so upgrade outside standup hours.
 
-To pin versions instead of following `latest`, use the `sha-<commit>` tag
+To pin versions instead of following `latest`, use a `sha-<short commit>` tag
 or a digest in `compose.yml`, and change it deliberately.
 
 ### Roll back
@@ -60,13 +67,48 @@ or a digest in `compose.yml`, and change it deliberately.
 Migrations don't run backwards, so rolling back means restoring the backup
 taken before the upgrade, with the image you ran before:
 
+1. In `compose.yml`, set `image: ghcr.io/asyncup-dev/asyncup:sha-<first 7
+   characters of the revision from step 1>`.
+2. [Restore](#restore) the backup from step 3.
+
+## Restore {#restore}
+
+Use the literal path of the backup you want, not a shell variable left over
+from another session, and don't go on unless the check prints *found*.
+
+From a stopped-volume backup (a folder holding `standup.db` and, possibly,
+`standup.db-wal` and `standup.db-shm`):
+
 ```bash
+cd /opt/asyncup
+B=/root/asyncup-backup-20260101T090000Z          # the backup to restore
+test -d "$B" && test -f "$B/standup.db" && echo "backup found" || echo "NO BACKUP AT $B - stop here"
 docker compose stop asyncup
 VOL="$(docker volume inspect --format '{{.Mountpoint}}' asyncup_standup-data)"
-rm -rf "$VOL"/* && cp -a "$BACKUP"/. "$VOL"/
-# set image: ghcr.io/asyncup-dev/asyncup:sha-<previous commit> in compose.yml
+rm -f "$VOL"/standup.db "$VOL"/standup.db-wal "$VOL"/standup.db-shm
+cp -a "$B"/. "$VOL"/
 docker compose up -d asyncup
 ```
+
+From a nightly snapshot (a single `.db` file):
+
+```bash
+cd /opt/asyncup
+F=/opt/asyncup/standup-2026-01-01.db             # the snapshot to restore
+test -f "$F" && echo "snapshot found" || echo "NO SNAPSHOT AT $F - stop here"
+docker compose stop asyncup
+VOL="$(docker volume inspect --format '{{.Mountpoint}}' asyncup_standup-data)"
+rm -f "$VOL"/standup.db-wal "$VOL"/standup.db-shm
+cp "$F" "$VOL"/standup.db
+docker compose up -d asyncup
+```
+
+Deleting the `-wal` and `-shm` files matters: left behind, SQLite would try to
+apply them to the restored file. Then run the [health checks](#health-checks).
+
+For PostgreSQL, restore with your provider's tools, or for the bundled service
+`gunzip -c backup.sql.gz | docker compose exec -T postgres psql -U asyncup asyncup`
+into an empty database.
 
 ## Backups {#backups}
 
@@ -83,14 +125,16 @@ and SAML secrets stored in it.
 | Managed PostgreSQL | The provider's automated backups and point-in-time recovery |
 | Bundled PostgreSQL | `docker compose exec postgres pg_dump -U asyncup asyncup \| gzip > backup-$(date +%F).sql.gz` |
 
-The nightly SQLite snapshot, for cron:
+The nightly SQLite snapshot, for cron (`VACUUM INTO` refuses to overwrite, so
+clear any leftover first):
 
 ```bash
 cd /opt/asyncup
+docker compose exec -T asyncup rm -f /data/snapshot.db
 docker compose exec -T asyncup bun -e \
   "import {Database} from 'bun:sqlite'; new Database('/data/standup.db').run(\"VACUUM INTO '/data/snapshot.db'\")"
 docker compose cp asyncup:/data/snapshot.db ./standup-$(date +%F).db
-docker compose exec -T asyncup rm /data/snapshot.db
+docker compose exec -T asyncup rm -f /data/snapshot.db
 ```
 
 Don't copy `standup.db` out of a running container: without its write-ahead
@@ -127,8 +171,11 @@ docker compose exec -T asyncup bun -e \
 docker compose restart asyncup
 ```
 
-For PostgreSQL, run `DELETE FROM settings WHERE key = 'tokenSignIn';` with
-`psql`. Then sign in with the operator token and fix the broken method.
+For the bundled PostgreSQL:
+`docker compose exec postgres psql -U asyncup asyncup -c "DELETE FROM settings WHERE key = 'tokenSignIn';"`,
+then `docker compose restart asyncup`. For managed PostgreSQL, run the same
+`DELETE` with `psql` against `DATABASE_URL`. Then sign in with the operator token
+and fix the broken method.
 
 ## Logs
 

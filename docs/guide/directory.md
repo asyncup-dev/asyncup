@@ -80,25 +80,42 @@ If the service account can't read users, every one of these falls back to
 working without the Directory: Google sign-in lets the person in as a regular
 user, and SAML users are linked the first time they use the bot.
 
-Earlier versions needed domain-wide delegation for lookups. Installs set up
-that way keep working: a **Workspace admin to act as** under **Settings ›
-Google Chat › Directory & Calendar access** switches lookups to delegation.
-Once the role above is assigned you can clear it, unless you also use Calendar
-out-of-office through the same delegation.
+### The *Directory & Calendar access* switch
+
+Despite its name, this switch (in the guided setup and under **Settings ›
+Google Chat**) does one thing: it sets a **Workspace admin to act as**, which
+moves Directory lookups from the admin role to domain-wide delegation,
+impersonating that admin. Leave it **off** with the admin role in place.
+
+Earlier versions needed delegation for lookups, and installs set up that way
+keep working. If you deliberately want lookups through delegation, turn the
+switch on, enter an admin's email, and delegate
+`https://www.googleapis.com/auth/admin.directory.user.readonly` to the service
+account (see the steps below). Calendar out-of-office never uses this switch or
+the admin email.
 
 ## Calendar out-of-office {#calendar-ooo}
 
 This needs **domain-wide delegation**, because AsyncUp reads each person's
-calendar as that person.
+calendar as that person. It does not use the *Directory & Calendar access*
+switch or the admin email.
 
 1. Find the service account's **OAuth 2 client ID**, a long number. It is shown
    as *Delegation client ID* under **Settings › Google Chat › Directory &
    Calendar access**, and in the Cloud console on the service account's page.
 2. In the Admin console: **Security → Access and data control → API controls →
    Domain-wide delegation → Add new**. Enter the client ID and the scope
-   `https://www.googleapis.com/auth/calendar.events.readonly`.
+   `https://www.googleapis.com/auth/calendar.events.readonly`. (The guided
+   setup's copy box lists `calendar.readonly`; AsyncUp requests
+   `calendar.events.readonly`, so delegate that one.)
 3. Enable the **Google Calendar API** in the Cloud project.
 4. In AsyncUp, **Settings › General → Calendar out-of-office**: On.
+
+The setting starts **on** in a new install. Without the delegation, every
+calendar check fails, nobody is marked away, and each failure is logged.
+Pressing **Save access settings** in the guided setup writes the switch's state
+into this setting, so saving with the switch off turns Calendar out-of-office
+off. Check **Settings › General** after delegating.
 
 When a run opens, people with an *Out of office* event that day are marked
 away, listed under *Away* and never counted as missing. AsyncUp needs each

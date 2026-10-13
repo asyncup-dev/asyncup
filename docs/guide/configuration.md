@@ -14,7 +14,7 @@ AsyncUp is configured in two layers:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `8080` | Webhook, API and web app port |
-| `DB_PATH` | `./data/standup.db` | SQLite database file (default storage). The image sets `/data/standup.db` in Compose |
+| `DB_PATH` | `./data/standup.db` | SQLite database file (default storage). The Docker image sets `/data/standup.db` |
 | `DATABASE_URL` | *(empty)* | Bring-your-own PostgreSQL — when set, SQLite is skipped (see [Deployment reference](./deployment#database-embedded-or-bring-your-own)) |
 | `DB_SSL` | from URL `sslmode` | Postgres TLS: `require` (encrypt, no verify — default for managed DBs), `verify-full`, or `disable` |
 | `DB_SSL_CA` | *(empty)* | CA bundle path for `DB_SSL=verify-full` |
@@ -35,10 +35,10 @@ its email), never the value.
 | Where | Setting | What it does |
 | --- | --- | --- |
 | General | Default timezone for new standups | Assigned to new standups; people can set their own |
-| General | Calendar out-of-office | Mark people away on OOO days. Needs [domain-wide delegation](./directory#calendar-ooo) |
+| General | Calendar out-of-office | Mark people away on OOO days. On by default; does nothing until the [delegation for the Calendar scope](./directory#calendar-ooo) exists |
 | Google Chat | Project number (and the events URL) | The audience incoming events are verified against. For an add-on Chat app both are needed — [the audience rule](./google-chat-setup#the-audience-rule) |
 | Google Chat | Service account | The JSON key used for Chat API calls, group rosters, Directory lookups and Calendar. Empty = [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) for Chat only |
-| Google Chat | Directory & Calendar access | Optional *Workspace admin to act as*: switches Directory lookups to domain-wide delegation. Not needed with the [admin role](./directory#admin-role); shows the *Delegation client ID* |
+| Google Chat | Directory & Calendar access | Optional *Workspace admin to act as*: moves Directory lookups to domain-wide delegation. Leave it off with the [admin role](./directory#admin-role); Calendar out-of-office doesn't use it. Shows the *Delegation client ID* |
 | Sign-in & SSO | Google sign-in | OAuth client ID and secret — [Google sign-in](./enterprise-sso#google-sign-in) |
 | Sign-in & SSO | SAML single sign-on | IdP entity ID, SSO URL, certificate, admin attribute (default `groups`) and admin group (default `asyncup-admins`) — [SAML](./enterprise-sso#saml-sign-in) |
 | Sign-in & SSO | Setup token | Whether the operator token still signs in. Can only be switched off while Google or SAML works |

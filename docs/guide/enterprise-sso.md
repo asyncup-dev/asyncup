@@ -117,8 +117,9 @@ person uses the bot. Until then, `/app/me` shows a "not linked yet" note.
 
 Once Google or SAML works for at least one admin, switch token sign-in off:
 **Settings › Sign-in & SSO → Setup token → Accept DASHBOARD_TOKEN for
-sign-in**. ("Setup token" is the operator token, whichever variable name you
-set it with.) The token then stops working for the web app and the JSON API.
+sign-in**. The label still uses the older variable name; it means the operator
+token, whether you set it as `OPERATOR_TOKEN` or `DASHBOARD_TOKEN`. The token
+then stops working for the web app and the JSON API.
 
 If you lock yourself out later, [Operations](./operations#locked-out) has the
 recovery.
@@ -133,8 +134,8 @@ provisioning: Okta, Entra, OneLogin.
 > should use the [Directory](./directory) instead; SCIM is for organisations
 > whose IdP fronts Google.
 
-Setup: generate the **SCIM provisioning token** under **Settings › API &
-tokens**, then configure your IdP with base URL `https://HOST/scim/v2` and the
+Setup: generate the **SCIM token** under **Settings › API & tokens →
+Machine tokens**, then configure your IdP with base URL `https://HOST/scim/v2` and the
 token as the bearer credential. Supported: `ServiceProviderConfig`, list
 (`startIndex`/`count`, max 200), get by id, the `userName eq "…"` filter
 (dedupe — other filters answer 501), create, PUT/PATCH updates,

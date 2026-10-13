@@ -5,6 +5,14 @@ Step 2 of the [setup path](./getting-started). You need AsyncUp running at
 Workspace. The guided setup at `https://HOST/app/setup` shows the same steps
 with copy buttons and a live check at each gate; this page explains them.
 
+## Before you start: allow Chat apps
+
+A Workspace admin must allow people to install Chat apps, or you can't message
+the app to verify it (section 3) or add it to a space (step 3). In the Admin
+console: **Apps → Google Workspace → Google Chat → Chat apps → Allow users to
+install Chat apps: On** ([Google's help](https://support.google.com/a/answer/7651360)).
+Allowing installs doesn't install anything for anyone.
+
 ## 1. Create a Cloud project
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com/projectcreate)
@@ -34,12 +42,22 @@ project** and press **Verify**.
    press **Save and verify key**. The key is encrypted at rest with
    `SECRET_KEY`.
 
-Keep the service account's email (`asyncup@<project>.iam.gserviceaccount.com`):
-step 5 gives it an admin role.
+The check calls Google Chat as the app, so before the Chat app is configured
+(section 3) it may say **Google rejected the key**. That's expected: the key is
+saved anyway, and **Continue** works. Come back after section 3 and press
+**Verify stored key**; it should pass then.
 
-The **Directory & Calendar access** switch on that page is only for Calendar
-out-of-office, which needs domain-wide delegation. Leave it off for now;
-[Directory and group rosters](./directory) explains when to use it.
+Keep the service account's email (`asyncup@<project>.iam.gserviceaccount.com`):
+[step 5 of the setup path](./directory) gives it an admin role.
+
+Leave the **Directory & Calendar access** switch on that page **off**. All it
+does is set a *Workspace admin to act as*, which moves Directory lookups to
+domain-wide delegation; the [admin role](./directory#admin-role) from step 5
+of the setup path does the same job without delegation. Calendar out-of-office doesn't
+use that switch at all ([Calendar out-of-office](./directory#calendar-ooo)).
+If you press **Save access settings** with the switch off, it also turns
+Calendar out-of-office off; switch it back on under **Settings › General**
+when you set it up.
 
 ## 3. Configure the Chat app
 
@@ -79,10 +97,14 @@ changes only the number and keeps the URL.
 
 ### Check the connection
 
-On the guided setup's Chat app step, press **Start listening**, then send any
-message to AsyncUp in Google Chat (find it with **+ → Find apps**). The
-step turns to **Verified** when the first signed event arrives, and
-**Continue** unlocks.
+On the guided setup's Chat app step:
+
+1. Press **Save audience**. It stores `https://HOST/chat/events` next to the
+   project number. Without it, an add-on app's events are refused with `401`.
+   The button disappears once the URL is stored.
+2. Press **Start listening**, then send any message to AsyncUp in Google Chat
+   (find it with **+ → Find apps**). The step turns to **Verified** when the
+   first signed event arrives, and **Continue** unlocks.
 
 If nothing arrives, see [Troubleshooting](#troubleshooting).
 
@@ -112,6 +134,7 @@ Moved to [Directory and group rosters](./directory#calendar-ooo).
 | No prompts arriving | `docker compose logs asyncup` logs every run opening and closing. Check the standup's days, timezone and deadline with `status` |
 | Replies not threading | The bot posts with a `threadKey`, which threads even if the parent failed. Check the space's history settings |
 
-A `POST` with an empty JSON body to `https://HOST/chat/events` should answer
-`401` with JSON: that proves the app is reachable and rejecting an unsigned
-request. A plain `GET` returns `404`; the route is `POST` only.
+A `POST` with an empty JSON body to `https://HOST/chat/events` proves the app
+is reachable: before an audience is stored it answers `200` with a "not
+connected to Google Chat yet" message, and afterwards `401`, rejecting the
+unsigned request. A plain `GET` returns `404`; the route is `POST` only.

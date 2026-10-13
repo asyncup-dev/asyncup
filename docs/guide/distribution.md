@@ -39,9 +39,8 @@ want it installed *for* them.
 
 No Marketplace listing needed.
 
-1. **Admin console** → Apps → Google Workspace → Google Chat → **Chat apps** →
-   set **"Allow users to install Chat apps"** to **On**
-   ([docs](https://support.google.com/a/answer/7651360)).
+1. **"Allow users to install Chat apps"** is **On** — you did this before
+   [step 2](./google-chat-setup#before-you-start-allow-chat-apps).
 2. In your Chat app's **Configuration** (the GCP project), set **Visibility** to
    the people who'll use it. Google allows **up to five individuals, or one or
    more Google Groups** from your domain
@@ -132,9 +131,9 @@ your endpoint. Check, in order:
 3. **Installed, not just published** — complete the Admin-console install (Path B).
 4. **Endpoint reachable over HTTPS** —
    `curl -i -X POST -H 'content-type: application/json' -d '{}' https://HOST/chat/events`
-   should answer with JSON (a `401` is fine; it means the app is up and
-   rejecting an unsigned probe — a plain GET returns 404, the route is
-   POST-only). The app logs every arrival and the concrete 401 reason,
+   should answer with JSON: `401` once an audience is stored (the app is up and
+   rejecting an unsigned probe), or `200` with a "not connected to Google Chat
+   yet" message before that. A plain GET returns 404; the route is POST-only. The app logs every arrival and the concrete 401 reason,
    so check `docker compose logs` to see whether Google's request even arrived.
 5. **Audience matches** — AsyncUp has your project **number** and, for an
    add-on app, `https://HOST/chat/events` stored

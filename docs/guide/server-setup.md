@@ -95,6 +95,10 @@ curl -fsSL https://get.docker.com | sh
 Caddy obtains and renews **Let's Encrypt certificates automatically** — you
 never touch TLS. Three files in `/opt/asyncup`:
 
+```bash
+mkdir -p /opt/asyncup && cd /opt/asyncup
+```
+
 **`compose.yml`**
 
 ```yaml
@@ -136,14 +140,15 @@ standup.example.com {
 ```
 
 **`.env`** — two generated secrets. This file lives in `/opt/asyncup`, next to
-`compose.yml`, not in a clone of the repository:
+`compose.yml`, not in a clone of the repository. Create it with:
 
-```
-OPERATOR_TOKEN=<openssl rand -hex 24>
-SECRET_KEY=<openssl rand -hex 32>
+```bash
+printf 'OPERATOR_TOKEN=%s\nSECRET_KEY=%s\n' "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > .env
+chmod 600 .env
+cat .env    # copy OPERATOR_TOKEN: you sign in with it
 ```
 
-`chmod 600 .env`. Keep a copy of `SECRET_KEY` somewhere safe and separate from
+ Keep a copy of `SECRET_KEY` somewhere safe and separate from
 database backups: it encrypts the secrets stored in the database, and a lost
 key means pasting them all again. (`DASHBOARD_TOKEN` is the older name for
 `OPERATOR_TOKEN` and still works.)
@@ -196,16 +201,24 @@ private CA, so it connects out of the box. Want strict verification? Set
 
 ### B2. Bundled Postgres on the same machine
 
-Use the repo's compose file, which ships an optional Postgres 18 service:
+Use the repo's compose file, which ships an optional Postgres 18 service. Clone
+it into its own directory (not the Path A one), then create `.env` in it:
 
 ```bash
-git clone https://github.com/asyncup-dev/asyncup /opt/asyncup && cd /opt/asyncup
+git clone https://github.com/asyncup-dev/asyncup /opt/asyncup-pg && cd /opt/asyncup-pg
 cp .env.example .env    # set OPERATOR_TOKEN, SECRET_KEY, POSTGRES_PASSWORD
 # and: DATABASE_URL=postgres://asyncup:<password>@postgres:5432/asyncup
 docker compose --profile postgres up -d
 ```
 
-(Add the Caddy service from Path A for HTTPS.) Sizing: 2 GB RAM is
+Use a password without special characters, or URL-encode it inside
+`DATABASE_URL` (`@` becomes `%40`, `/` becomes `%2F`, and so on);
+`POSTGRES_PASSWORD` itself stays as typed.
+
+That compose file publishes port `8080` on every interface, and Docker's port
+publishing bypasses `ufw`. Change `"8080:8080"` to `"127.0.0.1:8080:8080"` in
+your copy, then add the Caddy service from Path A for HTTPS. (Or use Path A's
+compose file with `DATABASE_URL` added.) Sizing: 2 GB RAM is
 comfortable for app + Postgres. Backups become your job:
 
 ```bash
@@ -250,7 +263,9 @@ No public IP needed: a **Cloudflare Tunnel** makes an outbound-only
 connection and gives your domain HTTPS for free.
 
 1. Domain on Cloudflare (free plan) → Zero Trust → Tunnels → create a tunnel,
-   route `standup.example.com` → `http://asyncup:8080`.
+   route `standup.example.com` → `http://asyncup:8080`. Cloudflare shows the
+   tunnel's token when you create it; put it in `.env` as `TUNNEL_TOKEN=…`,
+   beside `OPERATOR_TOKEN` and `SECRET_KEY`.
 2. On the Pi/box (arm64 and amd64 both work):
 
 ```yaml

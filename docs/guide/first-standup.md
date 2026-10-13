@@ -18,7 +18,8 @@ can come back to it any time.
 | Create your first standup | Template, space, people, schedule |
 
 Steps 1 to 3 are described in [step 2](./google-chat-setup). The rest of this
-page covers the last one.
+page covers the last one. **Before you reach it, make the private test space
+below**, so it's there to pick.
 
 ## Make a private test space
 
