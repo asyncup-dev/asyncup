@@ -130,6 +130,7 @@ a:hover {
 .badge-info { background: var(--info-bg); color: var(--info-fg); }
 .badge-danger { background: var(--danger-bg); color: var(--danger-fg); }
 
+.notice { padding: var(--space-3) var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--bg-surface-2); color: var(--text-primary); }
 .alert {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
