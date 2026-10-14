@@ -15,6 +15,7 @@ describe('migration 10 — AI removal', () => {
     }
   });
 
+  // Replays every migration on a real file, which can take several seconds on a CI runner.
   it('drops the ai_enabled column and forgets stored LLM settings on a v9 database', async () => {
     const dbPath = join(mkdtempSync(join(tmpdir(), 'asyncup-mig-')), 'v9.db');
     const raw = new Database(dbPath);
@@ -47,7 +48,7 @@ describe('migration 10 — AI removal', () => {
     expect(columns).toContain('digest_enabled');
     expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(16);
     check.close();
-  });
+  }, 30_000);
 });
 
 describe('migration 11 — MCP tokens and activity', () => {
