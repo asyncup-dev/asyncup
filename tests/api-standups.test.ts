@@ -29,8 +29,8 @@ async function startServer() {
   const server = app.listen(0);
   close = () => server.close();
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const cookieFor = (sub: string, name = sub) =>
-    `asyncup_sess=${sealSession(SECRET, newSession({ sub, email: `${sub}@o.com`, name, admin: false }))}`;
+  const cookieFor = (sub: string, name = sub, admin = false) =>
+    `asyncup_sess=${sealSession(SECRET, newSession({ sub, email: `${sub}@o.com`, name, admin }))}`;
   const op = (path: string, init: RequestInit = {}) =>
     fetch(`${url}/api/v1${path}`, {
       ...init,
@@ -329,6 +329,8 @@ describe('api: blockers', () => {
 
     expect((await (await post(carol, `/blockers/${bobB.id}/resolve`)).json() as any).error.code).toBe('not_allowed');
     expect(await (await post(bob, `/blockers/${bobB.id}/resolve`)).json()).toEqual({ result: 'resolved' });
+    // A Google or SAML admin may resolve anyone's blocker.
+    expect(await (await post(t.cookieFor('carol', 'Carol', true), `/blockers/${aliceB.id}/resolve`)).json()).toEqual({ result: 'resolved' });
     expect((await (await post(bob, `/blockers/${bobB.id}/resolve`)).json() as any).error.code).toBe('resolved');
     expect((await (await post(bob, `/blockers/${bobB.id}/update`, { text: 'late' })).json() as any).error.code).toBe('resolved');
     expect((await (await post(bob, `/blockers/${bobB.id}/acknowledge`)).json() as any).error.code).toBe('not_found');

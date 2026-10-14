@@ -11,7 +11,9 @@ import { ChatSettings } from './pages/settings/chat';
 import { DangerSettings } from './pages/settings/danger';
 import { GeneralSettings } from './pages/settings/general';
 import { SettingsLayout } from './pages/settings/layout';
+import { AccessSettings } from './pages/settings/access';
 import { McpSettings } from './pages/settings/mcp';
+import { RoleSettings } from './pages/settings/roles';
 import { SignInSettings } from './pages/settings/sign-in';
 import { TokenSettings } from './pages/settings/tokens';
 import { TeamPage } from './pages/team';
@@ -105,6 +107,13 @@ export function buildRouter(): AnyRouter {
     createRoute({ getParentRoute: () => settings, path: '/sign-in', component: SignInSettings }),
     createRoute({ getParentRoute: () => settings, path: '/mcp', component: McpSettings }),
     createRoute({ getParentRoute: () => settings, path: '/tokens', component: TokenSettings }),
+    createRoute({ getParentRoute: () => settings, path: '/roles', component: RoleSettings }),
+    createRoute({
+      getParentRoute: () => settings,
+      path: '/access',
+      validateSearch: (s: Record<string, unknown>): { role?: string } => (typeof s.role === 'string' ? { role: s.role } : {}),
+      component: AccessSettings,
+    }),
     createRoute({ getParentRoute: () => settings, path: '/danger', component: DangerSettings }),
   ];
   const mine = createRoute({ getParentRoute: () => shell, path: '/me', component: MePage });

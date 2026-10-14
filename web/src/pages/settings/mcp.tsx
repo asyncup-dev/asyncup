@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CopyRow } from '../../components/copy-row';
 import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
+import { can } from '../../lib/access';
 import { useMe } from '../../lib/auth';
 import { ago, clock } from '../../lib/format';
 import { clientSnippet, useCreateMcpToken, useMcpActivity, useMcpTokens, usePatchSettings, useRevokeMcpToken, useSettings, useVerifyMutation, type McpClient, type McpScope } from '../../lib/settings';
@@ -83,7 +84,7 @@ export function McpSettings() {
               <span className="t-medium">Kind</span>
               <div className="chip-tabs">
                 <button type="button" className="chip-tab" aria-pressed={form.kind === 'personal'} disabled={!canPersonal} onClick={() => setForm({ ...form, kind: 'personal' })}>Personal — acts as you</button>
-                <button type="button" className="chip-tab" aria-pressed={form.kind === 'service'} disabled={me.data?.kind !== 'admin'} onClick={() => setForm({ ...form, kind: 'service', scopes: ['read'] })}>Service — read-only, admin</button>
+                <button type="button" className="chip-tab" aria-pressed={form.kind === 'service'} disabled={!can(me.data, 'tokens.manage')} onClick={() => setForm({ ...form, kind: 'service', scopes: ['read'] })}>Service — read-only, admin</button>
               </div>
               <span className="t-medium">Scopes</span>
               <div className="chip-tabs">

@@ -295,7 +295,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     { title: 'Resolve a blocker', description: 'Resolve a blocker the owner owns, is tagged on, or administers.', inputSchema: z.object({ blockerId: ID }), outputSchema: S.BlockerResult.resolve, write: { destructive: true, idempotent: true } },
     async ({ blockerId }) => {
       const a = await blockerFor(blockerId);
-      const result = await deps.blockers.resolve(a.blocker.id, a.me);
+      const result = await deps.blockers.resolve(a.blocker.id, a.me, p.access);
       if (result === 'not_found') throw new ToolRefused('No such blocker.');
       if (result === 'already_resolved') throw new ToolRefused('This blocker is already resolved.');
       if (result === 'not_allowed') throw new ToolRefused('Only the owner, tagged people and standup admins can resolve a blocker.');

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAccess } from '../../lib/access';
 import { MOOD_EMOJI } from '../../lib/api';
 import { clock, longDate, monthOf, names, pct, shortDate } from '../../lib/format';
 import { useRun, useRuns, useStandup } from '../../lib/standups';
@@ -15,7 +16,9 @@ export function HistoryPage() {
   const [shown, setShown] = useState(PAGE);
   const list = (runs.data ?? []).filter((r) => filter === 'all' || r.missing.length > 0);
   const selected = picked ?? list[0]?.date ?? null;
-  const run = useRun(id, selected);
+  const access = useAccess();
+  const answers = access.can('answers.view', id);
+  const run = useRun(id, answers ? selected : null);
   const zone = standup.data?.schedule.timezone ?? 'UTC';
   const questionLabel = (q: string, i: number) => (standup.data?.questions[i] === q ? ['Yesterday', 'Today', 'Blockers'][i] ?? q : q) || q;
   return (
@@ -46,6 +49,7 @@ export function HistoryPage() {
       </section>
       <section className="card">
         {!selected ? <div className="card-body t-small muted">Pick a run to see its answers.</div> : null}
+        {selected && !answers ? <div className="card-body t-small muted">Your role shows who answered each day, not what they wrote.</div> : null}
         {run.isError ? <div className="card-body"><div className="alert">Could not load that run: {run.error.message}</div></div> : null}
         {run.data ? (
           <>
@@ -58,7 +62,7 @@ export function HistoryPage() {
                   {run.data.teamMood !== null ? ` · team mood ${run.data.teamMood}/5` : ''}
                 </div>
               </div>
-              <a className="btn btn-ghost" style={{ height: 28 }} href={`/api/v1/standups/${id}/export.csv?days=90`}>Export CSV</a>
+              {access.can('export', id) ? <a className="btn btn-ghost" style={{ height: 28 }} href={`/api/v1/standups/${id}/export.csv?days=90`}>Export CSV</a> : null}
             </div>
             <div className="card-body">
               {run.data.submissions.length === 0 ? <span className="t-small muted">No answers were submitted.</span> : null}

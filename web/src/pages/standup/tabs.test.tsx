@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ADMIN, renderApp, stubApi } from '../../test/harness';
+import { ADMIN, MANAGER, renderApp, stubApi } from '../../test/harness';
 
 const ENG = {
   id: 1, name: 'Engineering', spaceName: 'spaces/A', active: true,
@@ -24,14 +24,22 @@ const RUNS = [
   { date: '2026-09-14', status: 'open', submitted: 0, expected: 2, missing: [] },
 ];
 const detail = (date: string, late: boolean) => ({ date, status: 'closed', submitted: 2, expected: 2, missing: [], teamMood: null, submissions: [{ userName: 'users/alice', displayName: 'Alice', submittedAt: 'x', editedAt: null, late, mood: null, answers: [] }] });
+const ROLES = [
+  { id: 'admin', name: 'Admin', description: '', permissions: ['standups.view', 'settings.manage'], builtIn: true, grantable: true, workspaceOnly: true, grants: 0 },
+  { id: 'viewer', name: 'Viewer', description: '', permissions: ['standups.view', 'answers.view'], builtIn: true, grantable: true, workspaceOnly: false, grants: 1 },
+  { id: '9', name: 'Deleter', description: '', permissions: ['standups.view', 'standups.delete'], builtIn: false, grantable: true, workspaceOnly: true, grants: 0 },
+  { id: '8', name: 'Coach', description: '', permissions: ['standups.view', 'schedules.manage', 'blockers.manage'], builtIn: false, grantable: true, workspaceOnly: false, grants: 0 },
+];
 const WEEKS = Array.from({ length: 16 }, (_, i) => ({ label: `w${i}`, participationPct: 80, mood: i > 8 ? 4 : null, blockersOpened: 1, blockersResolved: 1 }));
 
 function server(over: Record<string, { status?: number; body: unknown }> = {}) {
   const patches: Record<string, unknown>[] = [];
   const weeks: Record<string, unknown>[] = [];
+  const grants: Record<string, unknown>[] = [];
   return {
     patches,
     weeks,
+    grants,
     ...stubApi({
       'GET /api/v1/me': { body: ADMIN },
       'GET /api/v1/standups/1': { body: ENG },
@@ -49,6 +57,9 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}) {
       'GET /api/v1/standups/1/runs?limit=40': { body: { runs: RUNS } },
       'GET /api/v1/standups/1/runs/2026-09-16': { body: detail('2026-09-16', true) },
       'GET /api/v1/standups/1/runs/2026-09-15': { body: detail('2026-09-15', false) },
+      'GET /api/v1/roles': { body: { roles: ROLES } },
+      'GET /api/v1/grants?standupId=1': { body: { grants: [{ id: 5, email: 'sam@example.com', displayName: 'Sam', role: { id: 'viewer', name: 'Viewer' }, standup: { id: 1, name: 'Engineering' }, grantedBy: 'Alice', grantedAt: '2026-10-01T09:00:00Z' }] } },
+      'POST /api/v1/grants': { status: 201, body: (init?: RequestInit) => { grants.push(JSON.parse(String(init?.body))); return { id: 6, email: 'pat@example.com', displayName: 'pat@example.com', role: { id: 'viewer', name: 'Viewer' }, standup: { id: 1, name: 'Engineering' }, grantedBy: 'Bob', grantedAt: 'x' }; } },
       ...over,
     }),
   };
@@ -229,9 +240,38 @@ describe('standup settings tab', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Archive the standup first');
     cleanup();
 
-    server({ 'GET /api/v1/me': { body: { kind: 'manager', via: 'session', tenantId: 'default', user: { userName: 'users/bob', email: 'b@o.com', name: 'Bob' }, managedStandupIds: [1] } } });
+    server({ 'GET /api/v1/me': { body: MANAGER } });
     renderApp('/standups/1/settings');
     expect(await screen.findByText(/Only workspace admins can delete a standup/)).toBeInTheDocument();
+  });
+
+  it('lets a standup’s manager grant roles on it, and hides what they cannot change', async () => {
+    const { grants, calls } = server({ 'GET /api/v1/me': { body: { ...MANAGER, permissions: { workspace: [], standups: { '1': ['standups.view', 'people.manage', 'answers.view', 'blockers.manage'] } } } } });
+    renderApp('/standups/1/settings');
+    const user = userEvent.setup();
+    expect(await screen.findByText('Sam')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Prompt time')).not.toBeInTheDocument();
+    expect(screen.queryByText('Danger zone')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Bob works Tue')).toBeDisabled();
+    const form = within(screen.getByRole('form', { name: 'Grant a role' }));
+    expect(form.getAllByRole('option').map((o) => o.textContent)).toEqual(['Viewer']);
+    expect(form.queryByLabelText('Where')).not.toBeInTheDocument();
+    await user.type(form.getByLabelText('Email'), 'pat@example.com');
+    await user.click(form.getByRole('button', { name: 'Grant' }));
+    expect(await screen.findByText(/Viewer granted to pat@example.com on Engineering/)).toBeInTheDocument();
+    expect(grants).toEqual([{ email: 'pat@example.com', role: 'viewer', standupId: 1 }]);
+    expect(calls).toContain('GET /api/v1/grants?standupId=1');
+  });
+
+  it('says so when there is no role to grant', async () => {
+    server({ 'GET /api/v1/me': { body: { ...MANAGER, permissions: { workspace: [], standups: { '1': ['people.manage'] } } } }, 'GET /api/v1/grants?standupId=1': { body: { grants: [] } } });
+    renderApp('/standups/1/settings');
+    expect(await screen.findByText('Nobody has a role granted on this standup.')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'No role you can grant here' })).toBeInTheDocument();
+    cleanup();
+    server({ 'GET /api/v1/roles': { status: 500, body: { error: { code: 'x', message: 'Down.' } } } });
+    renderApp('/standups/1/settings');
+    expect(await screen.findByText('Could not load roles: Down.')).toBeInTheDocument();
   });
 
   it('says why the signing secret could not be shown', async () => {

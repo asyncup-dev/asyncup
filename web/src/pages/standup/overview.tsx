@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { AWAY_LABEL, MOOD_EMOJI } from '../../lib/api';
+import { mayResolve } from '../../lib/access';
 import { useMe } from '../../lib/auth';
 import { ago, clock, closesIn, daysLabel, names, pct, shortDate, zoneAbbr } from '../../lib/format';
 import { useBlockerAction, useOpenBlockers, useRuns, useStandup, useToday } from '../../lib/standups';
@@ -145,7 +146,7 @@ export function OverviewPage() {
                     {b.status === 'open' && b.tags.some((x) => x.userName === me.data?.user?.userName) ? (
                       <button type="button" className="btn" style={{ height: 28 }} disabled={ack.isPending} onClick={() => void onBlocker(ack, b.id)}>Acknowledge</button>
                     ) : null}
-                    <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={resolve.isPending} onClick={() => void onBlocker(resolve, b.id)}>Resolve</button>
+                    {mayResolve(me.data, b) ? <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={resolve.isPending} onClick={() => void onBlocker(resolve, b.id)}>Resolve</button> : null}
                   </div>
                 ) : null}
               </div>

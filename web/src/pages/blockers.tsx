@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { mayResolve } from '../lib/access';
 import { useMe } from '../lib/auth';
 import { shortDate } from '../lib/format';
 import { ageOf, useBlockerUpdate, useBlockers } from '../lib/people';
@@ -119,7 +120,7 @@ export function BlockersPage() {
                         <button type="button" className="btn" style={{ height: 28 }} disabled={ack.isPending} onClick={() => void run(() => ack.mutateAsync(b.id))}>Acknowledge</button>
                       ) : null}
                       <button type="button" className="btn btn-ghost" style={{ height: 28 }} onClick={() => { setNoteFor(b.id); setNote(''); }}>Update</button>
-                      <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={resolve.isPending} onClick={() => void run(() => resolve.mutateAsync(b.id))}>Resolve</button>
+                      {mayResolve(me.data, b) ? <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={resolve.isPending} onClick={() => void run(() => resolve.mutateAsync(b.id))}>Resolve</button> : null}
                     </div>
                   ) : null}
                 </td>

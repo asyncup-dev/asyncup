@@ -1,7 +1,7 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ADMIN, MEMBER, OPERATOR, renderApp, stubApi } from '../../test/harness';
+import { ADMIN, MEMBER, OPERATOR, renderApp, stubApi, VIEWER } from '../../test/harness';
 import { participation, todayBadge } from '../standups';
 
 const ENG = {
@@ -199,6 +199,30 @@ describe('standup overview', () => {
     server();
     renderApp('/standups/9');
     expect(await screen.findByText(/Could not load this standup: No such standup/)).toBeInTheDocument();
+  });
+});
+
+describe('a granted Viewer on a standup', () => {
+  it('reads it without the controls that would be refused', async () => {
+    server({ 'GET /api/v1/standups/1': { body: { ...ENG, permissions: { manage: false } } } }, VIEWER);
+    renderApp('/standups/1');
+    expect(await screen.findByRole('heading', { name: 'Engineering' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run now' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Export CSV' })).toBeInTheDocument();
+    const tabs = within(screen.getByRole('navigation', { name: 'Standup sections' }));
+    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Overview', 'History', 'Insights']);
+    cleanup();
+
+    renderApp('/standups/1/settings');
+    expect(await screen.findByText(/You can’t change this standup’s settings/)).toBeInTheDocument();
+  });
+
+  it('shows who answered but not the answers to a role without them', async () => {
+    const { calls } = server({}, { ...VIEWER, permissions: { workspace: ['standups.view', 'reports.view'], standups: {} } });
+    renderApp('/standups/1/history');
+    expect(await screen.findByText('Your role shows who answered each day, not what they wrote.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Export CSV' })).not.toBeInTheDocument();
+    expect(calls.some((c) => c.startsWith('GET /api/v1/standups/1/runs/2026'))).toBe(false);
   });
 });
 

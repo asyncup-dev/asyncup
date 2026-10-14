@@ -2,22 +2,21 @@ import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { Icons } from '../components/icons';
 import { LogoLockup, LogoMark } from '../components/logo';
+import { can, canSomewhere, SETTINGS_PERMISSIONS } from '../lib/access';
 import { initials, useSignOut } from '../lib/auth';
 import type { Me } from '../lib/api';
 import { ThemeToggle } from './theme-toggle';
 
 type NavEntry = { to: string; label: string; icon: (p: object) => ReactNode };
 
-/** Admins and managers get the console; members only ever see their own standups. */
+/** Members only ever see their own standups; everyone else gets the console pages their permissions open. */
 export function navFor(me: Me): NavEntry[] {
   if (me.kind === 'member') return [{ to: '/me', label: 'My standups', icon: Icons.standups }];
-  const items: NavEntry[] = [
-    { to: '/standups', label: 'Standups', icon: Icons.standups },
-    { to: '/blockers', label: 'Blockers', icon: Icons.blockers },
-    { to: '/reports', label: 'Reports', icon: Icons.reports },
-    { to: '/team', label: 'Team', icon: Icons.team },
-  ];
-  if (me.kind === 'admin') items.push({ to: '/settings', label: 'Settings', icon: Icons.settings });
+  const items: NavEntry[] = [{ to: '/standups', label: 'Standups', icon: Icons.standups }];
+  if (canSomewhere(me, 'blockers.view')) items.push({ to: '/blockers', label: 'Blockers', icon: Icons.blockers });
+  if (canSomewhere(me, 'reports.view')) items.push({ to: '/reports', label: 'Reports', icon: Icons.reports });
+  if (canSomewhere(me, 'people.view')) items.push({ to: '/team', label: 'Team', icon: Icons.team });
+  if (SETTINGS_PERMISSIONS.some((p) => can(me, p))) items.push({ to: '/settings', label: 'Settings', icon: Icons.settings });
   return items;
 }
 

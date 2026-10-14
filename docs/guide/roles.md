@@ -61,9 +61,18 @@ Chat it's the email AsyncUp has learned for that person (from the
 [Directory](./directory) or their first interaction). Changes apply on the
 next request; an MCP token follows its owner's roles as they are now.
 
-Every change to a role or grant is logged with who made it and when. Manage
-them through the [JSON API](./api): `GET /api/v1/permissions`,
-`/api/v1/roles`, `/api/v1/grants` and `GET /api/v1/roles/audit`.
+Every change to a role or grant is logged with who made it and when.
+
+| Where | What you can do there |
+| --- | --- |
+| **Settings › Roles** | See every role, its permissions and who holds it. Copy a role, build one from the permission checklist, edit or delete custom roles |
+| **Settings › Access** | See every grant, filter by role, grant a role across the workspace or on one standup, revoke, and read the change history |
+| **Standup › Settings › Roles on this standup** | A standup's managers grant and revoke roles on that standup only |
+| [JSON API](./api) | `GET /api/v1/permissions`, `/api/v1/roles`, `/api/v1/grants` and `GET /api/v1/roles/audit` |
+
+The web app shows each person only the pages and controls their permissions
+allow. A Viewer, for example, gets Standups, Blockers, Reports and Team, with
+no Run now, roster or settings controls.
 
 Notes:
 

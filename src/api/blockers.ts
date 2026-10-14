@@ -62,7 +62,7 @@ export function registerBlockerRoutes(api: Router, ctx: ApiContext): void {
   api.post('/blockers/:id/resolve', async (req, res) => {
     const a = await actor(req, res);
     if (!a) return;
-    const result = await ctx.blockers.resolve(a.blocker.id, a.me);
+    const result = await ctx.blockers.resolve(a.blocker.id, a.me, principalOf(req).access);
     if (result === 'not_found') return apiError(res, 404, 'not_found', 'No such blocker.');
     if (result === 'already_resolved') return apiError(res, 409, 'resolved', 'This blocker is already resolved.');
     if (result === 'not_allowed') return apiError(res, 403, 'not_allowed', 'Only the owner, tagged people and standup admins can resolve a blocker.');
