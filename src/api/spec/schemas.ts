@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MCP_SCOPES } from '../../core/mcp-scopes.js';
+import { PERMISSIONS } from '../../core/permission-catalogue.js';
 import { AWAY_REASONS, MOODS, OVERRIDE_STATUSES, TIME_OFF_POLICIES, WEEKDAYS } from '../../core/types.js';
 import { LIMITS } from '../../core/validation.js';
 
@@ -28,6 +29,7 @@ export const Mood = named('Mood', z.enum(MOODS));
 export const Weekday = named('Weekday', z.enum(WEEKDAYS));
 export const TimeOffPolicy = named('TimeOffPolicy', z.enum(TIME_OFF_POLICIES), 'self: people mark themselves away · approval: a manager must approve · managers: only managers can.');
 export const McpScope = named('McpScope', z.enum(MCP_SCOPES));
+export const Permission = named('Permission', z.enum(Object.keys(PERMISSIONS) as [keyof typeof PERMISSIONS, ...(keyof typeof PERMISSIONS)[]]));
 
 export const ApiError = named(
   'Error',
@@ -47,8 +49,9 @@ export const Me = named(
     tenantId: z.string(),
     user: z.strictObject({ userName: z.string().nullable(), email: z.string(), name: z.string() }).nullable(),
     managedStandupIds: z.array(id),
+    permissions: z.strictObject({ workspace: z.array(Permission), standups: z.record(z.string(), z.array(Permission)) }),
   }),
-  'The caller. `user` is null for the operator token.',
+  'The caller. `user` is null for the operator token. `permissions.standups` is keyed by standup id and adds to the workspace ones.',
 );
 
 // --- standups and runs
@@ -531,6 +534,56 @@ export const CreateMcpTokenBody = named(
   'CreateMcpTokenBody',
   z.strictObject({ name: text.min(1), kind: z.enum(['personal', 'service']).optional(), scopes: z.array(McpScope).optional() }),
   'Service tokens are admin-only and always read-only; scopes default to the workspace default.',
+);
+
+export const PermissionList = named(
+  'PermissionList',
+  z.strictObject({ permissions: z.array(z.strictObject({ id: Permission, label: z.string(), description: z.string(), workspaceOnly: z.boolean() })) }),
+  'Every permission a role can hold. Workspace-only ones can only be granted across the workspace.',
+);
+export const Role = named(
+  'Role',
+  z.strictObject({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    permissions: z.array(Permission),
+    builtIn: z.boolean(),
+    grantable: z.boolean(),
+    workspaceOnly: z.boolean(),
+    grants: count,
+  }),
+  'Built-in roles have word ids (admin, manager, viewer, member) and cannot be changed; custom roles have numeric ids.',
+);
+export const RoleList = named('RoleList', z.strictObject({ roles: z.array(Role) }));
+export const RoleBody = named(
+  'RoleBody',
+  z.strictObject({ name: z.string().min(1).max(40), description: text.optional(), permissions: z.array(Permission).min(1) }),
+  'You can only give a role permissions you hold yourself. `standups.view` is added whenever another standup permission is chosen, since the others need it.',
+);
+export const Grant = named(
+  'Grant',
+  z.strictObject({
+    id,
+    email: z.string(),
+    displayName: z.string(),
+    role: z.strictObject({ id: z.string(), name: z.string() }),
+    standup: z.strictObject({ id, name: z.string() }).nullable(),
+    grantedBy: z.string(),
+    grantedAt: timestamp,
+  }),
+  '`standup` is null for a grant across the workspace.',
+);
+export const GrantList = named('GrantList', z.strictObject({ grants: z.array(Grant) }));
+export const GrantBody = named(
+  'GrantBody',
+  z.strictObject({ email: z.string(), displayName: text.optional(), role: z.string(), standupId: id.nullable().optional() }),
+  'Omit standupId for the whole workspace. On one standup, managing its people is enough to grant a role whose permissions you hold there.',
+);
+export const RoleAudit = named(
+  'RoleAudit',
+  z.strictObject({ entries: z.array(z.strictObject({ id, at: timestamp, actor: z.string(), action: z.string(), summary: z.string() })) }),
+  'Newest first.',
 );
 
 export type Person = z.infer<typeof Person>;

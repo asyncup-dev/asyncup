@@ -1,4 +1,4 @@
-import { PERMISSIONS } from '../../core/permissions.js';
+import { PERMISSIONS } from '../../core/permission-catalogue.js';
 import { z } from 'zod';
 import { SESSION_COOKIE } from '../../auth/session.js';
 import { APP_VERSION } from '../../version.js';

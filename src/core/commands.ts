@@ -269,7 +269,7 @@ export class CommandHandler {
   /** A standup with no admins is open to everyone in its space. */
   private async requirePermission(standup: Standup, sender: Mention, need: Permission): Promise<string | null> {
     const admins = await this.repo.listAdmins(standup.id);
-    if (admins.length === 0 || can(await resolveAccess(this.repo, sender.userName, false), need, standup.id)) return null;
+    if (admins.length === 0 || can(await resolveAccess(this.repo, { tenantId: standup.tenantId, userName: sender.userName }, false), need, standup.id)) return null;
     return `🔒 Only admins of *${standup.name}* can change its configuration (${admins
       .map((a) => a.displayName)
       .join(', ')}).`;

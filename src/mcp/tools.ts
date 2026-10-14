@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { nudgeToday, skipToday, updateMe, type Refusal } from '../api/actions.js';
 import type { Principal } from '../api/principal.js';
 import { actorFor, displayNameOf, managesPerson, overrideView, scheduleView } from '../api/schedule.js';
-import { allowed, findVisibleStandup, summarise, visibleStandups } from '../api/shared.js';
+import { allowed, findVisibleStandup, meView, summarise, visibleStandups } from '../api/shared.js';
 import { canSomewhere, standupsWith, type Permission } from '../core/permissions.js';
 import * as S from '../api/spec/schemas.js';
 import { BLOCKER_STATUSES, blockersView, linkedStandupsView, peopleView, runsView, runView, standupDetailView, visibleBlocker } from '../api/views.js';
@@ -148,7 +148,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       inputSchema: z.object({}),
       outputSchema: McpMe,
     },
-    async () => ({ kind: p.kind, via: p.via, tenantId: p.tenantId, user: p.user, managedStandupIds: p.managedStandupIds, scopes }),
+    async () => ({ ...meView(p), scopes }),
   );
 
   register(

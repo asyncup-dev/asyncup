@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Permission } from '../../core/permissions.js';
+import type { Permission } from '../../core/permission-catalogue.js';
 import * as S from './schemas.js';
 
 /** Who may call a route; the OpenAPI document turns this into security and a note. */
@@ -232,6 +232,34 @@ export const ROUTES: RouteSpec[] = [
     access: 'any',
     query: { limit: { schema: z.number().int().min(1).max(500).default(50), description: 'How many, newest first' } },
     responses: { 200: S.McpActivity },
+  },
+  // roles and grants
+  { method: 'get', path: '/permissions', summary: 'Every permission a role can hold', tag: 'Roles', access: 'any', responses: { 200: S.PermissionList } },
+  { method: 'get', path: '/roles', summary: 'Built-in and custom roles, with how many hold each', tag: 'Roles', access: 'manager', permission: 'people.manage', responses: { 200: S.RoleList } },
+  { method: 'post', path: '/roles', summary: 'Create a role', tag: 'Roles', access: 'admin', permission: 'roles.manage', body: S.RoleBody, responses: { 201: S.Role }, errors: [400, 409] },
+  { method: 'patch', path: '/roles/:id', summary: 'Change a custom role', tag: 'Roles', access: 'admin', permission: 'roles.manage', params: { id: { schema: z.string(), description: 'Role id' } }, body: S.RoleBody, responses: { 200: S.Role }, errors: [400, 404, 409] },
+  { method: 'delete', path: '/roles/:id', summary: 'Delete a custom role nobody holds', tag: 'Roles', access: 'admin', permission: 'roles.manage', params: { id: { schema: z.string(), description: 'Role id' } }, responses: { 204: null }, errors: [400, 404, 409] },
+  {
+    method: 'get',
+    path: '/grants',
+    summary: 'Who holds which role, where the caller can grant',
+    tag: 'Roles',
+    access: 'manager',
+    permission: 'people.manage',
+    query: { standupId: { schema: z.number().int().positive(), description: 'Only grants on this standup' } },
+    responses: { 200: S.GrantList },
+  },
+  { method: 'post', path: '/grants', summary: 'Grant a role across the workspace or on one standup', tag: 'Roles', access: 'manager', permission: 'people.manage', body: S.GrantBody, responses: { 201: S.Grant }, errors: [400, 404, 409] },
+  { method: 'delete', path: '/grants/:id', summary: 'Revoke a grant', tag: 'Roles', access: 'manager', permission: 'people.manage', params: { id: { schema: z.number().int().positive(), description: 'Grant id' } }, responses: { 204: null }, errors: [404, 409] },
+  {
+    method: 'get',
+    path: '/roles/audit',
+    summary: 'Every change to roles and grants',
+    tag: 'Roles',
+    access: 'admin',
+    permission: 'roles.manage',
+    query: { limit: { schema: z.number().int().min(1).max(500).default(100), description: 'How many, newest first' } },
+    responses: { 200: S.RoleAudit },
   },
   { method: 'post', path: '/verify/mcp', summary: 'Check the MCP server is on and has tokens', tag: 'Verify', access: 'admin', permission: 'settings.manage', responses: { 200: S.Verification } },
 ];

@@ -3,7 +3,7 @@ import type { DateTime } from 'luxon';
 import type { ChatClientFactory } from '../adapters/gchat/adapter.js';
 import type { SamlBroker, SamlConfig } from '../auth/saml.js';
 import type { ChatAdapter } from '../core/adapter.js';
-import { can, standupsWith, type Permission } from '../core/permissions.js';
+import { can, orderedPermissions, standupsWith, type Permission } from '../core/permissions.js';
 import type { BlockerService } from '../core/blocker-service.js';
 import type { WebhookNotifier } from '../core/webhooks.js';
 import { runProgress } from '../core/progress.js';
@@ -59,6 +59,19 @@ export interface ApiContext {
 export function clampInt(raw: unknown, fallback: number, min: number, max: number): number {
   const n = Number(raw);
   return Math.min(Math.max(Number.isInteger(n) ? n : fallback, min), max);
+}
+
+/** The caller as `/me` and MCP's get_me describe them. */
+export function meView(p: Principal) {
+  const standups = Object.fromEntries([...p.access.standups].map(([id, held]) => [String(id), orderedPermissions(held)]));
+  return {
+    kind: p.kind,
+    via: p.via,
+    tenantId: p.tenantId,
+    user: p.user,
+    managedStandupIds: p.managedStandupIds,
+    permissions: { workspace: orderedPermissions(p.access.workspace), standups },
+  };
 }
 
 /** Whether the caller holds a permission across the workspace, or on this standup. */

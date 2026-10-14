@@ -1,30 +1,8 @@
 import type { Repo } from '../db/repo.js';
+import { PERMISSIONS, type Permission } from './permission-catalogue.js';
+import type { CustomRole } from './types.js';
 
-/**
- * What a person may do. Roles are named sets of these; a grant gives a role
- * to someone across the workspace or on one standup.
- */
-export const PERMISSIONS = {
-  'standups.view': { label: 'See standups', description: 'See a standup, who is on it and how today is going', workspaceOnly: false },
-  'standups.create': { label: 'Create standups', description: 'Create standups in any space the app is in', workspaceOnly: true },
-  'standups.configure': { label: 'Configure standups', description: 'Change the schedule, questions, mood, escalation and webhook; run now, nudge and close polls', workspaceOnly: false },
-  'standups.archive': { label: 'Archive standups', description: 'Archive a standup and bring it back', workspaceOnly: false },
-  'standups.delete': { label: 'Delete standups', description: 'Delete an archived standup with all its history', workspaceOnly: true },
-  'people.view': { label: 'See the team', description: 'See the Team directory', workspaceOnly: false },
-  'people.manage': { label: 'Manage people', description: 'Add and remove people, mark them required, make managers', workspaceOnly: false },
-  'schedules.manage': { label: 'Manage schedules', description: 'Change people’s weeks and days off, and decide time-off requests', workspaceOnly: false },
-  'answers.view': { label: 'Read answers', description: 'Read each day’s answers', workspaceOnly: false },
-  'blockers.view': { label: 'See blockers', description: 'See blockers and their updates', workspaceOnly: false },
-  'blockers.manage': { label: 'Resolve blockers', description: 'Resolve anyone’s blocker', workspaceOnly: false },
-  'reports.view': { label: 'See reports', description: 'See run history and insights', workspaceOnly: false },
-  export: { label: 'Export', description: 'Download answers as CSV', workspaceOnly: false },
-  'settings.manage': { label: 'Manage settings', description: 'Change workspace settings, verify the setup and delete history', workspaceOnly: true },
-  'sso.manage': { label: 'Manage sign-in', description: 'Change Google sign-in, SAML and token sign-in', workspaceOnly: true },
-  'tokens.manage': { label: 'Manage tokens', description: 'Machine tokens, service MCP tokens, and everyone’s MCP tokens and activity', workspaceOnly: true },
-  'roles.manage': { label: 'Manage roles', description: 'Create roles and grant or revoke them', workspaceOnly: true },
-} as const;
-
-export type Permission = keyof typeof PERMISSIONS;
+export { PERMISSIONS, type Permission } from './permission-catalogue.js';
 
 const ALL = Object.keys(PERMISSIONS) as Permission[];
 
@@ -41,6 +19,25 @@ export const BUILT_IN_ROLES = {
   viewer: { name: 'Viewer', permissions: ['standups.view', 'people.view', 'answers.view', 'blockers.view', 'reports.view', 'export'] as Permission[] },
   member: { name: 'Member', permissions: ['standups.view', 'answers.view', 'blockers.view', 'reports.view'] as Permission[] },
 };
+
+/** In catalogue order, without repeats. */
+export function orderedPermissions(held: Iterable<Permission>): Permission[] {
+  const set = new Set(held);
+  return ALL.filter((p) => set.has(p));
+}
+
+/** Built-in roles that can be granted; Member comes from being on a roster. */
+export const GRANTABLE_BUILT_INS = ['admin', 'manager', 'viewer'] as const;
+
+export function isPermission(value: string): value is Permission {
+  return Object.hasOwn(PERMISSIONS, value);
+}
+
+/** A grant's permissions: a built-in role's, or a custom role's that still exist. */
+export function permissionsOf(role: string, custom: ReadonlyMap<string, CustomRole>): Permission[] {
+  if ((GRANTABLE_BUILT_INS as readonly string[]).includes(role)) return BUILT_IN_ROLES[role as (typeof GRANTABLE_BUILT_INS)[number]].permissions;
+  return (custom.get(role)?.permissions ?? []).filter(isPermission);
+}
 
 /** Permissions held across the workspace, and per standup on top of those. */
 export interface Access {
@@ -64,20 +61,50 @@ export function standupsWith(access: Access, permission: Permission): number[] {
 }
 
 /**
- * A person's access: workspace admins hold everything; otherwise Member on
- * each roster they are on and Manager on each standup they administer.
+ * The coarse role the web app lays out its navigation by: admin with the
+ * workspace settings, manager with anything beyond answering, else member.
  */
-export async function resolveAccess(repo: Repo, userName: string | null, workspaceAdmin: boolean): Promise<Access> {
+export function roleKind(access: Access, externalAdmin: boolean, administers: number): 'admin' | 'manager' | 'member' {
+  if (externalAdmin || access.workspace.has('settings.manage')) return 'admin';
+  const member = new Set<Permission>(BUILT_IN_ROLES.member.permissions);
+  const held = [...access.workspace, ...[...access.standups.values()].flatMap((s) => [...s])];
+  return administers > 0 || held.some((p) => !member.has(p)) ? 'manager' : 'member';
+}
+
+export interface Who {
+  tenantId: string;
+  userName: string | null;
+  /** Grants are keyed by email; looked up from the Chat user when not given. */
+  email?: string | null;
+}
+
+/**
+ * A person's access: workspace admins hold everything; otherwise Member on
+ * each roster they are on, Manager on each standup they administer, and
+ * whatever roles they were granted by email.
+ */
+export async function resolveAccess(repo: Repo, who: Who, workspaceAdmin: boolean): Promise<Access> {
   if (workspaceAdmin) return { workspace: new Set(BUILT_IN_ROLES.admin.permissions), standups: new Map() };
+  const workspace = new Set<Permission>();
   const standups = new Map<number, Set<Permission>>();
   const grant = (id: number, permissions: Permission[]) => {
     const held = standups.get(id) ?? new Set<Permission>();
     for (const p of permissions) held.add(p);
     standups.set(id, held);
   };
-  if (userName) {
-    for (const s of await repo.listStandupsForUser(userName)) grant(s.id, BUILT_IN_ROLES.member.permissions);
-    for (const s of await repo.listStandupsAdministeredBy(userName)) grant(s.id, BUILT_IN_ROLES.manager.permissions);
+  if (who.userName) {
+    for (const s of await repo.listStandupsForUser(who.userName)) grant(s.id, BUILT_IN_ROLES.member.permissions);
+    for (const s of await repo.listStandupsAdministeredBy(who.userName)) grant(s.id, BUILT_IN_ROLES.manager.permissions);
   }
-  return { workspace: new Set(), standups };
+  const email = (who.email ?? (who.userName ? await repo.getUserEmail(who.userName) : null))?.toLowerCase();
+  const grants = email ? await repo.listGrants(who.tenantId, { email }) : [];
+  if (grants.length > 0) {
+    const custom = new Map((await repo.listRoles(who.tenantId)).map((r) => [String(r.id), r]));
+    for (const g of grants) {
+      const permissions = permissionsOf(g.role, custom);
+      if (g.standupId === null) for (const p of permissions) workspace.add(p);
+      else grant(g.standupId, permissions.filter((p) => !PERMISSIONS[p].workspaceOnly));
+    }
+  }
+  return { workspace, standups };
 }
