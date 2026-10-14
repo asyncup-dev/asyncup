@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { Mention } from './commands.js';
+import { can, resolveAccess } from './permissions.js';
 import type { Repo } from '../db/repo.js';
 import type { Blocker, Standup } from './types.js';
 
@@ -98,7 +99,7 @@ export class BlockerService {
     return 'ok';
   }
 
-  /** Owner, tagged people, and standup admins may resolve. */
+  /** Owner, tagged people, and whoever may resolve blockers on the standup. */
   async resolve(blockerId: number, user: Mention): Promise<ResolveResult> {
     const blocker = await this.repo.getBlockerById(blockerId);
     if (!blocker) return 'not_found';
@@ -108,7 +109,7 @@ export class BlockerService {
     const allowed =
       blocker.userName === user.userName ||
       tags.some((t) => t.userName === user.userName) ||
-      (await this.repo.isAdmin(standup.id, user.userName));
+      can(await resolveAccess(this.repo, user.userName, false), 'blockers.manage', standup.id);
     if (!allowed) return 'not_allowed';
 
     const date = this.now().setZone(standup.timezone).toISODate()!;

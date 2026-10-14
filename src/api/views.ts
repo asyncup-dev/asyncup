@@ -6,7 +6,7 @@ import { runProgress } from '../core/progress.js';
 import { MOOD_SCORE, type Blocker, type Standup, type Submission } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
-import { findVisibleStandup, standupDays, summarise, visibleStandups } from './shared.js';
+import { allowed, findVisibleStandup, standupDays, summarise, visibleStandups } from './shared.js';
 
 /**
  * Read models shared by the JSON API and the MCP tools, so both surfaces
@@ -69,7 +69,7 @@ export async function blockersView(
   p: Principal,
   opts: { status: BlockerStatusFilter; standupId: number | null; owner?: string },
 ) {
-  const visible = await visibleStandups(repo, p);
+  const visible = (await visibleStandups(repo, p)).filter((s) => allowed(p, 'blockers.view', s.id));
   const standupIds = visible.map((s) => s.id).filter((id) => opts.standupId === null || id === opts.standupId);
   const names = new Map(visible.map((s) => [s.id, s.name]));
   const rows = await repo.listBlockers({
@@ -90,7 +90,7 @@ export async function blockersView(
 /** A blocker on a standup the caller can see. */
 export async function visibleBlocker(repo: Repo, p: Principal, blockerId: number): Promise<Blocker | null> {
   const blocker = await repo.getBlockerById(blockerId);
-  return blocker && (await findVisibleStandup(repo, p, blocker.standupId)) ? blocker : null;
+  return blocker && (await findVisibleStandup(repo, p, blocker.standupId)) && allowed(p, 'blockers.view', blocker.standupId) ? blocker : null;
 }
 
 export async function runsView(repo: Repo, standup: Standup, limit: number) {

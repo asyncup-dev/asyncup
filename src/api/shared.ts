@@ -3,6 +3,7 @@ import type { DateTime } from 'luxon';
 import type { ChatClientFactory } from '../adapters/gchat/adapter.js';
 import type { SamlBroker, SamlConfig } from '../auth/saml.js';
 import type { ChatAdapter } from '../core/adapter.js';
+import { can, standupsWith, type Permission } from '../core/permissions.js';
 import type { BlockerService } from '../core/blocker-service.js';
 import type { WebhookNotifier } from '../core/webhooks.js';
 import { runProgress } from '../core/progress.js';
@@ -60,54 +61,51 @@ export function clampInt(raw: unknown, fallback: number, min: number, max: numbe
   return Math.min(Math.max(Number.isInteger(n) ? n : fallback, min), max);
 }
 
-export function canManage(p: Principal, standupId: number): boolean {
-  return p.kind === 'admin' || p.managedStandupIds.includes(standupId);
+/** Whether the caller holds a permission across the workspace, or on this standup. */
+export function allowed(p: Principal, permission: Permission, standupId?: number): boolean {
+  return can(p.access, permission, standupId);
 }
 
-/** Admins see the tenant; everyone else sees what they administer or belong to. */
+/** The standups the caller may see, in the caller's tenant. */
 export async function visibleStandups(repo: Repo, p: Principal): Promise<Standup[]> {
-  if (p.kind === 'admin') return repo.listStandupsForTenant(p.tenantId);
-  const userName = p.user?.userName;
-  if (!userName) return [];
-  const byId = new Map<number, Standup>();
-  for (const s of [...(await repo.listStandupsAdministeredBy(userName)), ...(await repo.listStandupsForUser(userName))]) {
-    if (s.tenantId === p.tenantId) byId.set(s.id, s);
+  if (p.access.workspace.has('standups.view')) return repo.listStandupsForTenant(p.tenantId);
+  const found: Standup[] = [];
+  for (const id of standupsWith(p.access, 'standups.view')) {
+    const s = await repo.getStandupById(id);
+    if (s?.tenantId === p.tenantId) found.push(s);
   }
-  return [...byId.values()].sort((a, b) => a.id - b.id);
+  return found.sort((a, b) => a.id - b.id);
 }
 
-/**
- * Resolve `:id` to a standup the caller may see, or answer the request:
- * 404 when it does not exist, belongs to another tenant or is invisible;
- * 403 when `manage` is required and the caller only belongs to it.
- */
-/** A standup the caller may see (tenant + admin, manager or member), and whether they may manage it. */
+/** A standup the caller may see, and whether they may configure it. */
 export async function findVisibleStandup(
   repo: Repo,
   p: Principal,
   id: number,
 ): Promise<{ standup: Standup; manage: boolean } | null> {
   const standup = await repo.getStandupById(id);
-  if (!standup || standup.tenantId !== p.tenantId) return null;
-  const manage = canManage(p, standup.id);
-  if (manage) return { standup, manage };
-  const userName = p.user?.userName;
-  const member = !!userName && (await repo.listParticipants(standup.id)).some((x) => x.userName === userName);
-  return member ? { standup, manage: false } : null;
+  if (!standup || standup.tenantId !== p.tenantId || !allowed(p, 'standups.view', standup.id)) return null;
+  return { standup, manage: allowed(p, 'standups.configure', standup.id) };
 }
 
+/**
+ * Resolve `:id` to a standup the caller may see, or answer the request:
+ * 404 when it does not exist, belongs to another tenant or is invisible;
+ * 403 when the caller lacks `need` on it.
+ */
 export async function loadStandup(
   ctx: ApiContext,
   req: Request<any>,
   res: Response,
-  opts: { manage?: boolean } = {},
+  opts: { need?: Permission } = {},
 ): Promise<Standup | null> {
-  const found = await findVisibleStandup(ctx.repo, principalOf(req), Number(req.params.id));
+  const p = principalOf(req);
+  const found = await findVisibleStandup(ctx.repo, p, Number(req.params.id));
   if (!found) {
     apiError(res, 404, 'not_found', 'No such standup.');
     return null;
   }
-  if (opts.manage && !found.manage) {
+  if (opts.need && !allowed(p, opts.need, found.standup.id)) {
     apiError(res, 403, 'forbidden', 'Only admins and this standup’s managers can do that.');
     return null;
   }

@@ -1,3 +1,4 @@
+import { PERMISSIONS } from '../../core/permissions.js';
 import { z } from 'zod';
 import { SESSION_COOKIE } from '../../auth/session.js';
 import { APP_VERSION } from '../../version.js';
@@ -54,7 +55,8 @@ function operation(r: RouteSpec) {
   return {
     operationId: `${r.method}${r.path.replace(/[^A-Za-z0-9]+(.)?/g, (_m, c: string | undefined) => (c ? c.toUpperCase() : ''))}`,
     summary: r.summary,
-    description: ACCESS_NOTE[r.access],
+    description: r.permission ? `${ACCESS_NOTE[r.access]} Needs the “${PERMISSIONS[r.permission].label}” permission (\`${r.permission}\`).` : ACCESS_NOTE[r.access],
+    ...(r.permission ? { 'x-permission': r.permission } : {}),
     tags: [r.tag],
     ...(r.access === 'public' ? { security: [] } : {}),
     ...(parameters.length ? { parameters } : {}),

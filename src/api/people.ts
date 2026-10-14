@@ -1,4 +1,5 @@
 import type { Router } from 'express';
+import { canSomewhere } from '../core/permissions.js';
 import { apiError, principalOf, type ApiContext } from './shared.js';
 import { peopleView } from './views.js';
 
@@ -8,7 +9,7 @@ export function registerPeopleRoutes(api: Router, ctx: ApiContext): void {
 
   api.get('/people', async (req, res) => {
     const p = principalOf(req);
-    if (p.kind === 'member') {
+    if (!canSomewhere(p.access, 'people.view')) {
       apiError(res, 403, 'forbidden', 'Only admins and managers can list the team.');
       return;
     }

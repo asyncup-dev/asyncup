@@ -2,6 +2,7 @@ import type { Request } from 'express';
 import { sessionFrom, type Session } from '../auth/session.js';
 import { tokenEquals } from '../core/crypto.js';
 import { chatUserName } from '../core/directory.js';
+import { resolveAccess, type Access } from '../core/permissions.js';
 import { bearerToken } from '../core/http.js';
 import type { SettingsService } from '../core/settings.js';
 import type { Repo } from '../db/repo.js';
@@ -28,6 +29,8 @@ export interface Principal {
   user: { userName: string | null; email: string; name: string } | null;
   /** Standups this person administers. Empty for admins, who see everything. */
   managedStandupIds: number[];
+  /** What they may do; every check goes through this. */
+  access: Access;
 }
 
 export interface PrincipalDeps {
@@ -52,8 +55,9 @@ export async function resolvePrincipal(req: Request, deps: PrincipalDeps): Promi
   if (session) {
     const userName = await userNameFor(session, deps.repo);
     const user = { userName, email: session.email, name: session.name };
+    const access = await resolveAccess(deps.repo, userName, session.admin);
     if (session.admin) {
-      return { principal: { kind: 'admin', via: 'session', tenantId: deps.tenantId, user, managedStandupIds: [] } };
+      return { principal: { kind: 'admin', via: 'session', tenantId: deps.tenantId, user, managedStandupIds: [], access } };
     }
     const managed = userName ? await deps.repo.listStandupsAdministeredBy(userName) : [];
     return {
@@ -63,6 +67,7 @@ export async function resolvePrincipal(req: Request, deps: PrincipalDeps): Promi
         tenantId: deps.tenantId,
         user,
         managedStandupIds: managed.map((s) => s.id),
+        access,
       },
     };
   }
@@ -71,7 +76,7 @@ export async function resolvePrincipal(req: Request, deps: PrincipalDeps): Promi
   if (bearer === undefined) return { error: 'unauthenticated' };
   const { tokenSignIn } = await deps.settings.get();
   if (deps.operatorToken && tokenSignIn && tokenEquals(bearer, deps.operatorToken)) {
-    return { principal: { kind: 'admin', via: 'token', tenantId: deps.tenantId, user: null, managedStandupIds: [] } };
+    return { principal: { kind: 'admin', via: 'token', tenantId: deps.tenantId, user: null, managedStandupIds: [], access: await resolveAccess(deps.repo, null, true) } };
   }
   return { error: 'bad_token' };
 }
