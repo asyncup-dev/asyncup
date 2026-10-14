@@ -1,5 +1,6 @@
 import { Link, Outlet, useParams, useRouterState } from '@tanstack/react-router';
 import { useState } from 'react';
+import { useAccess, type Permission } from '../../lib/access';
 import { daysLabel, zoneAbbr } from '../../lib/format';
 import { RUN_NOW_COPY, spaceLabel, useNudge, useRunNow, useSpaceNames, useStandup } from '../../lib/standups';
 
@@ -8,12 +9,15 @@ export function useStandupId(): number {
   return Number(id);
 }
 
-const TABS = [
-  { to: '/standups/$id', label: 'Overview', exact: true },
-  { to: '/standups/$id/history', label: 'History' },
-  { to: '/standups/$id/insights', label: 'Insights' },
-  { to: '/standups/$id/settings', label: 'Settings' },
-] as const;
+/** Anything the standup's Settings tab lets you change. */
+export const STANDUP_SETTINGS: Permission[] = ['standups.configure', 'people.manage', 'standups.archive', 'standups.delete'];
+
+const TABS: { to: string; label: string; need: Permission[]; exact?: true }[] = [
+  { to: '/standups/$id', label: 'Overview', need: [], exact: true },
+  { to: '/standups/$id/history', label: 'History', need: ['reports.view'] },
+  { to: '/standups/$id/insights', label: 'Insights', need: ['reports.view'] },
+  { to: '/standups/$id/settings', label: 'Settings', need: STANDUP_SETTINGS },
+];
 
 export function StandupLayout() {
   const id = useStandupId();
@@ -22,6 +26,7 @@ export function StandupLayout() {
   const runNow = useRunNow(id);
   const nudge = useNudge(id);
   const [notice, setNotice] = useState<string | null>(null);
+  const access = useAccess();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   if (standup.isPending) return <p className="muted">Loading…</p>;
   if (standup.isError) return <div className="alert">Could not load this standup: {standup.error.message}</div>;
@@ -52,15 +57,15 @@ export function StandupLayout() {
           <>
             <button type="button" className="btn btn-primary" disabled={runNow.isPending} onClick={() => void act(runNow, (r) => RUN_NOW_COPY[r] ?? r)}>Run now</button>
             <button type="button" className="btn" disabled={nudge.isPending || s.today.status !== 'open'} onClick={() => void act(nudge, () => 'Reminder sent to everyone still expected today.')}>Nudge everyone</button>
-            <a className="btn btn-ghost" href={`/api/v1/standups/${id}/export.csv?days=90`}>Export CSV</a>
           </>
         ) : null}
+        {access.can('export', id) ? <a className="btn btn-ghost" href={`/api/v1/standups/${id}/export.csv?days=90`}>Export CSV</a> : null}
       </div>
       {notice ? <div className="toast" role="status">{notice} <button type="button" className="btn btn-ghost" style={{ height: 24 }} onClick={() => setNotice(null)}>Dismiss</button></div> : null}
       <nav className="tabs" aria-label="Standup sections">
-        {TABS.map((t) => {
+        {TABS.filter((t) => t.need.length === 0 || t.need.some((p) => access.can(p, id))).map((t) => {
           const href = t.to.replace('$id', String(id));
-          const current = 'exact' in t ? pathname === `/app${href}` || pathname === `${base}/` : pathname.startsWith(`/app${href}`);
+          const current = t.exact ? pathname === `/app${href}` || pathname === `${base}/` : pathname.startsWith(`/app${href}`);
           return (
             <Link key={t.to} to={t.to} params={{ id: String(id) }} className="tab" aria-current={current ? 'page' : undefined}>{t.label}</Link>
           );

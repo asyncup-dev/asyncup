@@ -1,6 +1,7 @@
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { averageSeries, BlockersChart, MoodChart, ParticipationChart } from '../components/charts';
+import { useAccess } from '../lib/access';
 import { api, type WeekPoint } from '../lib/api';
 import { shortDate } from '../lib/format';
 import { useBlockers } from '../lib/people';
@@ -27,7 +28,9 @@ export function headline(points: WeekPoint[]) {
 }
 
 export function ReportsPage() {
-  const standups = useStandups();
+  const access = useAccess();
+  const all = useStandups();
+  const standups = { ...all, data: all.data?.filter((s) => access.can('reports.view', s.id)) };
   const [standupId, setStandupId] = useState<number | null>(null);
   const [weeks, setWeeks] = useState<(typeof WEEKS)[number]>(8);
   const targets = (standups.data ?? []).filter((s) => standupId === null || s.id === standupId);
@@ -63,7 +66,7 @@ export function ReportsPage() {
           <select className="input" style={{ width: 'auto' }} aria-label="Period" value={weeks} onChange={(e) => setWeeks(Number(e.target.value) as (typeof WEEKS)[number])}>
             {WEEKS.map((w) => <option key={w} value={w}>Last {w} weeks</option>)}
           </select>
-          {standupId !== null ? <a className="btn" href={`/api/v1/standups/${standupId}/export.csv?days=${weeks * 7}`}>Export CSV</a> : null}
+          {standupId !== null && access.can('export', standupId) ? <a className="btn" href={`/api/v1/standups/${standupId}/export.csv?days=${weeks * 7}`}>Export CSV</a> : null}
         </div>
       </div>
       {standups.isError ? <div className="alert">Could not load standups: {standups.error.message}</div> : null}

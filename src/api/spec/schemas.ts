@@ -611,3 +611,7 @@ export type CreatedMcpToken = z.infer<typeof CreatedMcpToken>;
 export type McpActivityEntry = z.infer<typeof McpActivity>['activity'][number];
 export type Me = z.infer<typeof Me>;
 export type AuthMethods = z.infer<typeof AuthMethods>;
+export type PermissionInfo = z.infer<typeof PermissionList>['permissions'][number];
+export type Role = z.infer<typeof Role>;
+export type Grant = z.infer<typeof Grant>;
+export type RoleAuditEntry = z.infer<typeof RoleAudit>['entries'][number];

@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '../../components/confirm-dialog';
+import { GrantForm, GrantTable } from '../../components/grants';
 import { PeopleMatrix, type MatrixChange, type MatrixRow } from '../../components/people-matrix';
 import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
@@ -8,14 +9,15 @@ import { useMutation } from '@tanstack/react-query';
 import { CopyRow } from '../../components/copy-row';
 import { api, type Person } from '../../lib/api';
 import { ago } from '../../lib/format';
-import { useMe } from '../../lib/auth';
+import { useAccess } from '../../lib/access';
 import { useArchive, useDeleteStandup, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
 import type { Weekday } from '../../lib/roster';
+import { useGrants, useRoles } from '../../lib/roles';
 import { useSetWeek } from '../../lib/schedule';
 import { useVerifyMutation } from '../../lib/settings';
 import { timezoneOptions } from '../../lib/setup';
 import { useStandup } from '../../lib/standups';
-import { useStandupId } from './layout';
+import { STANDUP_SETTINGS, useStandupId } from './layout';
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 const DAY_LABEL: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
@@ -26,7 +28,16 @@ export function StandupSettingsPage() {
   const patch = useStandupPatch(id);
   const archive = useArchive(id);
   const remove = useDeleteStandup(id);
-  const me = useMe();
+  const access = useAccess();
+  const may = {
+    configure: access.can('standups.configure', id),
+    people: access.can('people.manage', id),
+    weeks: access.can('schedules.manage', id),
+    archive: access.can('standups.archive', id),
+    remove: access.can('standups.delete', id),
+  };
+  const roles = useRoles(may.people);
+  const grants = useGrants(id, may.people);
   const navigate = useNavigate();
   const pPatch = useParticipantPatch();
   const pRemove = useParticipantRemove();
@@ -46,7 +57,7 @@ export function StandupSettingsPage() {
   const [groupDraft, setGroupDraft] = useState<string | null>(null);
   const [synced, setSynced] = useState<RosterSynced | null>(null);
   const followsGroup = !!standup.data?.roster.group;
-  const members = useStandupMembers(id, !!standup.data && !followsGroup);
+  const members = useStandupMembers(id, !!standup.data && !followsGroup && may.people);
   useEffect(() => {
     if (s && !schedule) {
       setSchedule({ promptTime: s.schedule.promptTime, deadlineTime: s.schedule.deadlineTime, timezone: s.schedule.timezone, days: s.schedule.days, reminderMinutesBefore: String(s.schedule.reminderMinutesBefore) });
@@ -55,6 +66,7 @@ export function StandupSettingsPage() {
     }
   }, [s, schedule]);
   if (standup.isError) return <div className="alert">Could not load this standup: {standup.error.message}</div>;
+  if (!STANDUP_SETTINGS.some((p) => access.can(p, id))) return <div className="alert">You can’t change this standup’s settings. Ask one of its managers if something needs to change.</div>;
   if (!s || !schedule || !questions || !escalate) return <p className="muted">Loading…</p>;
   const save = async (body: Record<string, unknown>, what: string) => {
     try {
@@ -110,142 +122,163 @@ export function StandupSettingsPage() {
       {saved ? <div className="toast" role="status">{saved}</div> : null}
       <div className="overview">
         <div className="col">
-          <SectionCard title="Schedule" hint="Changes apply from the next run." action={<button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending} onClick={() => void save({ ...schedule, reminderMinutesBefore: Number(schedule.reminderMinutesBefore) }, 'Schedule')}>Save</button>}>
-            <SettingsRow label="Prompt and deadline" hint="Prompt goes out in each person’s own timezone">
-              <input type="time" required className="input" aria-label="Prompt time" style={{ width: 110 }} value={schedule.promptTime} onChange={(e) => setSchedule({ ...schedule, promptTime: e.target.value })} />
-              <span>→</span>
-              <input type="time" required className="input" aria-label="Deadline time" style={{ width: 110 }} value={schedule.deadlineTime} onChange={(e) => setSchedule({ ...schedule, deadlineTime: e.target.value })} />
-              <select className="input" aria-label="Timezone" style={{ width: 'auto' }} value={schedule.timezone} onChange={(e) => setSchedule({ ...schedule, timezone: e.target.value })}>
-                {timezoneOptions(s.schedule.timezone).map((z) => <option key={z} value={z}>{z}</option>)}
-              </select>
-            </SettingsRow>
-            <SettingsRow label="Days">
-              <div className="days">
-                {DAYS.map((d) => (
-                  <button key={d} type="button" className="day" aria-pressed={schedule.days.includes(d)} onClick={() => setSchedule({ ...schedule, days: schedule.days.includes(d) ? schedule.days.filter((x) => x !== d) : DAYS.filter((x) => x === d || schedule.days.includes(x)) })}>{DAY_LABEL[d]}</button>
-                ))}
-              </div>
-            </SettingsRow>
-            <SettingsRow label="Reminder nudge">
-              <input className="input" aria-label="Reminder minutes" style={{ width: 80 }} inputMode="numeric" value={schedule.reminderMinutesBefore} onChange={(e) => setSchedule({ ...schedule, reminderMinutesBefore: e.target.value })} />
-              <span className="t-small secondary">minutes before the deadline</span>
-            </SettingsRow>
-            <SettingsRow label="Time off" hint="Who can mark someone away, and whether a manager must approve. Managers can always override.">
-              <select className="input" aria-label="Time-off policy" style={{ width: 'auto' }} value={s.timeOffPolicy} disabled={patch.isPending} onChange={(e) => void save({ timeOffPolicy: e.target.value }, 'Time-off policy')}>
-                <option value="self">Self-service — managers get a daily digest</option>
-                <option value="approval">Needs a manager’s approval</option>
-                <option value="managers">Managers only</option>
-              </select>
-            </SettingsRow>
-          </SectionCard>
-          <SectionCard title="Questions" hint="Everyone answers all of them in one form." action={<button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending} onClick={() => void save({ questions: questions.map((q) => q.trim()).filter(Boolean) }, 'Questions')}>Save</button>}>
-            <div className="settings-row" style={{ gridTemplateColumns: '1fr' }}>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {questions.map((q, i) => (
-                  <div key={i} className="qrow">
-                    <input className="input" aria-label={`Question ${i + 1}`} value={q} onChange={(e) => setQuestions(questions.map((x, j) => (j === i ? e.target.value : x)))} />
-                    <button type="button" className="icon-btn" aria-label={`Move question ${i + 1} up`} disabled={i === 0} onClick={() => { const qs = [...questions]; [qs[i - 1], qs[i]] = [qs[i]!, qs[i - 1]!]; setQuestions(qs); }}>↑</button>
-                    <button type="button" className="icon-btn" aria-label={`Remove question ${i + 1}`} disabled={questions.length === 1} onClick={() => setQuestions(questions.filter((_, j) => j !== i))}>×</button>
+          {may.configure ? (
+            <>
+              <SectionCard title="Schedule" hint="Changes apply from the next run." action={<button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending} onClick={() => void save({ ...schedule, reminderMinutesBefore: Number(schedule.reminderMinutesBefore) }, 'Schedule')}>Save</button>}>
+                <SettingsRow label="Prompt and deadline" hint="Prompt goes out in each person’s own timezone">
+                  <input type="time" required className="input" aria-label="Prompt time" style={{ width: 110 }} value={schedule.promptTime} onChange={(e) => setSchedule({ ...schedule, promptTime: e.target.value })} />
+                  <span>→</span>
+                  <input type="time" required className="input" aria-label="Deadline time" style={{ width: 110 }} value={schedule.deadlineTime} onChange={(e) => setSchedule({ ...schedule, deadlineTime: e.target.value })} />
+                  <select className="input" aria-label="Timezone" style={{ width: 'auto' }} value={schedule.timezone} onChange={(e) => setSchedule({ ...schedule, timezone: e.target.value })}>
+                    {timezoneOptions(s.schedule.timezone).map((z) => <option key={z} value={z}>{z}</option>)}
+                  </select>
+                </SettingsRow>
+                <SettingsRow label="Days">
+                  <div className="days">
+                    {DAYS.map((d) => (
+                      <button key={d} type="button" className="day" aria-pressed={schedule.days.includes(d)} onClick={() => setSchedule({ ...schedule, days: schedule.days.includes(d) ? schedule.days.filter((x) => x !== d) : DAYS.filter((x) => x === d || schedule.days.includes(x)) })}>{DAY_LABEL[d]}</button>
+                    ))}
                   </div>
-                ))}
-                <div><button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={questions.length >= 10} onClick={() => setQuestions([...questions, ''])}>+ Add question</button></div>
-              </div>
-            </div>
-            <SettingsRow label="Mood" hint="A five-point pick after the questions.">
-              <label className="row t-small"><input type="checkbox" checked={s.mood.enabled} onChange={(e) => void save({ moodEnabled: e.target.checked }, 'Mood')} /> Mood question {s.mood.enabled ? 'on' : 'off'}</label>
-              {s.mood.enabled ? <label className="row t-small"><input type="checkbox" checked={s.mood.anonymous} onChange={(e) => void save({ moodAnonymous: e.target.checked }, 'Mood')} /> answers shown anonymously</label> : null}
-            </SettingsRow>
-          </SectionCard>
-          <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Tick who is prompted, who is required to answer, and which days each person works.">
-            <SettingsRow label="Roster" hint={followsGroup ? 'Follows a Google Group: joiners get the default setup, leavers drop off, and people you untick stay off.' : 'People you pick from the space’s members.'}>
-              <select
-                className="input"
-                aria-label="Roster source"
-                style={{ width: 'auto' }}
-                value={groupDraft !== null || followsGroup ? 'group' : 'space'}
-                disabled={patch.isPending}
-                onChange={(e) => (e.target.value === 'group' ? setGroupDraft(s.roster.group ?? '') : void save({ rosterGroup: null }, 'Roster').then(() => setGroupDraft(null)))}
-              >
-                <option value="space">Picked from the space</option>
-                <option value="group">Everyone in a Google Group</option>
-              </select>
-              {groupDraft !== null || followsGroup ? (
-                <>
-                  <input className="input" aria-label="Roster group email" style={{ width: 240 }} placeholder="team@example.com" value={draft} onChange={(e) => setGroupDraft(e.target.value)} />
-                  <button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending || !draft.trim() || draft.trim().toLowerCase() === s.roster.group} onClick={() => void save({ rosterGroup: draft.trim() }, 'Roster group').then(() => setGroupDraft(null))}>Save</button>
-                </>
-              ) : null}
-            </SettingsRow>
-            {followsGroup ? (
-              <SettingsRow label="Last sync" hint="Also syncs hourly and in the hour before each run.">
-                <span className="t-small">{s.roster.syncedAt ? `Synced ${ago(Date.now() - Date.parse(s.roster.syncedAt))}` : 'Not synced yet'}</span>
-                <button type="button" className="btn" style={{ height: 28 }} disabled={sync.isPending} onClick={runSync}>Sync now</button>
-                {s.roster.error ? <div className="alert" style={{ flexBasis: '100%' }}>{s.roster.error}</div> : null}
-                {synced ? (
-                  <div className="notice t-small" role="status" style={{ flexBasis: '100%' }}>
-                    {synced.added.length ? `Added ${synced.added.join(', ')}. ` : ''}
-                    {synced.removed.length ? `Removed ${synced.removed.join(', ')}. ` : ''}
-                    {!synced.added.length && !synced.removed.length ? 'Already up to date. ' : ''}
-                    {synced.skipped.length ? `Skipped ${synced.skipped.map((x) => `${x.email} (${x.reason})`).join(', ')}.` : ''}
+                </SettingsRow>
+                <SettingsRow label="Reminder nudge">
+                  <input className="input" aria-label="Reminder minutes" style={{ width: 80 }} inputMode="numeric" value={schedule.reminderMinutesBefore} onChange={(e) => setSchedule({ ...schedule, reminderMinutesBefore: e.target.value })} />
+                  <span className="t-small secondary">minutes before the deadline</span>
+                </SettingsRow>
+                <SettingsRow label="Time off" hint="Who can mark someone away, and whether a manager must approve. Managers can always override.">
+                  <select className="input" aria-label="Time-off policy" style={{ width: 'auto' }} value={s.timeOffPolicy} disabled={patch.isPending} onChange={(e) => void save({ timeOffPolicy: e.target.value }, 'Time-off policy')}>
+                    <option value="self">Self-service — managers get a daily digest</option>
+                    <option value="approval">Needs a manager’s approval</option>
+                    <option value="managers">Managers only</option>
+                  </select>
+                </SettingsRow>
+              </SectionCard>
+              <SectionCard title="Questions" hint="Everyone answers all of them in one form." action={<button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending} onClick={() => void save({ questions: questions.map((q) => q.trim()).filter(Boolean) }, 'Questions')}>Save</button>}>
+                <div className="settings-row" style={{ gridTemplateColumns: '1fr' }}>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {questions.map((q, i) => (
+                      <div key={i} className="qrow">
+                        <input className="input" aria-label={`Question ${i + 1}`} value={q} onChange={(e) => setQuestions(questions.map((x, j) => (j === i ? e.target.value : x)))} />
+                        <button type="button" className="icon-btn" aria-label={`Move question ${i + 1} up`} disabled={i === 0} onClick={() => { const qs = [...questions]; [qs[i - 1], qs[i]] = [qs[i]!, qs[i - 1]!]; setQuestions(qs); }}>↑</button>
+                        <button type="button" className="icon-btn" aria-label={`Remove question ${i + 1}`} disabled={questions.length === 1} onClick={() => setQuestions(questions.filter((_, j) => j !== i))}>×</button>
+                      </div>
+                    ))}
+                    <div><button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={questions.length >= 10} onClick={() => setQuestions([...questions, ''])}>+ Add question</button></div>
                   </div>
+                </div>
+                <SettingsRow label="Mood" hint="A five-point pick after the questions.">
+                  <label className="row t-small"><input type="checkbox" checked={s.mood.enabled} onChange={(e) => void save({ moodEnabled: e.target.checked }, 'Mood')} /> Mood question {s.mood.enabled ? 'on' : 'off'}</label>
+                  {s.mood.enabled ? <label className="row t-small"><input type="checkbox" checked={s.mood.anonymous} onChange={(e) => void save({ moodAnonymous: e.target.checked }, 'Mood')} /> answers shown anonymously</label> : null}
+                </SettingsRow>
+              </SectionCard>
+            </>
+          ) : null}
+          {may.people ? (
+            <>
+              <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Tick who is prompted, who is required to answer, and which days each person works.">
+                <SettingsRow label="Roster" hint={followsGroup ? 'Follows a Google Group: joiners get the default setup, leavers drop off, and people you untick stay off.' : 'People you pick from the space’s members.'}>
+                  <select
+                    className="input"
+                    aria-label="Roster source"
+                    style={{ width: 'auto' }}
+                    value={groupDraft !== null || followsGroup ? 'group' : 'space'}
+                    disabled={patch.isPending}
+                    onChange={(e) => (e.target.value === 'group' ? setGroupDraft(s.roster.group ?? '') : void save({ rosterGroup: null }, 'Roster').then(() => setGroupDraft(null)))}
+                  >
+                    <option value="space">Picked from the space</option>
+                    <option value="group">Everyone in a Google Group</option>
+                  </select>
+                  {groupDraft !== null || followsGroup ? (
+                    <>
+                      <input className="input" aria-label="Roster group email" style={{ width: 240 }} placeholder="team@example.com" value={draft} onChange={(e) => setGroupDraft(e.target.value)} />
+                      <button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending || !draft.trim() || draft.trim().toLowerCase() === s.roster.group} onClick={() => void save({ rosterGroup: draft.trim() }, 'Roster group').then(() => setGroupDraft(null))}>Save</button>
+                    </>
+                  ) : null}
+                </SettingsRow>
+                {followsGroup ? (
+                  <SettingsRow label="Last sync" hint="Also syncs hourly and in the hour before each run.">
+                    <span className="t-small">{s.roster.syncedAt ? `Synced ${ago(Date.now() - Date.parse(s.roster.syncedAt))}` : 'Not synced yet'}</span>
+                    <button type="button" className="btn" style={{ height: 28 }} disabled={sync.isPending} onClick={runSync}>Sync now</button>
+                    {s.roster.error ? <div className="alert" style={{ flexBasis: '100%' }}>{s.roster.error}</div> : null}
+                    {synced ? (
+                      <div className="notice t-small" role="status" style={{ flexBasis: '100%' }}>
+                        {synced.added.length ? `Added ${synced.added.join(', ')}. ` : ''}
+                        {synced.removed.length ? `Removed ${synced.removed.join(', ')}. ` : ''}
+                        {!synced.added.length && !synced.removed.length ? 'Already up to date. ' : ''}
+                        {synced.skipped.length ? `Skipped ${synced.skipped.map((x) => `${x.email} (${x.reason})`).join(', ')}.` : ''}
+                      </div>
+                    ) : null}
+                  </SettingsRow>
                 ) : null}
-              </SettingsRow>
-            ) : null}
-            {members.isError ? <div className="settings-row"><span className="alert">Could not list the space’s members: {members.error.message}. Showing the current roster only.</span></div> : null}
-            <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} onChange={change} />
-          </SectionCard>
+                {members.isError ? <div className="settings-row"><span className="alert">Could not list the space’s members: {members.error.message}. Showing the current roster only.</span></div> : null}
+                <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} weeks={may.weeks} onChange={change} />
+              </SectionCard>
+              <SectionCard title="Roles on this standup" hint="Give someone a role here only, by email: say Viewer for a stakeholder who reads answers. Its managers and roster are under People.">
+                {roles.isError || grants.isError ? <div className="settings-row"><span className="alert">Could not load roles: {(roles.error ?? grants.error)?.message}</span></div> : null}
+                {roles.data && access.me ? <GrantForm me={access.me} roles={roles.data} standupId={id} /> : null}
+                {grants.data ? <GrantTable grants={grants.data} showScope={false} empty="Nobody has a role granted on this standup." /> : null}
+              </SectionCard>
+            </>
+          ) : null}
         </div>
         <div className="col">
-          <SectionCard title="Blockers & escalation" action={<button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending} onClick={() => void save({ escalateAfterDays: Number(escalate.afterDays), escalateUserName: escalate.userName || null }, 'Escalation')}>Save</button>}>
-            <SettingsRow label="Escalate after">
-              <input className="input" aria-label="Escalate after days" style={{ width: 70 }} inputMode="numeric" value={escalate.afterDays} onChange={(e) => setEscalate({ ...escalate, afterDays: e.target.value })} />
-              <span className="t-small secondary">days</span>
-            </SettingsRow>
-            <SettingsRow label="Escalate to">
-              <select className="input" aria-label="Escalation contact" value={escalate.userName} onChange={(e) => setEscalate({ ...escalate, userName: e.target.value })}>
-                <option value="">— off —</option>
-                {[...s.participants, ...s.admins.filter((a) => !s.participants.some((p) => p.userName === a.userName))].map((p) => (
-                  <option key={p.userName} value={p.userName}>{p.displayName}</option>
-                ))}
-              </select>
-            </SettingsRow>
-          </SectionCard>
-          <SectionCard title="Integrations">
-            <SettingsRow label="Outbound webhook" hint="JSON POST on each submission and wrap-up, signed with X-AsyncUp-Signature.">
-              <input className="input" aria-label="Webhook URL" value={webhook ?? (s.webhook.configured ? '(configured — enter a new URL to replace)' : '')} onFocus={() => webhook === null && setWebhook('')} onChange={(e) => setWebhook(e.target.value)} placeholder="https://…" />
-              <button type="button" className="btn" style={{ height: 28 }} disabled={webhook === null || patch.isPending} onClick={() => void save({ webhookUrl: webhook?.trim() || null }, 'Webhook').then(() => setWebhook(null))}>Save</button>
-              {s.webhook.configured ? <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={verifyWebhook.isPending} onClick={() => verifyWebhook.mutate({ standupId: id })}>Send test</button> : null}
-              {verifyWebhook.data || verifyWebhook.isPending || verifyWebhook.isError ? <div style={{ flexBasis: '100%' }}><VerifyStatus state={fromMutation(verifyWebhook)} /></div> : null}
-              <div style={{ flexBasis: '100%' }}>
-                {secret.data ? (
-                  <CopyRow label="Signing secret" hint="HMAC-SHA256 key for X-AsyncUp-Signature. Changes only when SECRET_KEY does." value={secret.data.secret} />
-                ) : (
-                  <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={secret.isPending} onClick={() => secret.mutate()}>Show signing secret</button>
-                )}
-                {secret.isError ? <div className="alert" role="alert">{secret.error.message}</div> : null}
-              </div>
-            </SettingsRow>
-            <SettingsRow label="Weekly digest" hint="Posted to the space at the end of the week.">
-              <label className="row t-small"><input type="checkbox" checked={s.digestEnabled} onChange={(e) => void save({ digestEnabled: e.target.checked }, 'Digest')} /> {s.digestEnabled ? 'On' : 'Off'}</label>
-            </SettingsRow>
-          </SectionCard>
-          <SectionCard title="Danger zone">
-            <SettingsRow label={s.active ? 'Archive standup' : 'Unarchive standup'} hint={s.active ? 'Stops prompts. History stays readable.' : 'Prompts resume on the next scheduled day.'}>
-              <button type="button" className={`btn ${s.active ? 'btn-danger' : ''}`} style={{ height: 28 }} onClick={() => (s.active ? setConfirm('archive') : void roster(() => archive.mutateAsync('unarchive')))}>{s.active ? 'Archive' : 'Unarchive'}</button>
-            </SettingsRow>
-            <SettingsRow
-              label="Delete standup"
-              hint={
-                me.data?.kind !== 'admin'
-                  ? 'Only workspace admins can delete a standup. Archiving stops it and keeps its history.'
-                  : s.active
-                    ? 'Archive it first. Deleting removes every run, answer, blocker and poll for good.'
-                    : 'Removes every run, answer, blocker and poll for good. People’s own days and time off stay.'
-              }
-            >
-              <button type="button" className="btn btn-danger" style={{ height: 28 }} disabled={me.data?.kind !== 'admin' || s.active} onClick={() => setConfirm('delete')}>Delete</button>
-            </SettingsRow>
-          </SectionCard>
+          {may.configure ? (
+            <>
+              <SectionCard title="Blockers & escalation" action={<button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={patch.isPending} onClick={() => void save({ escalateAfterDays: Number(escalate.afterDays), escalateUserName: escalate.userName || null }, 'Escalation')}>Save</button>}>
+                <SettingsRow label="Escalate after">
+                  <input className="input" aria-label="Escalate after days" style={{ width: 70 }} inputMode="numeric" value={escalate.afterDays} onChange={(e) => setEscalate({ ...escalate, afterDays: e.target.value })} />
+                  <span className="t-small secondary">days</span>
+                </SettingsRow>
+                <SettingsRow label="Escalate to">
+                  <select className="input" aria-label="Escalation contact" value={escalate.userName} onChange={(e) => setEscalate({ ...escalate, userName: e.target.value })}>
+                    <option value="">— off —</option>
+                    {[...s.participants, ...s.admins.filter((a) => !s.participants.some((p) => p.userName === a.userName))].map((p) => (
+                      <option key={p.userName} value={p.userName}>{p.displayName}</option>
+                    ))}
+                  </select>
+                </SettingsRow>
+              </SectionCard>
+              <SectionCard title="Integrations">
+                <SettingsRow label="Outbound webhook" hint="JSON POST on each submission and wrap-up, signed with X-AsyncUp-Signature.">
+                  <input className="input" aria-label="Webhook URL" value={webhook ?? (s.webhook.configured ? '(configured — enter a new URL to replace)' : '')} onFocus={() => webhook === null && setWebhook('')} onChange={(e) => setWebhook(e.target.value)} placeholder="https://…" />
+                  <button type="button" className="btn" style={{ height: 28 }} disabled={webhook === null || patch.isPending} onClick={() => void save({ webhookUrl: webhook?.trim() || null }, 'Webhook').then(() => setWebhook(null))}>Save</button>
+                  {s.webhook.configured ? <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={verifyWebhook.isPending} onClick={() => verifyWebhook.mutate({ standupId: id })}>Send test</button> : null}
+                  {verifyWebhook.data || verifyWebhook.isPending || verifyWebhook.isError ? <div style={{ flexBasis: '100%' }}><VerifyStatus state={fromMutation(verifyWebhook)} /></div> : null}
+                  <div style={{ flexBasis: '100%' }}>
+                    {secret.data ? (
+                      <CopyRow label="Signing secret" hint="HMAC-SHA256 key for X-AsyncUp-Signature. Changes only when SECRET_KEY does." value={secret.data.secret} />
+                    ) : (
+                      <button type="button" className="btn btn-ghost" style={{ height: 28 }} disabled={secret.isPending} onClick={() => secret.mutate()}>Show signing secret</button>
+                    )}
+                    {secret.isError ? <div className="alert" role="alert">{secret.error.message}</div> : null}
+                  </div>
+                </SettingsRow>
+                <SettingsRow label="Weekly digest" hint="Posted to the space at the end of the week.">
+                  <label className="row t-small"><input type="checkbox" checked={s.digestEnabled} onChange={(e) => void save({ digestEnabled: e.target.checked }, 'Digest')} /> {s.digestEnabled ? 'On' : 'Off'}</label>
+                </SettingsRow>
+              </SectionCard>
+            </>
+          ) : null}
+          {may.archive || may.remove ? (
+            <SectionCard title="Danger zone">
+              {may.archive ? (
+                <SettingsRow label={s.active ? 'Archive standup' : 'Unarchive standup'} hint={s.active ? 'Stops prompts. History stays readable.' : 'Prompts resume on the next scheduled day.'}>
+                  <button type="button" className={`btn ${s.active ? 'btn-danger' : ''}`} style={{ height: 28 }} onClick={() => (s.active ? setConfirm('archive') : void roster(() => archive.mutateAsync('unarchive')))}>{s.active ? 'Archive' : 'Unarchive'}</button>
+                </SettingsRow>
+              ) : null}
+              <SettingsRow
+                label="Delete standup"
+                hint={
+                  !may.remove
+                    ? 'Only workspace admins can delete a standup. Archiving stops it and keeps its history.'
+                    : s.active
+                      ? 'Archive it first. Deleting removes every run, answer, blocker and poll for good.'
+                      : 'Removes every run, answer, blocker and poll for good. People’s own days and time off stay.'
+                }
+              >
+                <button type="button" className="btn btn-danger" style={{ height: 28 }} disabled={!may.remove || s.active} onClick={() => setConfirm('delete')}>Delete</button>
+              </SettingsRow>
+            </SectionCard>
+          ) : null}
         </div>
       </div>
       {confirm === 'delete' ? (

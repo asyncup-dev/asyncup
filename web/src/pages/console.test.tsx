@@ -1,8 +1,8 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Settings } from '../lib/api';
-import { ADMIN, MEMBER, OPERATOR, renderApp, stubApi } from '../test/harness';
+import { ADMIN, MEMBER, OPERATOR, renderApp, stubApi, VIEWER } from '../test/harness';
 import { headline } from './reports';
 
 const STANDUP = { id: 1, name: 'Engineering', spaceName: 'spaces/A', active: true, schedule: { promptTime: '09:30', deadlineTime: '11:30', timezone: 'Asia/Kolkata', days: ['mon'], reminderMinutesBefore: 60 }, people: { total: 2, mandatory: 2 }, today: { date: '2026-09-16', status: 'open', submitted: 1, expected: 2, missing: [] }, permissions: { manage: true } };
@@ -338,5 +338,46 @@ describe('settings', () => {
     await user.type(within(dialog).getByRole('textbox'), 'DELETE HISTORY');
     await user.click(within(dialog).getByRole('button', { name: 'Delete history' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Admins only.');
+  });
+});
+
+describe('a granted Viewer', () => {
+  it('reads every console page and is offered nothing it cannot do', async () => {
+    const { calls } = server({}, VIEWER);
+    const user = userEvent.setup();
+    const view = renderApp('/standups');
+    expect(await screen.findByText('Engineering')).toBeInTheDocument();
+    const nav = within(screen.getByRole('complementary', { name: 'Primary' }));
+    expect(nav.getAllByRole('link').map((a) => a.textContent)).toEqual(['Standups', 'Blockers', 'Reports', 'Team']);
+    expect(screen.queryByRole('link', { name: 'New standup' })).not.toBeInTheDocument();
+    view.unmount();
+
+    renderApp('/blockers');
+    expect(await screen.findByText('Waiting on API keys')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument();
+    cleanup();
+
+    renderApp('/team');
+    expect(await screen.findByText('Bob Mehta')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Actions for/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Requests/ })).not.toBeInTheDocument();
+    expect(calls).not.toContain('GET /api/v1/requests');
+    cleanup();
+
+    renderApp('/reports');
+    await screen.findByRole('option', { name: 'Engineering' });
+    await user.selectOptions(screen.getByLabelText('Standup'), '1');
+    expect(await screen.findByRole('link', { name: 'Export CSV' })).toBeInTheDocument();
+    cleanup();
+
+    renderApp('/settings');
+    expect(await screen.findByText(/You don’t have access to any settings/)).toBeInTheDocument();
+  });
+
+  it('shows Resolve on their own blocker', async () => {
+    server({}, { ...VIEWER, user: { userName: 'users/bob', email: 'bob@example.com', name: 'Bob Mehta' } });
+    renderApp('/blockers');
+    expect(await screen.findByRole('button', { name: 'Resolve' })).toBeInTheDocument();
   });
 });

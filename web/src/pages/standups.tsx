@@ -1,6 +1,7 @@
 import { useQueries } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { EmptyState } from '../components/empty-state';
+import { useAccess } from '../lib/access';
 import { api, type StandupSummary, type WeekPoint } from '../lib/api';
 import { daysLabel, names, pct, shortDate } from '../lib/format';
 import { spaceLabel, useOpenBlockers, useSpaceNames, useStandups } from '../lib/standups';
@@ -26,8 +27,11 @@ export function StandupsPage() {
   const standups = useStandups();
   const spaces = useSpaceNames();
   const blockers = useOpenBlockers();
+  const access = useAccess();
+  // Standups are created through the setup walkthrough, which needs the workspace settings too.
+  const creates = access.can('standups.create') && access.can('settings.manage');
   const insights = useQueries({
-    queries: (standups.data ?? []).map((s) => ({
+    queries: (standups.data ?? []).filter((s) => access.can('reports.view', s.id)).map((s) => ({
       queryKey: ['insights', s.id, 2],
       queryFn: () => api<{ weeks: WeekPoint[] }>(`/standups/${s.id}/insights?weeks=2`),
       select: (d: { weeks: WeekPoint[] }) => d.weeks,
@@ -53,12 +57,16 @@ export function StandupsPage() {
             {list.length ? `${today ? `${shortDate(today)} · ` : ''}${list.length} standup${list.length === 1 ? '' : 's'} · ${open.length} open today` : 'Nothing running yet'}
           </div>
         </div>
-        {list.length ? <Link to="/setup/template" className="btn btn-primary">New standup</Link> : null}
+        {list.length && creates ? <Link to="/setup/template" className="btn btn-primary">New standup</Link> : null}
       </div>
       {list.length === 0 ? (
-        <EmptyState title="No standups yet" action={<Link to="/setup" className="btn btn-primary">Set up your first standup</Link>}>
-          Pick a template, choose the Chat space it reports to and add the people to prompt. About two minutes once Google Chat is connected.
-        </EmptyState>
+        creates ? (
+          <EmptyState title="No standups yet" action={<Link to="/setup" className="btn btn-primary">Set up your first standup</Link>}>
+            Pick a template, choose the Chat space it reports to and add the people to prompt. About two minutes once Google Chat is connected.
+          </EmptyState>
+        ) : (
+          <EmptyState title="No standups to show">Standups you are given access to appear here.</EmptyState>
+        )
       ) : (
         <>
           <div className="stats">

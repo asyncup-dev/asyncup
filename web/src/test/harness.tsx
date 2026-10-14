@@ -14,6 +14,16 @@ const EVERYTHING: Me['permissions'] = {
 };
 export const ADMIN: Me = { kind: 'admin', via: 'session', tenantId: 'default', user: { userName: 'users/1', email: 'asha@example.com', name: 'Asha Rao' }, managedStandupIds: [], permissions: EVERYTHING };
 export const MEMBER: Me = { kind: 'member', via: 'session', tenantId: 'default', user: { userName: 'users/2', email: 'bob@example.com', name: 'Bob' }, managedStandupIds: [], permissions: { workspace: [], standups: {} } };
+/** Manager of standup 1 only, as the server works it out for a standup admin. */
+export const MANAGER: Me = {
+  kind: 'manager', via: 'session', tenantId: 'default', user: { userName: 'users/bob', email: 'b@o.com', name: 'Bob' }, managedStandupIds: [1],
+  permissions: { workspace: [], standups: { '1': ['standups.view', 'standups.configure', 'standups.archive', 'people.view', 'people.manage', 'schedules.manage', 'answers.view', 'blockers.view', 'blockers.manage', 'reports.view', 'export'] } },
+};
+/** Granted Viewer across the workspace: reads everything, changes nothing. */
+export const VIEWER: Me = {
+  kind: 'manager', via: 'session', tenantId: 'default', user: { userName: 'users/vee', email: 'vee@example.com', name: 'Vee' }, managedStandupIds: [],
+  permissions: { workspace: ['standups.view', 'people.view', 'answers.view', 'blockers.view', 'reports.view', 'export'], standups: {} },
+};
 export const OPERATOR: Me = { kind: 'admin', via: 'token', tenantId: 'default', user: null, managedStandupIds: [], permissions: EVERYTHING };
 
 type Route = { status?: number; body: unknown | ((init?: RequestInit) => unknown) };

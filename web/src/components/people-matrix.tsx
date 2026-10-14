@@ -17,7 +17,7 @@ export type MatrixChange = { onStandup: boolean } | { mandatory: boolean } | { w
  * Who is on a standup, whether they count when they miss it, and which of
  * its days they work — one row per person in the space.
  */
-export function PeopleMatrix({ rows, standupDays, busy = false, onChange }: { rows: MatrixRow[]; standupDays: readonly Weekday[]; busy?: boolean; onChange: (row: MatrixRow, change: MatrixChange) => void }) {
+export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, onChange }: { rows: MatrixRow[]; standupDays: readonly Weekday[]; busy?: boolean; weeks?: boolean; onChange: (row: MatrixRow, change: MatrixChange) => void }) {
   if (rows.length === 0) return <p className="t-small muted" style={{ padding: 'var(--space-3) var(--space-4)' }}>Nobody in this space yet.</p>;
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -63,9 +63,9 @@ export function PeopleMatrix({ rows, standupDays, busy = false, onChange }: { ro
                       <input
                         type="checkbox"
                         aria-label={`${row.displayName} works ${DAY_LABEL[d]}`}
-                        title={runs ? undefined : 'The standup does not run this day — add it under Schedule first'}
+                        title={!runs ? 'The standup does not run this day — add it under Schedule first' : weeks ? undefined : 'You can’t change people’s days'}
                         checked={runs && row.onStandup && ticked.includes(d)}
-                        disabled={busy || !runs || !row.onStandup}
+                        disabled={busy || !runs || !row.onStandup || !weeks}
                         onChange={() => toggleDay(d)}
                       />
                     </td>

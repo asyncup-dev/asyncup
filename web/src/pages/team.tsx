@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '../components/confirm-dialog';
 import { ScheduleDrawer } from '../components/schedule-drawer';
+import { useAccess } from '../lib/access';
 import { roleOf, useParticipantPatch, useParticipantRemove, usePeople, type PersonRow } from '../lib/people';
 import { dateSpan, groupRequests, useDecide, useRequests } from '../lib/schedule';
 
@@ -17,7 +18,9 @@ export function TeamPage() {
   const [error, setError] = useState<string | null>(null);
   const [scheduleFor, setScheduleFor] = useState<PersonRow | null>(null);
   const [declining, setDeclining] = useState<{ key: string; note: string } | null>(null);
-  const requests = useRequests(true);
+  const access = useAccess();
+  const decides = access.canSomewhere('schedules.manage');
+  const requests = useRequests(decides);
   const decide = useDecide();
   const groups = groupRequests(requests.data ?? []);
   const matches = (p: PersonRow, f: Filter) => f === 'everyone' || (f === 'managers' ? roleOf(p) === 'Manager' : f === 'away' ? p.onVacation : false);
@@ -42,7 +45,7 @@ export function TeamPage() {
         </div>
       </div>
       <div className="chip-tabs" role="tablist" aria-label="Filter">
-        {(['everyone', 'managers', 'away', 'requests'] as const).map((f) => (
+        {(['everyone', 'managers', 'away', ...(decides ? (['requests'] as const) : [])] as const).map((f) => (
           <button key={f} type="button" role="tab" className="chip-tab" aria-pressed={filter === f} aria-selected={filter === f} onClick={() => setFilter(f)}>
             {FILTER_LABEL[f]} · {f === 'requests' ? groups.length : (people.data ?? []).filter((p) => matches(p, f)).length}
           </button>
@@ -88,49 +91,55 @@ export function TeamPage() {
           </thead>
           <tbody>
             {people.data && rows.length === 0 ? <tr><td colSpan={7} className="t-small muted">Nobody matches this filter.</td></tr> : null}
-            {rows.map((p) => (
-              <tr key={p.userName}>
-                <td data-label="Person">
-                  <span className="person-row">
-                    <span className="avatar" aria-hidden="true">{p.displayName[0]}</span>
-                    <span>
-                      <div className="t-medium">{p.displayName}</div>
-                      <div className="t-caption">{p.email ?? p.userName}</div>
+            {rows.map((p) => {
+              const managed = p.standups.filter((s) => access.can('people.manage', s.id));
+              const schedules = p.standups.some((s) => access.can('schedules.manage', s.id));
+              return (
+                <tr key={p.userName}>
+                  <td data-label="Person">
+                    <span className="person-row">
+                      <span className="avatar" aria-hidden="true">{p.displayName[0]}</span>
+                      <span>
+                        <div className="t-medium">{p.displayName}</div>
+                        <div className="t-caption">{p.email ?? p.userName}</div>
+                      </span>
                     </span>
-                  </span>
-                </td>
-                <td data-label="Role"><span className={`badge ${roleOf(p) === 'Manager' ? 'badge-info' : ''}`}>{roleOf(p)}</span></td>
-                <td data-label="Standups" className="t-small">{p.standups.map((s) => `${s.name}${s.mandatory ? '' : ' (optional)'}`).join(' · ') || '—'}</td>
-                <td data-label="Schedule" className="t-small">{p.workingDaysLabel === 'Follows the standup' ? 'Standup days' : p.workingDaysLabel}</td>
-                <td data-label="Timezone" className="t-small secondary">{p.timezone ?? '—'}</td>
-                <td data-label="Status"><span className={`badge ${p.onVacation ? 'badge-warning' : 'badge-success'}`}>{p.onVacation ? 'Away' : 'Active'}</span></td>
-                <td>
-                  <div className="menu" style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button type="button" className="icon-btn" aria-label={`Actions for ${p.displayName}`} aria-expanded={menuFor === p.userName} onClick={() => setMenuFor(menuFor === p.userName ? null : p.userName)}>⋯</button>
-                    {menuFor === p.userName ? (
-                      <div className="menu-list" role="menu">
-                        {p.standups.map((s) => (
-                          <div key={s.id} style={{ display: 'contents' }}>
-                            <div className="t-label" style={{ padding: '6px 12px 2px' }}>{s.name}</div>
-                            <button type="button" role="menuitem" onClick={() => void act(() => patch.mutateAsync({ standupId: s.id, userName: p.userName, patch: { mandatory: !s.mandatory } }))}>{s.mandatory ? 'Make optional' : 'Make mandatory'}</button>
-                            <button type="button" role="menuitem" onClick={() => void act(() => patch.mutateAsync({ standupId: s.id, userName: p.userName, patch: { admin: !s.admin } }))}>{s.admin ? 'Remove as manager' : 'Make manager'}</button>
-                            <button type="button" role="menuitem" className="danger" onClick={() => { setMenuFor(null); setConfirm({ person: p, standup: s }); }}>Remove from {s.name}</button>
+                  </td>
+                  <td data-label="Role"><span className={`badge ${roleOf(p) === 'Manager' ? 'badge-info' : ''}`}>{roleOf(p)}</span></td>
+                  <td data-label="Standups" className="t-small">{p.standups.map((s) => `${s.name}${s.mandatory ? '' : ' (optional)'}`).join(' · ') || '—'}</td>
+                  <td data-label="Schedule" className="t-small">{p.workingDaysLabel === 'Follows the standup' ? 'Standup days' : p.workingDaysLabel}</td>
+                  <td data-label="Timezone" className="t-small secondary">{p.timezone ?? '—'}</td>
+                  <td data-label="Status"><span className={`badge ${p.onVacation ? 'badge-warning' : 'badge-success'}`}>{p.onVacation ? 'Away' : 'Active'}</span></td>
+                  <td>
+                    {managed.length || schedules ? (
+                      <div className="menu" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button type="button" className="icon-btn" aria-label={`Actions for ${p.displayName}`} aria-expanded={menuFor === p.userName} onClick={() => setMenuFor(menuFor === p.userName ? null : p.userName)}>⋯</button>
+                        {menuFor === p.userName ? (
+                          <div className="menu-list" role="menu">
+                            {managed.map((s) => (
+                              <div key={s.id} style={{ display: 'contents' }}>
+                                <div className="t-label" style={{ padding: '6px 12px 2px' }}>{s.name}</div>
+                                <button type="button" role="menuitem" onClick={() => void act(() => patch.mutateAsync({ standupId: s.id, userName: p.userName, patch: { mandatory: !s.mandatory } }))}>{s.mandatory ? 'Make optional' : 'Make mandatory'}</button>
+                                <button type="button" role="menuitem" onClick={() => void act(() => patch.mutateAsync({ standupId: s.id, userName: p.userName, patch: { admin: !s.admin } }))}>{s.admin ? 'Remove as manager' : 'Make manager'}</button>
+                                <button type="button" role="menuitem" className="danger" onClick={() => { setMenuFor(null); setConfirm({ person: p, standup: s }); }}>Remove from {s.name}</button>
+                              </div>
+                            ))}
+                            <div className="t-label" style={{ padding: '6px 12px 2px' }}>Everywhere</div>
+                            {schedules ? <button type="button" role="menuitem" onClick={() => { setMenuFor(null); setScheduleFor(p); }}>Edit schedule…</button> : null}
+                            {managed.length ? <button type="button" role="menuitem" onClick={() => void act(async () => { for (const s of managed) await patch.mutateAsync({ standupId: s.id, userName: p.userName, patch: { onVacation: !p.onVacation } }); })}>{p.onVacation ? 'Mark as back' : 'Mark as away'}</button> : null}
                           </div>
-                        ))}
-                        <div className="t-label" style={{ padding: '6px 12px 2px' }}>Everywhere</div>
-                        <button type="button" role="menuitem" onClick={() => { setMenuFor(null); setScheduleFor(p); }}>Edit schedule…</button>
-                        <button type="button" role="menuitem" onClick={() => void act(async () => { for (const s of p.standups) await patch.mutateAsync({ standupId: s.id, userName: p.userName, patch: { onVacation: !p.onVacation } }); })}>{p.onVacation ? 'Mark as back' : 'Mark as away'}</button>
+                        ) : null}
                       </div>
                     ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
       )}
-      <p className="t-small muted" style={{ margin: 0 }}>Roles: Admins manage the workspace. Managers see reports and manage their own standups without Workspace-admin rights. Members get the personal console.</p>
+      <p className="t-small muted" style={{ margin: 0 }}>Roles: Admins manage the workspace. Managers run their own standups. Members get the personal console. Custom roles and who holds them are under Settings › Roles and Access.</p>
       {scheduleFor ? <ScheduleDrawer target={{ userName: scheduleFor.userName }} title="Edit schedule" onClose={() => setScheduleFor(null)} /> : null}
       {confirm ? (
         <ConfirmDialog
