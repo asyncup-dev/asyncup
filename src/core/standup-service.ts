@@ -164,6 +164,21 @@ export class StandupService {
     return 'skipped';
   }
 
+  /** Someone taken off the standup leaves its open run too, unless they already answered. */
+  async leaveOpenRuns(standup: Standup, userName: string): Promise<void> {
+    for (const run of await this.repo.listOpenRuns(standup.id)) {
+      if (await this.repo.getSubmission(run.id, userName)) continue;
+      const names = await this.repo.listCardMessages(run.id, userName);
+      await this.repo.removeRunParticipant(run.id, userName);
+      if (names.length === 0) continue;
+      try {
+        await this.adapter.updateStandupCards(names, standup, run, { kind: 'removed' });
+      } catch (err) {
+        this.log(`updating ${userName}'s cards for run ${run.id} failed: ${err}`);
+      }
+    }
+  }
+
   private async removeMessage(messageName: string): Promise<void> {
     try {
       await this.adapter.deleteMessage(messageName);

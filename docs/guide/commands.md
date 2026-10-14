@@ -128,8 +128,9 @@ Anyone can DM the bot directly:
   the service account has its admin role (works for everyone immediately),
   otherwise they are learned from Chat interactions — kicking in after a
   person has used the bot at least once.
-- **Roster snapshots:** the day's roster is frozen when the run opens;
-  `add`/`remove`/`vacation` apply from the next run.
+- **Roster snapshots:** the day's roster is frozen when the run opens, so
+  `add` and `vacation` apply from the next run. `remove` also takes the person
+  off a run that is still open, unless they have already answered.
 - **Custom questions** apply from the next run. Questions containing the word
   "blocker" get blocker tracking; questions containing "yesterday"/"today"
   get pre-fill behavior.

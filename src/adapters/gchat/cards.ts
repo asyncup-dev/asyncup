@@ -85,6 +85,9 @@ function promptBody(standup: Standup, run: Run, state: PromptState, endpoint: st
       { buttonList: { buttons: [{ text: 'Edit answers', onClick: { action: clickAction(OPEN_DIALOG_FN, param, endpoint, 'OPEN_DIALOG') } }] } },
     ];
   }
+  if (state.kind === 'removed') {
+    return [{ textParagraph: { text: 'You’re no longer on this standup, so there’s nothing to answer today.' } }];
+  }
   if (state.kind === 'skipped') {
     return [
       { textParagraph: { text: `🏖️ You skipped today${state.note ? `: <i>${html(state.note)}</i>` : ''}. You won’t be counted as missing. Changed your mind? Undo it before ${due}.` } },

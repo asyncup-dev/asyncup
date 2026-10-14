@@ -18,7 +18,7 @@ export interface SpaceMember {
  * APIs directly — only this interface. New platforms = new implementation.
  */
 /** Where someone stands on a run, as their prompt cards show it. */
-export type PromptState = { kind: 'open' } | { kind: 'submitted'; at: string; late: boolean } | { kind: 'skipped'; note: string | null };
+export type PromptState = { kind: 'open' } | { kind: 'submitted'; at: string; late: boolean } | { kind: 'skipped'; note: string | null } | { kind: 'removed' };
 
 export interface ChatAdapter {
   /** DM the user a prompt with a way to fill in the standup form; returns the card's message name when known. */

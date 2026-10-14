@@ -36,6 +36,15 @@ describe('RosterSync', () => {
     expect(await standup()).toMatchObject({ rosterSyncedAt: '2026-06-10T02:30:00.000Z', rosterSyncError: null });
   });
 
+  it('takes a leaver out of the open run too', async () => {
+    const { roster, repo, standup, groups } = await groupStandup();
+    await roster.sync(await standup());
+    const run = await repo.createRun((await standup()).id, '2026-06-10', 'k');
+    groups.listings.set(GROUP, { members: [ravi], skipped: [] });
+    expect(await roster.sync(await standup())).toMatchObject({ removed: ['Asha'] });
+    expect((await repo.listRunParticipants(run.id)).map((p) => p.displayName)).toEqual(['Ravi']);
+  });
+
   it('follows joiners, leavers and renames, and keeps hand-made changes', async () => {
     const { roster, repo, standup, groups } = await groupStandup();
     const id = (await standup()).id;

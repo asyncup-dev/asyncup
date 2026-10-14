@@ -227,8 +227,10 @@ describe('api: roster', () => {
     expect((await (await patch('users/dave', { admin: false })).json() as any).admin).toBe(false);
 
     expect((await op(`/standups/${s.id}/participants/${encodeURIComponent('users/zoe')}`, { method: 'DELETE' })).status).toBe(404);
+    const run = await repo.createRun(s.id, '2026-06-10', 'k');
     expect((await op(`/standups/${s.id}/participants/${encodeURIComponent('users/dave')}`, { method: 'DELETE' })).status).toBe(204);
     expect((await repo.listParticipants(s.id)).map((p) => p.userName)).not.toContain('users/dave');
+    expect((await repo.listRunParticipants(run.id)).map((p) => p.userName)).not.toContain('users/dave');
   });
 
   it('lists the space’s members to the standup’s managers, and shows each person’s week', async () => {

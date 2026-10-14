@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import type { Repo } from '../db/repo.js';
 import { GroupAccessError, type GroupDirectory } from './groups.js';
+import type { StandupService } from './standup-service.js';
 import type { Standup } from './types.js';
 
 export type RosterSyncResult =
@@ -19,6 +20,7 @@ export class RosterSync {
     private groups: () => Promise<GroupDirectory | null>,
     private now: () => DateTime = () => DateTime.utc(),
     private log: (msg: string) => void = () => {},
+    private standups: StandupService | null = null,
   ) {}
 
   /** Whether the last sync is older than `minutes` (or never happened). */
@@ -56,6 +58,7 @@ export class RosterSync {
     for (const row of rows.values()) {
       if (row.source === 'group' && row.active && !inGroup.has(row.userName)) {
         await this.repo.dropGroupMember(standup.id, row.userName);
+        await this.standups?.leaveOpenRuns(standup, row.userName);
         removed.push(row.displayName);
       }
     }
