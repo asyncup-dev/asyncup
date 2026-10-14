@@ -47,7 +47,7 @@ const service = new StandupService(repo, adapter, undefined, webhooks, (msg) => 
 const blockerService = new BlockerService(repo, adapter);
 const pollService = new PollService(repo, adapter);
 const schedule = new ScheduleService(repo, adapter, undefined, webhooks, (msg) => console.log(`[schedule] ${msg}`));
-const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter, pollService, schedule);
+const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter, pollService, schedule, service);
 const router = new EventRouter(
   commands,
   service,
@@ -69,6 +69,7 @@ const roster = new RosterSync(
   },
   undefined,
   (msg) => console.log(`[roster] ${msg}`),
+  service,
 );
 const providers: SchedulerProviders = {
   schedule,

@@ -258,6 +258,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 404, 'not_found', 'Not a participant.');
       return;
     }
+    await ctx.service?.leaveOpenRuns(standup, userName);
     res.status(204).end();
   });
 }

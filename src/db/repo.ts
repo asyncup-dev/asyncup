@@ -1378,6 +1378,11 @@ export class Repo {
     await this.db.run('UPDATE run_participants SET card_messages = ? WHERE run_id = ? AND user_name = ?', [JSON.stringify([...names, messageName]), runId, userName]);
   }
 
+  /** Takes someone out of a run's roster, so it no longer expects them. */
+  async removeRunParticipant(runId: number, userName: string): Promise<void> {
+    await this.db.run('DELETE FROM run_participants WHERE run_id = ? AND user_name = ?', [runId, userName]);
+  }
+
   async listCardMessages(runId: number, userName: string): Promise<string[]> {
     const row = await this.db.get('SELECT card_messages FROM run_participants WHERE run_id = ? AND user_name = ?', [runId, userName]);
     return row?.card_messages ? JSON.parse(row.card_messages) : [];

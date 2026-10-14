@@ -6,6 +6,7 @@ import { runProgress } from './progress.js';
 import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, LIMITS, parseDays } from './validation.js';
 import type { BlockerService } from './blocker-service.js';
 import type { PollService } from './poll-service.js';
+import type { StandupService } from './standup-service.js';
 import { parseDateSpec, type Actor, type ScheduleService } from './schedule.js';
 import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
@@ -77,6 +78,7 @@ export class CommandHandler {
     private adapter: ChatAdapter | null = null,
     private pollService: PollService | null = null,
     private schedule: ScheduleService | null = null,
+    private standups: StandupService | null = null,
   ) {}
 
   /** The scheduler is constructed after the handler; attach it once built. */
@@ -323,6 +325,7 @@ export class CommandHandler {
     for (const m of mentions) {
       // On a group roster, kept off so the next sync doesn't add them back.
       const done = standup.rosterGroup ? await this.repo.excludeParticipant(standup.id, m.userName) : await this.repo.removeParticipant(standup.id, m.userName);
+      if (done) await this.standups?.leaveOpenRuns(standup, m.userName);
       (done ? removed : unknown).push(m.displayName);
     }
     const parts: string[] = [];

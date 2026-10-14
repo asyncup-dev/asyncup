@@ -64,7 +64,7 @@ export async function makeStack(
   const scheduleRef: { current: ScheduleService | undefined } = { current: undefined };
   const blockers = new BlockerService(repo, adapter, clock.now);
   const groups = new FakeGroups();
-  const roster = new RosterSync(repo, async () => groups, clock.now);
+  const roster = new RosterSync(repo, async () => groups, clock.now, () => {}, service);
   const scheduler = new Scheduler(
     repo,
     adapter,
@@ -84,7 +84,7 @@ export async function makeStack(
   const polls = new PollService(repo, adapter, clock.now);
   const schedule = new ScheduleService(repo, adapter, clock.now, webhooks, () => {});
   scheduleRef.current = schedule;
-  const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter, polls, schedule);
+  const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter, polls, schedule, service);
   commands.attachRunner(scheduler);
 
   return { repo, adapter, service, blockers, polls, settings, scheduler, commands, clock, schedule, groups, roster };

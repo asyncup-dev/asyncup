@@ -135,7 +135,7 @@ export function TeamPage() {
       {confirm ? (
         <ConfirmDialog
           title={`Remove ${confirm.person.displayName} from ${confirm.standup.name}?`}
-          body="They stop being prompted from the next run. Their past answers stay in the history."
+          body="They come off today’s run too, unless they have already answered. Their past answers stay in the history."
           confirmLabel="Remove"
           danger
           onConfirm={() => act(() => remove.mutateAsync({ standupId: confirm.standup.id, userName: confirm.person.userName })).then(() => setConfirm(null))}

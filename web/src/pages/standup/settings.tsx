@@ -270,7 +270,7 @@ export function StandupSettingsPage() {
       ) : confirm === 'archive' ? (
         <ConfirmDialog title={`Archive ${s.name}?`} body="No more prompts or reports. History stays in the database and exports." confirmLabel="Archive" typed="ARCHIVE" danger onConfirm={() => roster(() => archive.mutateAsync('archive')).then(() => setConfirm(null))} onCancel={() => setConfirm(null)} />
       ) : confirm ? (
-        <ConfirmDialog title={`Remove ${confirm.displayName}?`} body="They stop being prompted from the next run. Their past answers stay in the history." confirmLabel="Remove" danger onConfirm={() => roster(() => pRemove.mutateAsync({ standupId: id, userName: confirm.userName })).then(() => setConfirm(null))} onCancel={() => setConfirm(null)} />
+        <ConfirmDialog title={`Remove ${confirm.displayName}?`} body="They come off today’s run too, unless they have already answered. Their past answers stay in the history." confirmLabel="Remove" danger onConfirm={() => roster(() => pRemove.mutateAsync({ standupId: id, userName: confirm.userName })).then(() => setConfirm(null))} onCancel={() => setConfirm(null)} />
       ) : null}
     </>
   );

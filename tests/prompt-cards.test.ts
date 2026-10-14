@@ -110,6 +110,41 @@ describe('prompt cards follow where the person stands', () => {
   });
 });
 
+describe('taking someone off a standup mid-run', () => {
+  const mention = (name: string) => ({ userName: `users/${name.toLowerCase()}`, displayName: name });
+
+  it('drops them from the open run and rewrites their cards, unless they already answered', async () => {
+    const { repo, run, service, adapter, commands, standup, clock, scheduler } = await promptedRun();
+    await service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
+    const bobCards = await repo.listCardMessages(run.id, 'users/bob');
+    const reply = await commands.handle({ tenantId: TENANT, spaceName: 'spaces/team', text: 'remove @Alice @Bob', mentions: [mention('Alice'), mention('Bob')], sender: mention('Alice') });
+    expect(reply).toBe('✅ Removed Alice, Bob.');
+    expect((await repo.listRunParticipants(run.id)).map((p) => p.userName)).toEqual(['users/alice', 'users/carol']);
+    expect(adapter.cardUpdates.at(-1)).toEqual({ messageNames: bobCards, runId: run.id, state: { kind: 'removed' } });
+    expect(textOf(promptMessage(standup, run, null, { kind: 'removed' }))).toBe('You’re no longer on this standup, so there’s nothing to answer today.');
+
+    // a closed run keeps who it expected
+    clock.set('2026-06-10T12:00');
+    await scheduler.tick();
+    await service.leaveOpenRuns(standup, 'users/carol');
+    expect((await repo.listRunParticipants(run.id)).map((p) => p.userName)).toEqual(['users/alice', 'users/carol']);
+  });
+
+  it('logs a card that cannot be rewritten, and skips people never prompted', async () => {
+    const { repo, adapter, run, clock, standup } = await promptedRun();
+    const logs: string[] = [];
+    adapter.updateStandupCards = async () => {
+      throw new Error('message deleted');
+    };
+    const service = new StandupService(repo, adapter, clock.now, null, (m) => logs.push(m));
+    await service.leaveOpenRuns(standup, 'users/bob');
+    expect(logs).toEqual([`updating users/bob's cards for run ${run.id} failed: Error: message deleted`]);
+    await repo.upsertParticipant({ standupId: standup.id, userName: 'users/dan', displayName: 'Dan' });
+    await service.leaveOpenRuns(standup, 'users/dan'); // on the roster, not on the run
+    expect(logs).toHaveLength(1);
+  });
+});
+
 describe('skip and undo from Chat', () => {
   const click = (fn: string, runId: number, user: object = ALICE) => ({ type: 'CARD_CLICKED', common: { invokedFunction: fn, parameters: { runId: String(runId) } }, user });
   const skipWith = (runId: number, reason: string, user: object = ALICE) => ({
