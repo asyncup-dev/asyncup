@@ -18,8 +18,13 @@ Every request needs one of:
 
 | How | Who you are |
 | --- | --- |
-| Session cookie from Google or SAML sign-in | **admin** if you are a Workspace admin, **manager** if you administer at least one standup, otherwise **member** |
-| `Authorization: Bearer <OPERATOR_TOKEN>` | **admin** (the operator token, while token sign-in is on) |
+| Session cookie from Google or SAML sign-in | That person, with the permissions of their roles ([Roles and permissions](./roles)) |
+| `Authorization: Bearer <OPERATOR_TOKEN>` | Admin across the workspace (the operator token, while token sign-in is on) |
+
+Each route needs one permission, across the workspace or on the standup it
+names. The OpenAPI document gives it as `x-permission` on the operation and
+in its description. A caller without it gets `403 forbidden`, or `404` for a
+standup they can't see at all.
 
 `GET /api/v1/auth/methods` (which sign-in buttons to show) and
 `GET /api/v1/openapi.json` are public. Any other unauthenticated call gets
@@ -38,7 +43,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `active` (delete a standup that isn't archived), `lockout`, `chat_unavailable`, `unavailable`, `no_roster_group`, `roster_unavailable` (Google refused the group read, with the fix), `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`, `refused` (a time-off policy said no, with the reason).
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `active` (delete a standup that isn't archived), `lockout`, `chat_unavailable`, `unavailable`, `no_roster_group`, `roster_unavailable` (Google refused the group read, with the fix), `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`, `refused` (a time-off policy said no, with the reason), `escalation` (a role or grant would give more than you hold), `built_in` (built-in roles can't be changed), `in_use` (a role someone holds), `workspace_only` (that role can only be granted across the workspace).
 
 ## Endpoints
 
@@ -49,11 +54,16 @@ Who the caller is.
 ```json
 { "kind": "manager", "via": "session", "tenantId": "default",
   "user": { "userName": "users/1234", "email": "asha@example.com", "name": "Asha" },
-  "managedStandupIds": [1] }
+  "managedStandupIds": [1],
+  "permissions": { "workspace": ["standups.view", "reports.view"],
+                   "standups": { "1": ["standups.configure", "people.manage", "…"] } } }
 ```
 
 `user` is `null` for the operator token. `userName` is `null` for a SAML
-sign-in that has not been linked to a Chat identity yet.
+sign-in that has not been linked to a Chat identity yet. `permissions.standups`
+adds to `permissions.workspace` on each standup. `kind` is a coarse summary
+for laying out a client: `admin` with `settings.manage`, `manager` with
+anything beyond a Member's, otherwise `member`.
 
 ### `GET /api/v1/standups`
 
@@ -98,7 +108,7 @@ tenant.
 
 ### Creating a standup
 
-Admins only. The chat `setup` command and this endpoint share one core, so naming and duplicate rules match.
+Needs `standups.create`. The chat `setup` command and this endpoint share one core, so naming and duplicate rules match.
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -111,7 +121,7 @@ A template seeds the configuration; any config key from `PATCH /standups/:id` se
 
 ### Managing a standup
 
-Admins and that standup's managers only (`403 forbidden` otherwise).
+Each route needs a permission on that standup: `standups.configure` for `PATCH`, run now, nudge and the webhook secret; `standups.archive` to archive; `people.manage` for participants, space members and roster sync; `export` for the CSV; and `standups.delete`, across the workspace, to delete.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
@@ -119,18 +129,18 @@ Admins and that standup's managers only (`403 forbidden` otherwise).
 | `POST` | `/standups/:id/run-now` | `{ "result": "started" \| "already_open" \| "already_closed" \| "past_deadline" \| "no_participants" }` |
 | `POST` | `/standups/:id/nudge` | Reminds everyone still expected today; `409 no_open_run` otherwise |
 | `POST` | `/standups/:id/archive`, `/unarchive` | Stops or resumes prompts; history stays |
-| `DELETE` | `/standups/:id` | Workspace admins only. `{ "confirm": "<the standup's name>" }` removes an **archived** standup with every run, answer, blocker and poll, and returns the counts; `409 active` until it is archived, `400 invalid` for a wrong name. People's own weeks and days off stay; messages already posted in Chat are not touched |
+| `DELETE` | `/standups/:id` | `{ "confirm": "<the standup's name>" }` removes an **archived** standup with every run, answer, blocker and poll, and returns the counts; `409 active` until it is archived, `400 invalid` for a wrong name. People's own weeks and days off stay; messages already posted in Chat are not touched |
 | `POST` | `/standups/:id/participants` | `{ userName: "users/…", displayName, mandatory? }` → `201` with `reachable` (can the bot DM them) |
 | `PATCH` | `/standups/:id/participants/:userName` | `{ mandatory?, onVacation?, admin? }`; `409 last_admin` guards the last admin. `:userName` is the Chat resource name URL-encoded (`users%2F123`) |
 | `DELETE` | `/standups/:id/participants/:userName` | `204`. On a group roster the person is kept off: later syncs don't add them back |
-| `GET` | `/standups/:id/webhook/secret` | `{ secret }`: the key the standup's webhooks are signed with ([webhooks](./configuration#outbound-webhooks)). Admins and the standup's managers; `503 unavailable` when the server has no signing key |
+| `GET` | `/standups/:id/webhook/secret` | `{ secret }`: the key the standup's webhooks are signed with ([webhooks](./configuration#outbound-webhooks)); `503 unavailable` when the server has no signing key |
 | `GET` | `/standups/:id/members` | Members of the standup's Chat space, as roster candidates; `502 chat_unavailable` carries Google's reason |
 | `POST` | `/standups/:id/roster/sync` | Sync a group roster now → `{ added: [names], removed: [names], skipped: [{ email, reason }], syncedAt }`. `409 no_roster_group` when the standup doesn't follow a group, `502 roster_unavailable` when Google refuses (the message names the admin role to grant), `503` when the server has no group support |
 | `GET` | `/standups/:id/export.csv?days=90` | CSV download |
 
 ### Runs
 
-Anyone who can see the standup.
+Today's run needs `standups.view`; the run list and insights need `reports.view`; one run's answers need `answers.view`.
 
 | Path | Returns |
 | --- | --- |
@@ -143,15 +153,15 @@ Moods are withheld per person when the standup keeps them anonymous; only the te
 
 ### Blockers
 
-`GET /blockers?status=open|acknowledged|resolved|all&standupId=&owner=` — across every standup the caller can see. Each blocker carries its `status`, `tags` (with `acknowledgedAt`) and `updates`.
+`GET /blockers?status=open|acknowledged|resolved|all&standupId=&owner=` — across every standup where the caller has `blockers.view`. Each blocker carries its `status`, `tags` (with `acknowledgedAt`) and `updates`.
 
-`POST /blockers/:id/acknowledge`, `/update` (`{ text }`), `/resolve` — the same rules as in Chat: only tagged people acknowledge; the owner, tagged people and standup admins resolve. These need a signed-in person; the operator token gets `403 needs_user`.
+`POST /blockers/:id/acknowledge`, `/update` (`{ text }`), `/resolve` — the same rules as in Chat: only tagged people acknowledge; the owner, tagged people and anyone with `blockers.manage` on the standup resolve. These need a signed-in person; the operator token gets `403 needs_user`.
 
 ### Team
 
-`GET /people` — admins and managers. Everyone on a roster the caller can see, with `email` (when known), `timezone`, `onVacation`, `workingDays` / `workingDaysLabel` and their `standups` (`mandatory`, `admin`).
+`GET /people` — needs `people.view`. Everyone on a roster of a standup where the caller has it, with `email` (when known), `timezone`, `onVacation`, `workingDays` / `workingDaysLabel` and their `standups` (`mandatory`, `admin`).
 
-Schedules of others — admins, and managers of a standup the person is on:
+Schedules of others need `schedules.manage` on a standup the person is on:
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -159,7 +169,7 @@ Schedules of others — admins, and managers of a standup the person is on:
 | `PATCH` | `/people/:userName/schedule` | `{ workingDays }` — the person is DM'd |
 | `POST` | `/people/:userName/overrides` | Same body as `/me/overrides`; managers may set past dates and are never subject to the policy — the person is DM'd |
 | `DELETE` | `/people/:userName/overrides/:date` | Withdraw |
-| `GET` | `/requests` | Pending time-off requests — all of them for admins, those of people in managed standups for managers |
+| `GET` | `/requests` | Pending time-off requests: all of them with `schedules.manage` across the workspace, otherwise those of people on standups where the caller has it |
 | `POST` | `/requests/:ids/approve` · `/requests/:ids/decline` | `:ids` comma-separated (one request can span several dates); `{ note? }` on decline goes to the person; `409 refused` once decided or when the caller doesn't manage the person |
 
 ### Me
@@ -177,7 +187,7 @@ Schedules of others — admins, and managers of a standup the person is on:
 
 ### Workspace settings
 
-Admins only.
+Reading needs any of `settings.manage`, `sso.manage`, `tokens.manage` or `roles.manage`. Each field then needs its own: the sign-in fields `sso.manage`, `samlAdminAttribute` and `samlAdminGroup` `roles.manage` (they decide who is an admin), `mcpDefaultScopes` `tokens.manage`, and the rest `settings.manage`. Machine tokens need `tokens.manage`; deleting history needs `settings.manage`.
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -187,6 +197,22 @@ Admins only.
 | `DELETE` | `/settings/tokens/:name` | `204` |
 | `DELETE` | `/history` | `{ "confirm": "DELETE HISTORY" }` — removes every run, submission, blocker and poll in the workspace; standups, rosters and settings stay. Returns the counts. `400 invalid` without the phrase |
 
+### Roles and grants
+
+Custom roles and who holds what ([Roles and permissions](./roles)). Every change is written to the audit log.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/permissions` | The permission catalogue: `id`, `label`, `description`, `workspaceOnly`. Anyone signed in |
+| `GET` | `/roles` | Built-in and custom roles with `permissions`, `builtIn`, `grantable`, `workspaceOnly` and the number of `grants`. Needs `roles.manage`, or `people.manage` on some standup |
+| `POST` | `/roles` | `{ name, description?, permissions: [...] }` → `201`. Needs `roles.manage`. `403 escalation` for a permission you don't hold, `409 duplicate` for a taken name. `standups.view` is added whenever another standup permission is chosen |
+| `PATCH` | `/roles/:id` | Same body. Custom roles only (`400 built_in`); `409 lockout` when it would take away your own `roles.manage` |
+| `DELETE` | `/roles/:id` | `204`; `409 in_use` while anyone holds it |
+| `GET` | `/grants?standupId=` | Grants the caller may change: all of them with `roles.manage`, otherwise those on standups where they have `people.manage` |
+| `POST` | `/grants` | `{ email, displayName?, role, standupId? }` → `201`. Omit `standupId` for the whole workspace, which needs `roles.manage`; on one standup, `people.manage` there is enough. `403 escalation` for a role holding more than you do there, `400 workspace_only` for a workspace-only role on one standup, `409 duplicate` when they already hold it there |
+| `DELETE` | `/grants/:id` | `204`. Same escalation rule; `409 lockout` for your own last `roles.manage` |
+| `GET` | `/roles/audit?limit=100` | Newest first: `at`, `actor`, `action`, `summary`. Needs `roles.manage` |
+
 ### MCP server
 
 AsyncUp has no AI of its own. Instead it speaks the [Model Context Protocol](https://modelcontextprotocol.io) at `/mcp` (Streamable HTTP, stateless), so the team's own assistants can read standups and, with the right scopes, act as a person. Off by default. Setting up Claude Code, the tool list and what each scope allows are in [Claude Code and MCP](./mcp); this section covers the API that manages it.
@@ -194,8 +220,8 @@ AsyncUp has no AI of its own. Instead it speaks the [Model Context Protocol](htt
 | Method | Path | Notes |
 | --- | --- | --- |
 | `PATCH` | `/settings` | `mcpEnabled` (boolean) switches the endpoint on; `mcpDefaultScopes` (`"read"`, `"read,blockers:write"`, …) seeds new tokens. `GET /settings` shows the `mcp` section with the scope catalogue |
-| `GET` | `/mcp/tokens` | Every token in the tenant for admins; only your own otherwise |
-| `POST` | `/mcp/tokens` | `{ name, kind?: "personal" \| "service", scopes?: [...] }` → `201` with the token once (`secret`) and a ready-to-paste `config` (`url`, `headers`). Personal tokens act as you and need a signed-in person; service tokens are admin-only and always read-only |
+| `GET` | `/mcp/tokens` | Every token in the tenant with `tokens.manage`; only your own otherwise |
+| `POST` | `/mcp/tokens` | `{ name, kind?: "personal" \| "service", scopes?: [...] }` → `201` with the token once (`secret`) and a ready-to-paste `config` (`url`, `headers`). Personal tokens act as you and need a signed-in person; service tokens need `tokens.manage` and are always read-only |
 | `DELETE` | `/mcp/tokens/:id` | Revokes; `204` |
 | `GET` | `/mcp/activity?limit=50` | Newest first: `tool`, `argsSummary`, `ok`, `at`, `token` |
 | `POST` | `/verify/mcp` | Verification shape: fails while the server is off or no token exists |
@@ -217,14 +243,14 @@ Every gate in setup and settings has a live check. All return the same shape:
   "checkedAt": "2026-09-16T10:42:00Z", "data": { "email": "bot@…", "spaces": 3 } }
 ```
 
-| `POST` | Checks | Who |
+| `POST` | Checks | Needs |
 | --- | --- | --- |
-| `/verify/project` | The stored audience is a project number and/or https app URL | admin |
-| `/verify/service-account` | Mints a token from the stored key and calls `spaces.list` | admin |
-| `/verify/chat-event` | Whether a verified event has arrived at `/chat/events` since setup began — the gate setup polls while you save the Chat app configuration | admin |
-| `/verify/webhook` | `{ standupId }` — POSTs a signed `test` event to the standup's webhook URL | admin, manager |
-| `/verify/saml` | Builds a sign-in request from the stored IdP config and checks the SSO URL answers | admin |
+| `/verify/project` | The stored audience is a project number and/or https app URL | `settings.manage` |
+| `/verify/service-account` | Mints a token from the stored key and calls `spaces.list` | `settings.manage` |
+| `/verify/chat-event` | Whether a verified event has arrived at `/chat/events` since setup began — the gate setup polls while you save the Chat app configuration | `settings.manage` |
+| `/verify/webhook` | `{ standupId }` — POSTs a signed `test` event to the standup's webhook URL | `standups.configure` on it |
+| `/verify/saml` | Builds a sign-in request from the stored IdP config and checks the SSO URL answers | `sso.manage` |
 | `/verify/dm` | Sends the caller a Chat direct message | any signed-in person |
-| `/verify/mcp` | The MCP server is on and at least one token exists | admin |
+| `/verify/mcp` | The MCP server is on and at least one token exists | `settings.manage` |
 
 `GET /health/chat` (no auth) mirrors the connection state without secrets: `audience`, `serviceAccount` (`set` / `unset`), `lastEventAt`, `lastRejectedAt`.

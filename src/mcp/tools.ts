@@ -6,7 +6,7 @@ import { nudgeToday, skipToday, updateMe, type Refusal } from '../api/actions.js
 import type { Principal } from '../api/principal.js';
 import { actorFor, displayNameOf, managesPerson, overrideView, scheduleView } from '../api/schedule.js';
 import { allowed, findVisibleStandup, meView, summarise, visibleStandups } from '../api/shared.js';
-import { canSomewhere, standupsWith, type Permission } from '../core/permissions.js';
+import { canSomewhere, PERMISSIONS, standupsWith, type Permission } from '../core/permissions.js';
 import * as S from '../api/spec/schemas.js';
 import { BLOCKER_STATUSES, blockersView, linkedStandupsView, peopleView, runsView, runView, standupDetailView, visibleBlocker } from '../api/views.js';
 import type { ChatAdapter } from '../core/adapter.js';
@@ -67,8 +67,9 @@ type WriteHints = { destructive: boolean; idempotent: boolean };
 
 /**
  * One McpServer per request, holding only the tools the token's scopes
- * allow. Every call is logged against the token; the principal decides
- * what the tools can see, exactly as the JSON API would for that person.
+ * allow and the owner's permissions could use somewhere. Every call is
+ * logged against the token; the principal decides what the tools can see,
+ * exactly as the JSON API would for that person.
  */
 export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal): McpServer {
   const { repo } = deps;
@@ -86,10 +87,10 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   const register = <Args extends z.ZodObject<any>, Out extends z.ZodObject<any>>(
     name: string,
     scope: McpScope,
-    config: { title: string; description: string; inputSchema: Args; outputSchema: Out; write?: WriteHints },
+    config: { title: string; description: string; inputSchema: Args; outputSchema: Out; write?: WriteHints; need?: Permission },
     handler: (args: z.infer<Args>) => Promise<z.infer<Out>>,
   ) => {
-    if (!scopes.includes(scope)) return;
+    if (!scopes.includes(scope) || (config.need && !canSomewhere(p.access, config.need))) return;
     const write = config.write;
     server.registerTool(
       name,
@@ -129,7 +130,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   };
   const standupFor = async (id: number, need: Permission = 'standups.view') => {
     const found = await visible(id);
-    if (!allowed(p, need, id)) throw new ToolRefused('Only admins and this standup’s managers can do that.');
+    if (!allowed(p, need, id)) throw new ToolRefused(`Your access doesn’t include “${PERMISSIONS[need].label}” on this standup.`);
     return found.standup;
   };
   const me = () => {
@@ -144,7 +145,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'read',
     {
       title: 'Who am I',
-      description: 'Who this token acts as, their role (admin, manager or member), the standups they manage, and the token’s scopes.',
+      description: 'Who this token acts as, their role (admin, manager or member), their permissions across the workspace and per standup, the standups they manage, and the token’s scopes.',
       inputSchema: z.object({}),
       outputSchema: McpMe,
     },
@@ -192,6 +193,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       description: 'Recent runs of a standup, newest first, with submitted and expected counts and who is missing.',
       inputSchema: z.object({ standupId: ID, limit: z.number().int().min(1).max(90).default(14) }),
       outputSchema: S.RunList,
+      need: 'reports.view',
     },
     async ({ standupId, limit }) => ({ runs: await runsView(repo, await standupFor(standupId, 'reports.view'), limit) }),
   );
@@ -204,6 +206,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       description: 'One run with every submission and its answers. Omit date for today. Moods are withheld per person when the standup keeps them anonymous.',
       inputSchema: z.object({ standupId: ID, date: ISO_DATE.optional() }),
       outputSchema: S.RunDetail,
+      need: 'answers.view',
     },
     async ({ standupId, date }) => {
       const standup = await standupFor(standupId, 'answers.view');
@@ -221,6 +224,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       description: 'Blockers across every standup the owner can see, with who is tagged and the updates so far.',
       inputSchema: z.object({ status: z.enum(BLOCKER_STATUSES).default('open'), standupId: ID.optional(), owner: z.string().optional() }),
       outputSchema: S.BlockerList,
+      need: 'blockers.view',
     },
     async ({ status, standupId, owner }) => ({ blockers: await blockersView(repo, p, { status, standupId: standupId ?? null, ...(owner ? { owner } : {}) }) }),
   );
@@ -228,11 +232,8 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   register(
     'get_team',
     'read',
-    { title: 'Get the team', description: 'Everyone on a roster the owner can see, with their standups and roles (admins and managers only).', inputSchema: z.object({}), outputSchema: S.Team },
-    async () => {
-      if (!canSomewhere(p.access, 'people.view')) throw new ToolRefused('Only admins and managers can list the team.');
-      return { people: await peopleView(repo, p) };
-    },
+    { title: 'Get the team', description: 'Everyone on a roster the owner can see, with their standups and roles.', inputSchema: z.object({}), outputSchema: S.Team, need: 'people.view' },
+    async () => ({ people: await peopleView(repo, p) }),
   );
 
   register(
@@ -243,6 +244,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       description: 'Weekly participation, mood and blocker series for a standup.',
       inputSchema: z.object({ standupId: ID, weeks: z.number().int().min(1).max(26).default(8) }),
       outputSchema: S.Insights,
+      need: 'reports.view',
     },
     async ({ standupId, weeks }) => ({ weeks: await weeklySeries(repo, await standupFor(standupId, 'reports.view'), deps.now(), weeks) }),
   );
@@ -354,6 +356,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       inputSchema: z.object({ standupId: ID }),
       outputSchema: S.RunNow,
       write: { destructive: false, idempotent: true },
+      need: 'standups.configure',
     },
     async ({ standupId }) => {
       const standup = await standupFor(standupId, 'standups.configure');
@@ -370,6 +373,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       inputSchema: z.object({ standupId: ID }),
       outputSchema: S.Nudged,
       write: { destructive: false, idempotent: false },
+      need: 'standups.configure',
     },
     async ({ standupId }) => {
       const standup = await standupFor(standupId, 'standups.configure');
@@ -402,9 +406,6 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     if (out.size > 31) throw new ToolRefused('At most 31 days at a time.');
     return [...out].sort();
   };
-  const managerOnly = () => {
-    if (!canSomewhere(p.access, 'schedules.manage')) throw new ToolRefused('Only admins and managers can do that.');
-  };
 
   register(
     'get_schedule',
@@ -425,10 +426,9 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   register(
     'list_time_off_requests',
     'read',
-    { title: 'List time-off requests', description: 'Time-off requests waiting for a decision, for the people the owner manages.', inputSchema: z.object({}), outputSchema: S.TimeOffRequests },
+    { title: 'List time-off requests', description: 'Time-off requests waiting for a decision, for the people the owner manages.', inputSchema: z.object({}), outputSchema: S.TimeOffRequests, need: 'schedules.manage' },
     async () => {
       schedule();
-      managerOnly();
       let names: string[] | undefined;
       if (!allowed(p, 'schedules.manage')) {
         names = [];
@@ -520,10 +520,10 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       inputSchema: z.object({ ids: z.array(ID).min(1), approve: z.boolean(), note: z.string().trim().max(200).optional() }),
       outputSchema: S.Decision,
       write: { destructive: true, idempotent: false },
+      need: 'schedules.manage',
     },
     async ({ ids, approve, note }) => {
       const svc = schedule();
-      managerOnly();
       const r = await svc.decide(ids, approve, actorFor(p), note ?? null);
       if (!r.ok) throw new ToolRefused(r.message);
       return { ok: true as const, message: r.message };

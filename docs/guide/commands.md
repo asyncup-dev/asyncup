@@ -6,14 +6,17 @@ e.g. `@AsyncUp #2 time 09:30` — `status` lists all standups with their ids.
 
 `help` shows the essentials; `help all` lists every command.
 
-## Configuration (admins only)
+## Configuration
 
 The person who runs `setup` becomes the standup's first admin (`setup` itself
 is open to everyone in the space — there is nobody to gate it before the first
-standup exists). Only admins can change configuration; `status`, `trends`,
-`blockers`, `blocker`, `poll`, `polls`, `export` and `help` are open to
-everyone in the space. `status` without a `#id` prefix reports every standup
-in the space.
+standup exists). Changing a standup needs a permission on it, which its admins
+(Managers) hold: `standups.configure` for the schedule, questions and
+`run now`, `people.manage` for the roster, admins and roles,
+`schedules.manage` for people's days, and `standups.archive` to archive
+([Roles and permissions](./roles)). `status`, `trends`, `blockers`,
+`blocker`, `poll`, `polls`, `export` and `help` are open to everyone in the
+space. `status` without a `#id` prefix reports every standup in the space.
 
 | Command | Effect |
 | --- | --- |
@@ -26,7 +29,9 @@ in the space.
 | `vacation @user…` / `back @user…` | Mark people away — no prompts, not counted as missing |
 | `off @user <date\|range> [reason]` / `working @user <date>` | Mark someone away or working on given days; `off @user cancel <date>` undoes ([Personal schedules](./schedules)) |
 | `days @user mon-thu\|adhoc\|reset` | Someone's personal week |
-| `admin @user…` / `unadmin @user…` | Manage who can change configuration |
+| `admin @user…` / `unadmin @user…` | Manage the standup's admins, who are its Managers |
+| `role @user <role>` / `role @user remove <role>` | Grant or revoke a role on this standup, say `Viewer` for a stakeholder. Roles follow email, so `role pat@example.com Viewer` works for someone not yet in Chat. You can only grant a role whose permissions you hold here |
+| `roles` | Who holds a role on this standup, and the roles you can grant |
 | `time HH:MM` | Prompt time — interpreted in each participant's own timezone (participants set theirs by DMing `timezone <IANA>`; default is the standup timezone) |
 | `deadline HH:MM` | When the run closes and the wrap-up posts — standup timezone |
 | `remind <minutes>` | Nudge non-submitters this many minutes before the deadline (`0` disables) |

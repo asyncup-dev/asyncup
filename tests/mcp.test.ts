@@ -228,17 +228,16 @@ describe('mcp: tools', () => {
     await service.submit(run.id, ALICE.userName, ALICE.displayName, withBlocker('Waiting on API keys'));
 
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: FULL })).secret);
-    expect(((await alice.listTools()).tools.map((t) => t.name)).sort()).toEqual(
-      [
-        'acknowledge_blocker', 'cancel_day_off', 'decide_time_off_request', 'get_insights', 'get_me', 'get_my_standups', 'get_run', 'get_schedule', 'get_standup', 'get_team',
-        'list_blockers', 'list_runs', 'list_standups', 'list_time_off_requests', 'nudge_standup', 'resolve_blocker', 'run_standup_now', 'set_days_off', 'set_working_days',
-        'skip_today', 'submit_answers', 'update_blocker', 'update_my_settings',
-      ].sort(),
-    );
+    const MEMBER_TOOLS = [
+      'acknowledge_blocker', 'cancel_day_off', 'get_insights', 'get_me', 'get_my_standups', 'get_run', 'get_schedule', 'get_standup',
+      'list_blockers', 'list_runs', 'list_standups', 'resolve_blocker', 'set_days_off', 'set_working_days',
+      'skip_today', 'submit_answers', 'update_blocker', 'update_my_settings',
+    ];
+    // Tools the owner's permissions rule out everywhere aren't offered at all.
+    expect(((await alice.listTools()).tools.map((t) => t.name)).sort()).toEqual(MEMBER_TOOLS.sort());
     const standups = (await call(alice, 'list_standups')).json.standups;
     expect(standups).toHaveLength(1);
     expect(standups[0]).toMatchObject({ id: s.id, permissions: { manage: false }, today: { status: 'open', submitted: 1 } });
-    expect((await call(alice, 'get_team')).error).toContain('Only admins and managers');
     expect((await call(alice, 'list_runs', { standupId: s.id })).json.runs).toEqual([expect.objectContaining({ date: '2026-06-10', submitted: 1, expected: 3 })]);
     expect((await call(alice, 'get_run', { standupId: s.id })).json.submissions[0]).toMatchObject({ userName: 'users/alice', answers: [expect.anything(), expect.anything(), { answer: 'Waiting on API keys' }] });
     expect((await call(alice, 'get_run', { standupId: s.id, date: '2026-06-10' })).json.date).toBe('2026-06-10');
@@ -253,6 +252,9 @@ describe('mcp: tools', () => {
     await repo.addAdmin(s.id, ALICE.userName, ALICE.displayName);
     expect((await call(alice, 'get_team')).json.people.map((p: any) => p.userName).sort()).toEqual(['users/alice', 'users/bob', 'users/carol']);
     expect((await call(alice, 'list_standups')).json.standups[0].permissions.manage).toBe(true);
+    expect(((await alice.listTools()).tools.map((t) => t.name)).sort()).toEqual(
+      [...MEMBER_TOOLS, 'decide_time_off_request', 'get_team', 'list_time_off_requests', 'nudge_standup', 'run_standup_now'].sort(),
+    );
 
     const root = await connect((await mint(cookieFor('root', true), { name: 'r' })).secret);
     expect((await root.listTools()).tools).toHaveLength(11);
@@ -394,10 +396,9 @@ describe('schedule tools', () => {
     // approval flow through the tools
     await repo.updateStandup(s.id, { timeOffPolicy: 'approval' });
     expect((await call(alice, 'set_days_off', { dates: ['2026-06-24'], reason: 'dentist' })).json.status).toBe('pending');
-    expect((await call(alice, 'list_time_off_requests')).error).toBe('Only admins and managers can do that.');
+    expect((await alice.listTools()).tools.map((t) => t.name)).not.toContain('list_time_off_requests');
     const pending = (await call(bob, 'list_time_off_requests')).json.requests;
     expect(pending).toEqual([expect.objectContaining({ userName: 'users/alice', date: '2026-06-24', status: 'pending' })]);
-    expect((await call(alice, 'decide_time_off_request', { ids: [pending[0].id], approve: true })).error).toBe('Only admins and managers can do that.');
     expect((await call(bob, 'decide_time_off_request', { ids: [pending[0].id], approve: false, note: 'not that day' })).json.message).toContain('Declined');
     expect((await call(bob, 'decide_time_off_request', { ids: [pending[0].id], approve: true })).error).toContain('already decided');
     expect((await repo.getOverride('users/alice', '2026-06-24'))!).toMatchObject({ status: 'declined', decisionNote: 'not that day' });
@@ -412,7 +413,8 @@ describe('schedule tools', () => {
 
   it('refuses every schedule tool when the host has no schedule service', async () => {
     const { mint, cookieFor, connect, call, repo } = await startServer({ withoutSchedule: true });
-    await seedStandup(repo);
+    const s = await seedStandup(repo);
+    await repo.addAdmin(s.id, ALICE.userName, ALICE.displayName);
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['read', 'schedule'] })).secret);
     for (const [name, args] of [['get_schedule', {}], ['list_time_off_requests', {}], ['set_working_days', { workingDays: 'mon' }], ['set_days_off', { dates: ['2026-06-22'] }], ['cancel_day_off', { date: '2026-06-22' }], ['decide_time_off_request', { ids: [1], approve: true }]] as const) {
       expect((await call(alice, name, args as Record<string, unknown>)).error).toBe('Personal schedules are not available on this install.');
@@ -497,8 +499,12 @@ describe('mcp: ready for Claude Code', () => {
     clock.set('2026-06-10T08:00');
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['manage'] })).secret);
     const bob = await connect((await mint(cookieFor('bob'), { name: 'b', scopes: ['manage'] })).secret);
-    expect((await alice.listTools()).tools.map((t) => t.name)).toEqual(['run_standup_now', 'nudge_standup']);
-    expect((await call(alice, 'run_standup_now', { standupId: s.id })).error).toBe('Only admins and this standup’s managers can do that.');
+    expect((await alice.listTools()).tools).toEqual([]);
+    expect((await bob.listTools()).tools.map((t) => t.name)).toEqual(['run_standup_now', 'nudge_standup']);
+    // Managing one standup is not managing another.
+    const other = await repo.createStandup({ tenantId: s.tenantId, spaceName: s.spaceName, name: 'Other', timezone: s.timezone });
+    await repo.upsertParticipant({ standupId: other.id, userName: BOB.userName, displayName: BOB.displayName });
+    expect((await call(bob, 'run_standup_now', { standupId: other.id })).error).toBe('Your access doesn’t include “Configure standups” on this standup.');
     expect((await call(bob, 'nudge_standup', { standupId: s.id })).error).toBe('There is no open run today — use run-now first.');
     expect((await call(bob, 'run_standup_now', { standupId: s.id })).json).toEqual({ result: 'started' });
     expect((await call(bob, 'run_standup_now', { standupId: s.id })).json).toEqual({ result: 'already_open' });

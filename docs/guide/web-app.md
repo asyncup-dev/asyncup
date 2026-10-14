@@ -39,15 +39,19 @@ detects a working Chat connection and skips straight to the standup step.
 - **Team** — everyone on a roster with role, standups, timezone and status;
   roster changes with confirmation.
 - **Settings** — General, Google Chat (with live verification), Sign-in & SSO,
-  MCP server, API & tokens, Danger zone (disconnect Chat; delete all history —
-  both behind a typed confirmation).
+  MCP server, API & tokens, Roles, Access, Danger zone (disconnect Chat;
+  delete all history — both behind a typed confirmation). Each section shows
+  only to people with its permission.
 - **My standups** (`/app/me`) — for everyone else: today's standup with an
   *Answer in Chat* link and *Skip today* (which asks for a one-line reason),
   recent answers, timezone, vacation mode and *My schedule*.
 
-Admins see the whole workspace. **Managers** — people who administer at least
-one standup — see and manage their own standups, blockers, reports and team
-without Workspace-admin rights. Everyone else gets the personal page.
+Admins see the whole workspace. **Managers**, the people who administer a
+standup, see and manage their own standups, blockers, reports and team
+without Workspace-admin rights. A **Viewer** reads the same pages and changes
+nothing. Everyone else gets the personal page. Pages, tabs and buttons follow
+each person's permissions, including custom roles
+([Roles and permissions](./roles)).
 
 ## People
 
