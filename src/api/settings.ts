@@ -4,9 +4,26 @@ import { googleSignInOn, LOCKOUT_MSG, locksOut, samlSignInOn, stageFieldValue } 
 import type { AppSettings } from '../core/settings.js';
 import { generateToken } from '../core/crypto.js';
 import { verifyChatEvent, verifyDm, verifyProject, verifySaml, verifyServiceAccount, verifyWebhook } from '../core/verify.js';
-import { apiError, loadStandup, principalOf, type ApiContext } from './shared.js';
+import type { Permission } from '../core/permissions.js';
+import { allowed, apiError, loadStandup, principalOf, type ApiContext } from './shared.js';
 
 const TOKENS = { tick: 'tickToken', export: 'exportToken', scim: 'scimToken' } as const;
+
+/** Any of these opens the workspace settings; each field then needs its own. */
+const SETTINGS_READERS: Permission[] = ['settings.manage', 'sso.manage', 'tokens.manage', 'roles.manage'];
+
+/** Sign-in settings need their own permission; the SAML admin group decides who is an admin, so it needs roles. */
+const FIELD_PERMISSION: Partial<Record<keyof AppSettings, Permission>> = {
+  tokenSignIn: 'sso.manage',
+  oauthClientId: 'sso.manage',
+  oauthClientSecret: 'sso.manage',
+  samlIdpEntityId: 'sso.manage',
+  samlIdpSsoUrl: 'sso.manage',
+  samlIdpCert: 'sso.manage',
+  samlAdminAttribute: 'roles.manage',
+  samlAdminGroup: 'roles.manage',
+  mcpDefaultScopes: 'tokens.manage',
+};
 
 /** Email and numeric client ID from the key, the latter being what domain-wide delegation asks for. */
 function saIdentity(json: string): { email: string | null; clientId: string | null } {
@@ -46,23 +63,27 @@ function view(s: AppSettings) {
 export function registerSettingsRoutes(api: Router, ctx: ApiContext): void {
   const { repo, settings } = ctx;
 
-  const adminOnly = (req: Request<any>, res: Response): boolean => {
-    if (principalOf(req).kind === 'admin') return true;
+  const requires = (req: Request<any>, res: Response, ...any: Permission[]): boolean => {
+    if (any.some((permission) => allowed(principalOf(req), permission))) return true;
     apiError(res, 403, 'forbidden', 'Only admins can change workspace settings.');
     return false;
   };
 
   api.get('/settings', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, ...SETTINGS_READERS)) return;
     res.json(view(await settings.get()));
   });
 
   // Body: { key: value, … }. Strings set, null clears a secret, booleans for toggles.
   api.patch('/settings', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, ...SETTINGS_READERS)) return;
     const s = await settings.get();
     const body: Record<string, unknown> = req.body && typeof req.body === 'object' ? req.body : {};
     const change: Partial<AppSettings> = {};
+    for (const key of Object.keys(body)) {
+      const need = Object.hasOwn(FIELD_PERMISSION, key) ? FIELD_PERMISSION[key as keyof AppSettings]! : 'settings.manage';
+      if (!requires(req, res, need)) return;
+    }
     for (const [key, raw] of Object.entries(body)) {
       const staged = stageFieldValue(s, key, raw);
       if (!staged.ok) {
@@ -83,7 +104,7 @@ export function registerSettingsRoutes(api: Router, ctx: ApiContext): void {
   // Danger zone: wipe every run, submission, blocker and poll. The typed
   // phrase travels with the request so a stray client call cannot do it.
   api.delete('/history', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, 'settings.manage')) return;
     if (req.body?.confirm !== 'DELETE HISTORY') {
       apiError(res, 400, 'invalid', 'Send { "confirm": "DELETE HISTORY" } to delete every run, submission, blocker and poll.', 'confirm');
       return;
@@ -92,7 +113,7 @@ export function registerSettingsRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.post('/settings/tokens/:name', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, 'tokens.manage')) return;
     const field = TOKENS[String(req.params.name) as keyof typeof TOKENS];
     if (!field) {
       apiError(res, 404, 'not_found', 'Token must be tick, export or scim.');
@@ -104,7 +125,7 @@ export function registerSettingsRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.delete('/settings/tokens/:name', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, 'tokens.manage')) return;
     const field = TOKENS[String(req.params.name) as keyof typeof TOKENS];
     if (!field) {
       apiError(res, 404, 'not_found', 'Token must be tick, export or scim.');
@@ -117,30 +138,30 @@ export function registerSettingsRoutes(api: Router, ctx: ApiContext): void {
   // --- verification gates ---
 
   api.post('/verify/project', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, 'settings.manage')) return;
     res.json(verifyProject(await settings.get(), ctx.now()));
   });
 
   api.post('/verify/service-account', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, 'settings.manage')) return;
     res.json(await verifyServiceAccount(await settings.get(), ctx.chatClientFactory, ctx.now()));
   });
 
   api.post('/verify/chat-event', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, 'settings.manage')) return;
     res.json(await verifyChatEvent(repo, ctx.now()));
   });
 
   api.post('/verify/webhook', async (req, res) => {
     const id = Number(req.body?.standupId);
     (req.params as Record<string, string>).id = String(id);
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'standups.configure' });
     if (!standup) return;
     res.json(await verifyWebhook(standup, ctx.webhooks, ctx.now()));
   });
 
   api.post('/verify/saml', async (req, res) => {
-    if (!adminOnly(req, res)) return;
+    if (!requires(req, res, 'sso.manage')) return;
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     res.json(await verifySaml(await settings.get(), baseUrl, (config) => ctx.samlBroker(config).loginUrl('verify'), ctx.externalFetch, ctx.now()));
   });

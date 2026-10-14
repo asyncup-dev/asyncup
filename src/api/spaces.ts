@@ -1,6 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import { TEMPLATES } from '../core/templates.js';
-import { apiError, principalOf, type ApiContext } from './shared.js';
+import { allowed, apiError, principalOf, type ApiContext } from './shared.js';
 
 /** Create-standup helpers: the template gallery, the space picker and roster suggestions. */
 export function registerSpaceRoutes(api: Router, ctx: ApiContext): void {
@@ -8,8 +8,9 @@ export function registerSpaceRoutes(api: Router, ctx: ApiContext): void {
     res.json({ templates: TEMPLATES });
   });
 
+  // Picking a space and its people is part of creating a standup.
   const adminOnly = (req: Request<any>, res: Response): boolean => {
-    if (principalOf(req).kind === 'admin') return true;
+    if (allowed(principalOf(req), 'standups.create')) return true;
     apiError(res, 403, 'forbidden', 'Admins only.');
     return false;
   };

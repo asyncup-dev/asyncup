@@ -7,6 +7,7 @@ import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, LIMITS, pa
 import type { BlockerService } from './blocker-service.js';
 import type { PollService } from './poll-service.js';
 import type { StandupService } from './standup-service.js';
+import { can, resolveAccess, type Permission } from './permissions.js';
 import { parseDateSpec, type Actor, type ScheduleService } from './schedule.js';
 import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
@@ -60,7 +61,33 @@ const HELP_ALL = `*AsyncUp commands* (mention me in this space — prefix with \
 \`status\` · \`trends\` · \`blockers\` · \`export\` — insights`;
 
 /** Commands anyone in the space may run; everything else needs an admin. */
-const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'blocker', 'export', 'poll', 'polls']);
+/** Anyone in the space may use these. */
+export const OPEN_COMMANDS = new Set(['help', 'status', 'trends', 'blockers', 'blocker', 'export', 'poll', 'polls']);
+
+/** What each configuration command needs on the standup. */
+export const COMMAND_PERMISSIONS: Record<string, Permission> = {
+  run: 'standups.configure',
+  archive: 'standups.archive',
+  add: 'people.manage',
+  remove: 'people.manage',
+  mandatory: 'people.manage',
+  optional: 'people.manage',
+  admin: 'people.manage',
+  unadmin: 'people.manage',
+  vacation: 'schedules.manage',
+  back: 'schedules.manage',
+  off: 'schedules.manage',
+  working: 'schedules.manage',
+  time: 'standups.configure',
+  deadline: 'standups.configure',
+  remind: 'standups.configure',
+  timezone: 'standups.configure',
+  days: 'standups.configure',
+  questions: 'standups.configure',
+  mood: 'standups.configure',
+  escalate: 'standups.configure',
+  digest: 'standups.configure',
+};
 
 /** The slice of the scheduler `run now` needs (avoids a circular dependency). */
 export interface RunNowRunner {
@@ -125,8 +152,9 @@ export class CommandHandler {
       return `This space has several standups — prefix your command with the id, e.g. \`#${standups[0]!.id} ${command}\`.\n${listStandups(standups)}`;
     }
 
-    if (!OPEN_COMMANDS.has(command)) {
-      const denied = await this.requireAdmin(standup, ctx.sender);
+    const need = COMMAND_PERMISSIONS[command];
+    if (need) {
+      const denied = await this.requirePermission(standup, ctx.sender, need);
       if (denied) return denied;
     }
 
@@ -238,9 +266,10 @@ export class CommandHandler {
     return result.message;
   }
 
-  private async requireAdmin(standup: Standup, sender: Mention): Promise<string | null> {
+  /** A standup with no admins is open to everyone in its space. */
+  private async requirePermission(standup: Standup, sender: Mention, need: Permission): Promise<string | null> {
     const admins = await this.repo.listAdmins(standup.id);
-    if (admins.length === 0 || admins.some((a) => a.userName === sender.userName)) return null;
+    if (admins.length === 0 || can(await resolveAccess(this.repo, sender.userName, false), need, standup.id)) return null;
     return `🔒 Only admins of *${standup.name}* can change its configuration (${admins
       .map((a) => a.displayName)
       .join(', ')}).`;

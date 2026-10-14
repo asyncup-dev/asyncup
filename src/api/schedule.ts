@@ -3,18 +3,19 @@ import { AWAY_LABEL, describeWorkingDays, isIsoDate, type Actor, type ScheduleSe
 import type { ScheduleOverride } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
-import { apiError, canManage, principalOf, type ApiContext } from './shared.js';
+import { canSomewhere, standupsWith } from '../core/permissions.js';
+import { allowed, apiError, principalOf, type ApiContext } from './shared.js';
 
-/** Whether the caller manages a standup this person is on (workspace admins manage everyone). */
+/** Whether the caller manages schedules on a standup this person is on, or across the workspace. */
 export async function managesPerson(repo: Repo, p: Principal, userName: string): Promise<boolean> {
-  if (p.kind === 'admin') return true;
-  for (const s of await repo.listStandupsForUser(userName)) if (canManage(p, s.id)) return true;
+  if (allowed(p, 'schedules.manage')) return true;
+  for (const s of await repo.listStandupsForUser(userName)) if (allowed(p, 'schedules.manage', s.id)) return true;
   return false;
 }
 
 /** The caller as a schedule actor; the service decides what they may change. */
 export function actorFor(p: Principal): Actor {
-  return { userName: p.user?.userName ?? 'operator', displayName: p.user?.name ?? 'Operator', admin: p.kind === 'admin' };
+  return { userName: p.user?.userName ?? 'operator', displayName: p.user?.name ?? 'Operator', admin: allowed(p, 'schedules.manage') };
 }
 
 /** A person's display name from any roster they are on, else their id. */
@@ -203,14 +204,14 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
   api.get('/requests', async (req, res) => {
     if (!schedule(res)) return;
     const p = principalOf(req);
-    if (p.kind === 'member') {
+    if (!canSomewhere(p.access, 'schedules.manage')) {
       apiError(res, 403, 'forbidden', 'Only admins and managers see requests.');
       return;
     }
     let names: string[] | undefined;
-    if (p.kind === 'manager') {
+    if (!allowed(p, 'schedules.manage')) {
       names = [];
-      for (const id of p.managedStandupIds) for (const x of await repo.listParticipants(id)) names.push(x.userName);
+      for (const id of standupsWith(p.access, 'schedules.manage')) for (const x of await repo.listParticipants(id)) names.push(x.userName);
     }
     res.json({ requests: (await repo.listPendingOverrides(names)).map(overrideView) });
   });
@@ -220,7 +221,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       const svc = schedule(res);
       if (!svc) return;
       const p = principalOf(req);
-      if (p.kind === 'member') {
+      if (!canSomewhere(p.access, 'schedules.manage')) {
         apiError(res, 403, 'forbidden', 'Only admins and managers decide requests.');
         return;
       }

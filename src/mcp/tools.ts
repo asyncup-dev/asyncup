@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { nudgeToday, skipToday, updateMe, type Refusal } from '../api/actions.js';
 import type { Principal } from '../api/principal.js';
 import { actorFor, displayNameOf, managesPerson, overrideView, scheduleView } from '../api/schedule.js';
-import { findVisibleStandup, summarise, visibleStandups } from '../api/shared.js';
+import { allowed, findVisibleStandup, summarise, visibleStandups } from '../api/shared.js';
+import { canSomewhere, standupsWith, type Permission } from '../core/permissions.js';
 import * as S from '../api/spec/schemas.js';
 import { BLOCKER_STATUSES, blockersView, linkedStandupsView, peopleView, runsView, runView, standupDetailView, visibleBlocker } from '../api/views.js';
 import type { ChatAdapter } from '../core/adapter.js';
@@ -126,10 +127,9 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     if (!found) throw new ToolRefused('No such standup.');
     return found;
   };
-  const standupFor = async (id: number) => (await visible(id)).standup;
-  const managedStandup = async (id: number) => {
+  const standupFor = async (id: number, need: Permission = 'standups.view') => {
     const found = await visible(id);
-    if (!found.manage) throw new ToolRefused('Only admins and this standup’s managers can do that.');
+    if (!allowed(p, need, id)) throw new ToolRefused('Only admins and this standup’s managers can do that.');
     return found.standup;
   };
   const me = () => {
@@ -157,7 +157,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     { title: 'List standups', description: 'Standups the owner can see, each with its schedule, questions and today’s progress.', inputSchema: z.object({}), outputSchema: S.StandupList },
     async () => {
       const standups = [];
-      for (const s of await visibleStandups(repo, p)) standups.push(await summarise(repo, s, deps.now(), p.kind === 'admin' || p.managedStandupIds.includes(s.id)));
+      for (const s of await visibleStandups(repo, p)) standups.push(await summarise(repo, s, deps.now(), allowed(p, 'standups.configure', s.id)));
       return { standups };
     },
   );
@@ -193,7 +193,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       inputSchema: z.object({ standupId: ID, limit: z.number().int().min(1).max(90).default(14) }),
       outputSchema: S.RunList,
     },
-    async ({ standupId, limit }) => ({ runs: await runsView(repo, await standupFor(standupId), limit) }),
+    async ({ standupId, limit }) => ({ runs: await runsView(repo, await standupFor(standupId, 'reports.view'), limit) }),
   );
 
   register(
@@ -206,7 +206,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       outputSchema: S.RunDetail,
     },
     async ({ standupId, date }) => {
-      const standup = await standupFor(standupId);
+      const standup = await standupFor(standupId, 'answers.view');
       const run = await runView(repo, standup, date ?? deps.now().setZone(standup.timezone).toISODate()!);
       if (!run) throw new ToolRefused('No run on that date.');
       return run;
@@ -230,7 +230,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'read',
     { title: 'Get the team', description: 'Everyone on a roster the owner can see, with their standups and roles (admins and managers only).', inputSchema: z.object({}), outputSchema: S.Team },
     async () => {
-      if (p.kind === 'member') throw new ToolRefused('Only admins and managers can list the team.');
+      if (!canSomewhere(p.access, 'people.view')) throw new ToolRefused('Only admins and managers can list the team.');
       return { people: await peopleView(repo, p) };
     },
   );
@@ -244,7 +244,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       inputSchema: z.object({ standupId: ID, weeks: z.number().int().min(1).max(26).default(8) }),
       outputSchema: S.Insights,
     },
-    async ({ standupId, weeks }) => ({ weeks: await weeklySeries(repo, await standupFor(standupId), deps.now(), weeks) }),
+    async ({ standupId, weeks }) => ({ weeks: await weeklySeries(repo, await standupFor(standupId, 'reports.view'), deps.now(), weeks) }),
   );
 
   // ---- blockers
@@ -356,7 +356,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       write: { destructive: false, idempotent: true },
     },
     async ({ standupId }) => {
-      const standup = await managedStandup(standupId);
+      const standup = await standupFor(standupId, 'standups.configure');
       return { result: await deps.scheduler.runNow(standup) };
     },
   );
@@ -372,7 +372,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       write: { destructive: false, idempotent: false },
     },
     async ({ standupId }) => {
-      const standup = await managedStandup(standupId);
+      const standup = await standupFor(standupId, 'standups.configure');
       const r = await nudgeToday(repo, deps.adapter, standup, deps.now());
       return r.ok ? { nudged: r.nudged } : refuse(r);
     },
@@ -403,7 +403,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     return [...out].sort();
   };
   const managerOnly = () => {
-    if (p.kind === 'member') throw new ToolRefused('Only admins and managers can do that.');
+    if (!canSomewhere(p.access, 'schedules.manage')) throw new ToolRefused('Only admins and managers can do that.');
   };
 
   register(
@@ -430,9 +430,9 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       schedule();
       managerOnly();
       let names: string[] | undefined;
-      if (p.kind === 'manager') {
+      if (!allowed(p, 'schedules.manage')) {
         names = [];
-        for (const id of p.managedStandupIds) for (const x of await repo.listParticipants(id)) names.push(x.userName);
+        for (const id of standupsWith(p.access, 'schedules.manage')) for (const x of await repo.listParticipants(id)) names.push(x.userName);
       }
       return { requests: (await repo.listPendingOverrides(names)).map(overrideView) };
     },

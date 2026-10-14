@@ -6,6 +6,7 @@ import type { Principal } from '../api/principal.js';
 import type { ChatAdapter } from '../core/adapter.js';
 import type { BlockerService } from '../core/blocker-service.js';
 import { bearerToken } from '../core/http.js';
+import { resolveAccess } from '../core/permissions.js';
 import type { SettingsService } from '../core/settings.js';
 import type { StandupService } from '../core/standup-service.js';
 import type { ScheduleService } from '../core/schedule.js';
@@ -31,9 +32,12 @@ export interface McpDeps {
 /** Who a token acts as — service tokens and admins' personal tokens see the tenant. */
 export async function principalForToken(repo: Repo, t: McpToken): Promise<Principal> {
   const user = t.ownerUserName ? { userName: t.ownerUserName, email: '', name: t.ownerDisplayName ?? t.ownerUserName } : null;
-  if (t.kind === 'service' || t.ownerAdmin) return { kind: 'admin', via: 'token', tenantId: t.tenantId, user, managedStandupIds: [] };
+  if (t.kind === 'service' || t.ownerAdmin) {
+    return { kind: 'admin', via: 'token', tenantId: t.tenantId, user, managedStandupIds: [], access: await resolveAccess(repo, null, true) };
+  }
   const managed = (await repo.listStandupsAdministeredBy(t.ownerUserName!)).map((s) => s.id);
-  return { kind: managed.length ? 'manager' : 'member', via: 'token', tenantId: t.tenantId, user, managedStandupIds: managed };
+  const access = await resolveAccess(repo, t.ownerUserName, false);
+  return { kind: managed.length ? 'manager' : 'member', via: 'token', tenantId: t.tenantId, user, managedStandupIds: managed, access };
 }
 
 /**

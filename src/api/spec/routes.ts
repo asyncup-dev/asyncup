@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Permission } from '../../core/permissions.js';
 import * as S from './schemas.js';
 
 /** Who may call a route; the OpenAPI document turns this into security and a note. */
@@ -11,6 +12,8 @@ export interface RouteSpec {
   summary: string;
   tag: string;
   access: Access;
+  /** What the caller must hold, across the workspace or on the standup concerned. */
+  permission?: Permission;
   params?: Record<string, { schema: z.ZodType; description: string }>;
   query?: Record<string, { schema: z.ZodType; description: string }>;
   body?: z.ZodType;
@@ -35,43 +38,43 @@ export const ROUTES: RouteSpec[] = [
 
   // standups
   { method: 'get', path: '/standups', summary: 'Standups the caller can see', tag: 'Standups', access: 'any', responses: { 200: S.StandupList } },
-  { method: 'post', path: '/standups', summary: 'Create a standup', tag: 'Standups', access: 'admin', body: S.CreateStandup, responses: { 201: S.CreatedStandup }, errors: [400, 409] },
-  { method: 'get', path: '/standups/:id', summary: 'One standup with its roster and admins', tag: 'Standups', access: 'any', params: standupId, responses: { 200: S.StandupDetail }, errors: [404] },
-  { method: 'patch', path: '/standups/:id', summary: 'Change a standup’s settings', tag: 'Standups', access: 'manager', params: standupId, body: S.StandupPatch, responses: { 200: S.StandupSummary }, errors: [400, 404] },
+  { method: 'post', path: '/standups', summary: 'Create a standup', tag: 'Standups', access: 'admin', permission: 'standups.create', body: S.CreateStandup, responses: { 201: S.CreatedStandup }, errors: [400, 409] },
+  { method: 'get', path: '/standups/:id', summary: 'One standup with its roster and admins', tag: 'Standups', access: 'any', permission: 'standups.view', params: standupId, responses: { 200: S.StandupDetail }, errors: [404] },
+  { method: 'patch', path: '/standups/:id', summary: 'Change a standup’s settings', tag: 'Standups', access: 'manager', permission: 'standups.configure', params: standupId, body: S.StandupPatch, responses: { 200: S.StandupSummary }, errors: [400, 404] },
   {
     method: 'delete',
     path: '/standups/:id',
     summary: 'Delete an archived standup and all its history',
     tag: 'Standups',
-    access: 'admin',
+    access: 'admin', permission: 'standups.delete',
     params: standupId,
     body: S.DeleteStandupBody,
     responses: { 200: S.DeletedHistory },
     errors: [400, 404, 409],
   },
-  { method: 'post', path: '/standups/:id/archive', summary: 'Archive a standup', tag: 'Standups', access: 'manager', params: standupId, responses: { 200: S.ArchiveResult }, errors: [404] },
-  { method: 'post', path: '/standups/:id/unarchive', summary: 'Bring an archived standup back', tag: 'Standups', access: 'manager', params: standupId, responses: { 200: S.ArchiveResult }, errors: [404] },
-  { method: 'post', path: '/standups/:id/run-now', summary: 'Start today’s run now', tag: 'Standups', access: 'manager', params: standupId, responses: { 200: S.RunNow }, errors: [404] },
-  { method: 'post', path: '/standups/:id/nudge', summary: 'Remind everyone still expected today', tag: 'Standups', access: 'manager', params: standupId, responses: { 200: S.Nudged }, errors: [404, 409] },
+  { method: 'post', path: '/standups/:id/archive', summary: 'Archive a standup', tag: 'Standups', access: 'manager', permission: 'standups.archive', params: standupId, responses: { 200: S.ArchiveResult }, errors: [404] },
+  { method: 'post', path: '/standups/:id/unarchive', summary: 'Bring an archived standup back', tag: 'Standups', access: 'manager', permission: 'standups.archive', params: standupId, responses: { 200: S.ArchiveResult }, errors: [404] },
+  { method: 'post', path: '/standups/:id/run-now', summary: 'Start today’s run now', tag: 'Standups', access: 'manager', permission: 'standups.configure', params: standupId, responses: { 200: S.RunNow }, errors: [404] },
+  { method: 'post', path: '/standups/:id/nudge', summary: 'Remind everyone still expected today', tag: 'Standups', access: 'manager', permission: 'standups.configure', params: standupId, responses: { 200: S.Nudged }, errors: [404, 409] },
   {
     method: 'get',
     path: '/standups/:id/runs',
     summary: 'Recent runs',
     tag: 'Runs',
-    access: 'any',
+    access: 'any', permission: 'reports.view',
     params: standupId,
     query: { limit: { schema: z.number().int().min(1).max(90).default(14), description: 'How many runs, newest first' } },
     responses: { 200: S.RunList },
     errors: [404],
   },
-  { method: 'get', path: '/standups/:id/runs/today', summary: 'Today’s run, for polling', tag: 'Runs', access: 'any', params: standupId, responses: { 200: S.TodayRun }, errors: [404] },
-  { method: 'get', path: '/standups/:id/runs/:date', summary: 'One day’s run with every submission', tag: 'Runs', access: 'any', params: { ...standupId, ...dateParam }, responses: { 200: S.RunDetail }, errors: [400, 404] },
+  { method: 'get', path: '/standups/:id/runs/today', summary: 'Today’s run, for polling', tag: 'Runs', access: 'any', permission: 'standups.view', params: standupId, responses: { 200: S.TodayRun }, errors: [404] },
+  { method: 'get', path: '/standups/:id/runs/:date', summary: 'One day’s run with every submission', tag: 'Runs', access: 'any', permission: 'answers.view', params: { ...standupId, ...dateParam }, responses: { 200: S.RunDetail }, errors: [400, 404] },
   {
     method: 'get',
     path: '/standups/:id/insights',
     summary: 'Weekly participation, mood and blocker trends',
     tag: 'Runs',
-    access: 'any',
+    access: 'any', permission: 'reports.view',
     params: standupId,
     query: { weeks: { schema: z.number().int().min(1).max(26).default(8), description: 'How many weeks back' } },
     responses: { 200: S.Insights },
@@ -82,28 +85,28 @@ export const ROUTES: RouteSpec[] = [
     path: '/standups/:id/export.csv',
     summary: 'Submissions as CSV',
     tag: 'Runs',
-    access: 'manager',
+    access: 'manager', permission: 'export',
     params: standupId,
     query: { days: { schema: z.number().int().min(1).max(365).default(90), description: 'How many days back' } },
     responses: { 200: 'csv' },
     errors: [404],
   },
-  { method: 'get', path: '/standups/:id/webhook/secret', summary: 'The key this standup’s webhooks are signed with', tag: 'Standups', access: 'manager', params: standupId, responses: { 200: S.WebhookSecret }, errors: [403, 404, 503] },
-  { method: 'get', path: '/standups/:id/members', summary: 'Members of the standup’s Chat space, as roster candidates', tag: 'Roster', access: 'manager', params: standupId, responses: { 200: S.SpaceMembers }, errors: [404, 502] },
-  { method: 'post', path: '/standups/:id/roster/sync', summary: 'Sync the roster with its Google Group now', tag: 'Roster', access: 'manager', params: standupId, responses: { 200: S.RosterSynced }, errors: [404, 409, 502, 503] },
-  { method: 'post', path: '/standups/:id/participants', summary: 'Add someone to the roster', tag: 'Roster', access: 'manager', params: standupId, body: S.AddParticipant, responses: { 201: S.AddedParticipant }, errors: [400, 404] },
+  { method: 'get', path: '/standups/:id/webhook/secret', summary: 'The key this standup’s webhooks are signed with', tag: 'Standups', access: 'manager', permission: 'standups.configure', params: standupId, responses: { 200: S.WebhookSecret }, errors: [403, 404, 503] },
+  { method: 'get', path: '/standups/:id/members', summary: 'Members of the standup’s Chat space, as roster candidates', tag: 'Roster', access: 'manager', permission: 'people.manage', params: standupId, responses: { 200: S.SpaceMembers }, errors: [404, 502] },
+  { method: 'post', path: '/standups/:id/roster/sync', summary: 'Sync the roster with its Google Group now', tag: 'Roster', access: 'manager', permission: 'people.manage', params: standupId, responses: { 200: S.RosterSynced }, errors: [404, 409, 502, 503] },
+  { method: 'post', path: '/standups/:id/participants', summary: 'Add someone to the roster', tag: 'Roster', access: 'manager', permission: 'people.manage', params: standupId, body: S.AddParticipant, responses: { 201: S.AddedParticipant }, errors: [400, 404] },
   {
     method: 'patch',
     path: '/standups/:id/participants/:userName',
     summary: 'Change someone’s role on the roster',
     tag: 'Roster',
-    access: 'manager',
+    access: 'manager', permission: 'people.manage',
     params: { ...standupId, ...userNameParam },
     body: S.UpdateParticipant,
     responses: { 200: S.UpdatedParticipant },
     errors: [400, 404, 409],
   },
-  { method: 'delete', path: '/standups/:id/participants/:userName', summary: 'Remove someone from the roster', tag: 'Roster', access: 'manager', params: { ...standupId, ...userNameParam }, responses: { 204: null }, errors: [404] },
+  { method: 'delete', path: '/standups/:id/participants/:userName', summary: 'Remove someone from the roster', tag: 'Roster', access: 'manager', permission: 'people.manage', params: { ...standupId, ...userNameParam }, responses: { 204: null }, errors: [404] },
 
   // blockers and people
   {
@@ -111,7 +114,7 @@ export const ROUTES: RouteSpec[] = [
     path: '/blockers',
     summary: 'Blockers across the standups the caller can see',
     tag: 'Blockers',
-    access: 'any',
+    access: 'any', permission: 'blockers.view',
     query: {
       status: { schema: z.enum(['open', 'acknowledged', 'resolved', 'all']).default('open'), description: 'Which blockers' },
       standupId: { schema: z.number().int().positive(), description: 'One standup only' },
@@ -123,17 +126,17 @@ export const ROUTES: RouteSpec[] = [
   { method: 'post', path: '/blockers/:id/acknowledge', summary: 'Acknowledge a blocker you are tagged on', tag: 'Blockers', access: 'person', params: blockerId, responses: { 200: S.BlockerResult.acknowledge }, errors: [404, 409] },
   { method: 'post', path: '/blockers/:id/update', summary: 'Add an update to a blocker', tag: 'Blockers', access: 'person', params: blockerId, body: S.BlockerUpdateBody, responses: { 200: S.BlockerResult.update }, errors: [400, 404, 409] },
   { method: 'post', path: '/blockers/:id/resolve', summary: 'Resolve a blocker', tag: 'Blockers', access: 'person', params: blockerId, responses: { 200: S.BlockerResult.resolve }, errors: [404, 409] },
-  { method: 'get', path: '/people', summary: 'Everyone on the rosters the caller manages', tag: 'People', access: 'manager', responses: { 200: S.Team } },
+  { method: 'get', path: '/people', summary: 'Everyone on the rosters the caller manages', tag: 'People', access: 'manager', permission: 'people.view', responses: { 200: S.Team } },
 
   // create-standup helpers
   { method: 'get', path: '/templates', summary: 'Standup templates', tag: 'Standups', access: 'any', responses: { 200: S.Templates } },
-  { method: 'get', path: '/spaces', summary: 'Chat spaces the app is in', tag: 'Standups', access: 'admin', responses: { 200: S.Spaces }, errors: [502] },
+  { method: 'get', path: '/spaces', summary: 'Chat spaces the app is in', tag: 'Standups', access: 'admin', permission: 'standups.create', responses: { 200: S.Spaces }, errors: [502] },
   {
     method: 'get',
     path: '/spaces/:name/members',
     summary: 'Human members of a Chat space',
     tag: 'Standups',
-    access: 'admin',
+    access: 'admin', permission: 'standups.create',
     params: { name: { schema: z.string(), description: 'Space resource name, URL-encoded (spaces%2FAAAA)' } },
     responses: { 200: S.SpaceMembers },
     errors: [400, 502],
@@ -158,17 +161,17 @@ export const ROUTES: RouteSpec[] = [
   { method: 'patch', path: '/me/schedule', summary: 'Set my week', tag: 'Schedules', access: 'person', body: S.WorkingDaysBody, responses: { 200: S.Schedule }, errors: [400, 409, 503] },
   { method: 'post', path: '/me/overrides', summary: 'Mark my days off or extra working days', tag: 'Schedules', access: 'person', body: S.OverrideBody, responses: { 200: S.ScheduleChange }, errors: [400, 409, 503] },
   { method: 'delete', path: '/me/overrides/:date', summary: 'Withdraw a day or a pending request', tag: 'Schedules', access: 'person', params: dateParam, responses: { 200: S.ScheduleChange }, errors: [400, 409, 503] },
-  { method: 'get', path: '/people/:userName/schedule', summary: 'Someone’s week and upcoming days', tag: 'Schedules', access: 'manager', params: userNameParam, responses: { 200: S.Schedule }, errors: [503] },
-  { method: 'patch', path: '/people/:userName/schedule', summary: 'Set someone’s week', tag: 'Schedules', access: 'manager', params: userNameParam, body: S.WorkingDaysBody, responses: { 200: S.Schedule }, errors: [400, 503] },
-  { method: 'post', path: '/people/:userName/overrides', summary: 'Mark someone’s days off or extra working days', tag: 'Schedules', access: 'manager', params: userNameParam, body: S.OverrideBody, responses: { 200: S.ScheduleChange }, errors: [400, 503] },
-  { method: 'delete', path: '/people/:userName/overrides/:date', summary: 'Withdraw someone’s day', tag: 'Schedules', access: 'manager', params: { ...userNameParam, ...dateParam }, responses: { 200: S.ScheduleChange }, errors: [400, 503] },
-  { method: 'get', path: '/requests', summary: 'Time-off requests waiting for a decision', tag: 'Schedules', access: 'manager', responses: { 200: S.TimeOffRequests }, errors: [503] },
+  { method: 'get', path: '/people/:userName/schedule', summary: 'Someone’s week and upcoming days', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: userNameParam, responses: { 200: S.Schedule }, errors: [503] },
+  { method: 'patch', path: '/people/:userName/schedule', summary: 'Set someone’s week', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: userNameParam, body: S.WorkingDaysBody, responses: { 200: S.Schedule }, errors: [400, 503] },
+  { method: 'post', path: '/people/:userName/overrides', summary: 'Mark someone’s days off or extra working days', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: userNameParam, body: S.OverrideBody, responses: { 200: S.ScheduleChange }, errors: [400, 503] },
+  { method: 'delete', path: '/people/:userName/overrides/:date', summary: 'Withdraw someone’s day', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: { ...userNameParam, ...dateParam }, responses: { 200: S.ScheduleChange }, errors: [400, 503] },
+  { method: 'get', path: '/requests', summary: 'Time-off requests waiting for a decision', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', responses: { 200: S.TimeOffRequests }, errors: [503] },
   {
     method: 'post',
     path: '/requests/:id/approve',
     summary: 'Approve a request',
     tag: 'Schedules',
-    access: 'manager',
+    access: 'manager', permission: 'schedules.manage',
     params: { id: { schema: z.string(), description: 'Request ids, comma-separated (one request can span several dates)' } },
     body: S.DecisionBody,
     responses: { 200: S.Decision },
@@ -179,7 +182,7 @@ export const ROUTES: RouteSpec[] = [
     path: '/requests/:id/decline',
     summary: 'Decline a request',
     tag: 'Schedules',
-    access: 'manager',
+    access: 'manager', permission: 'schedules.manage',
     params: { id: { schema: z.string(), description: 'Request ids, comma-separated' } },
     body: S.DecisionBody,
     responses: { 200: S.Decision },
@@ -187,15 +190,15 @@ export const ROUTES: RouteSpec[] = [
   },
 
   // settings
-  { method: 'get', path: '/settings', summary: 'Workspace settings', tag: 'Settings', access: 'admin', responses: { 200: S.Settings } },
-  { method: 'patch', path: '/settings', summary: 'Change workspace settings', tag: 'Settings', access: 'admin', body: S.SettingsPatch, responses: { 200: S.Settings }, errors: [400, 409] },
-  { method: 'delete', path: '/history', summary: 'Delete every run, submission, blocker and poll', tag: 'Settings', access: 'admin', body: S.DeleteHistoryBody, responses: { 200: S.DeletedHistory }, errors: [400] },
+  { method: 'get', path: '/settings', summary: 'Workspace settings', tag: 'Settings', access: 'admin', permission: 'settings.manage', responses: { 200: S.Settings } },
+  { method: 'patch', path: '/settings', summary: 'Change workspace settings', tag: 'Settings', access: 'admin', permission: 'settings.manage', body: S.SettingsPatch, responses: { 200: S.Settings }, errors: [400, 409] },
+  { method: 'delete', path: '/history', summary: 'Delete every run, submission, blocker and poll', tag: 'Settings', access: 'admin', permission: 'settings.manage', body: S.DeleteHistoryBody, responses: { 200: S.DeletedHistory }, errors: [400] },
   {
     method: 'post',
     path: '/settings/tokens/:name',
     summary: 'Generate a machine token',
     tag: 'Settings',
-    access: 'admin',
+    access: 'admin', permission: 'tokens.manage',
     params: { name: { schema: z.enum(['tick', 'export', 'scim']), description: 'Which token' } },
     responses: { 201: S.GeneratedToken },
     errors: [404],
@@ -205,16 +208,16 @@ export const ROUTES: RouteSpec[] = [
     path: '/settings/tokens/:name',
     summary: 'Revoke a machine token',
     tag: 'Settings',
-    access: 'admin',
+    access: 'admin', permission: 'tokens.manage',
     params: { name: { schema: z.enum(['tick', 'export', 'scim']), description: 'Which token' } },
     responses: { 204: null },
     errors: [404],
   },
-  { method: 'post', path: '/verify/project', summary: 'Check the Google Cloud project number', tag: 'Verify', access: 'admin', responses: { 200: S.Verification } },
-  { method: 'post', path: '/verify/service-account', summary: 'Check the service account against the Chat API', tag: 'Verify', access: 'admin', responses: { 200: S.Verification } },
-  { method: 'post', path: '/verify/chat-event', summary: 'Check that Chat events are arriving', tag: 'Verify', access: 'admin', responses: { 200: S.Verification } },
-  { method: 'post', path: '/verify/webhook', summary: 'Send a signed test event to a standup’s webhook', tag: 'Verify', access: 'manager', body: S.VerifyWebhookBody, responses: { 200: S.Verification }, errors: [404] },
-  { method: 'post', path: '/verify/saml', summary: 'Check the SAML identity provider', tag: 'Verify', access: 'admin', responses: { 200: S.Verification } },
+  { method: 'post', path: '/verify/project', summary: 'Check the Google Cloud project number', tag: 'Verify', access: 'admin', permission: 'settings.manage', responses: { 200: S.Verification } },
+  { method: 'post', path: '/verify/service-account', summary: 'Check the service account against the Chat API', tag: 'Verify', access: 'admin', permission: 'settings.manage', responses: { 200: S.Verification } },
+  { method: 'post', path: '/verify/chat-event', summary: 'Check that Chat events are arriving', tag: 'Verify', access: 'admin', permission: 'settings.manage', responses: { 200: S.Verification } },
+  { method: 'post', path: '/verify/webhook', summary: 'Send a signed test event to a standup’s webhook', tag: 'Verify', access: 'manager', permission: 'standups.configure', body: S.VerifyWebhookBody, responses: { 200: S.Verification }, errors: [404] },
+  { method: 'post', path: '/verify/saml', summary: 'Check the SAML identity provider', tag: 'Verify', access: 'admin', permission: 'sso.manage', responses: { 200: S.Verification } },
   { method: 'post', path: '/verify/dm', summary: 'Send the caller a test DM', tag: 'Verify', access: 'person', responses: { 200: S.Verification } },
 
   // MCP
@@ -230,7 +233,7 @@ export const ROUTES: RouteSpec[] = [
     query: { limit: { schema: z.number().int().min(1).max(500).default(50), description: 'How many, newest first' } },
     responses: { 200: S.McpActivity },
   },
-  { method: 'post', path: '/verify/mcp', summary: 'Check the MCP server is on and has tokens', tag: 'Verify', access: 'admin', responses: { 200: S.Verification } },
+  { method: 'post', path: '/verify/mcp', summary: 'Check the MCP server is on and has tokens', tag: 'Verify', access: 'admin', permission: 'settings.manage', responses: { 200: S.Verification } },
 ];
 
 /** Looks up a route by method and Express path. */

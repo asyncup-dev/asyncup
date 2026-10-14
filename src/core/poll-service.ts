@@ -2,6 +2,7 @@ import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { Repo } from '../db/repo.js';
 import type { Poll, Standup } from './types.js';
+import { can, resolveAccess } from './permissions.js';
 
 export type VoteResult =
   | { status: 'ok'; poll: Poll; tallies: number[] }
@@ -60,7 +61,7 @@ export class PollService {
     const poll = await this.repo.getPollById(pollId);
     if (!poll || poll.standupId !== standup.id) return 'not_found';
     if (poll.closedAt) return 'already_closed';
-    if (poll.createdBy !== by.userName && !(await this.repo.isAdmin(standup.id, by.userName))) {
+    if (poll.createdBy !== by.userName && !can(await resolveAccess(this.repo, by.userName, false), 'standups.configure', standup.id)) {
       return 'not_allowed';
     }
     await this.repo.closePoll(pollId, this.now().toISO()!);

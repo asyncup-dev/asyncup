@@ -5,7 +5,7 @@ import { LIMITS } from '../core/validation.js';
 import type { Verification } from '../core/verify.js';
 import { mcpExpiry, mintMcpToken } from '../mcp/tokens.js';
 import type { Principal } from './principal.js';
-import { apiError, clampInt, principalOf, type ApiContext } from './shared.js';
+import { allowed, apiError, clampInt, principalOf, type ApiContext } from './shared.js';
 
 function tokenView(t: McpToken) {
   return {
@@ -21,9 +21,9 @@ function tokenView(t: McpToken) {
   };
 }
 
-/** Admins see every token in the tenant; everyone else only their own. */
+/** Token managers see every token in the tenant; everyone else only their own. */
 async function visibleTokens(ctx: ApiContext, p: Principal): Promise<McpToken[]> {
-  if (p.kind === 'admin') return ctx.repo.listMcpTokens(p.tenantId);
+  if (allowed(p, 'tokens.manage')) return ctx.repo.listMcpTokens(p.tenantId);
   return p.user?.userName ? ctx.repo.listMcpTokens(p.tenantId, p.user.userName) : [];
 }
 
@@ -49,7 +49,7 @@ export function registerMcpRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 400, 'invalid', 'kind must be personal or service.', 'kind');
       return;
     }
-    if (kind === 'service' && p.kind !== 'admin') {
+    if (kind === 'service' && !allowed(p, 'tokens.manage')) {
       apiError(res, 403, 'forbidden', 'Only admins can create service tokens.');
       return;
     }
@@ -108,13 +108,13 @@ export function registerMcpRoutes(api: Router, ctx: ApiContext): void {
   api.get('/mcp/activity', async (req, res) => {
     const p = principalOf(req);
     const limit = clampInt(req.query.limit, 50, 1, 500);
-    const tokenIds = p.kind === 'admin' ? undefined : (await visibleTokens(ctx, p)).map((t) => t.id);
+    const tokenIds = allowed(p, 'tokens.manage') ? undefined : (await visibleTokens(ctx, p)).map((t) => t.id);
     res.json({ activity: await repo.listMcpActivity(p.tenantId, { tokenIds, limit }) });
   });
 
   api.post('/verify/mcp', async (req, res) => {
     const p = principalOf(req);
-    if (p.kind !== 'admin') {
+    if (!allowed(p, 'settings.manage')) {
       apiError(res, 403, 'forbidden', 'Admins only.');
       return;
     }

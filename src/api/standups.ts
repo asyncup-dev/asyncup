@@ -6,7 +6,7 @@ import { weeklySeries } from '../core/insights.js';
 import { validateStandupConfig } from '../core/standup-config.js';
 import type { Standup } from '../core/types.js';
 import { clampExportDays, LIMITS } from '../core/validation.js';
-import { apiError, canManage, clampInt, loadStandup, principalOf, summarise, visibleStandups, type ApiContext } from './shared.js';
+import { allowed, apiError, clampInt, loadStandup, principalOf, summarise, visibleStandups, type ApiContext } from './shared.js';
 import { runsView, runView, standupDetailView, todayView } from './views.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -17,7 +17,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   api.get('/standups', async (req, res) => {
     const p = principalOf(req);
     const standups = [];
-    for (const s of await visibleStandups(repo, p)) standups.push(await summarise(repo, s, ctx.now(), canManage(p, s.id)));
+    for (const s of await visibleStandups(repo, p)) standups.push(await summarise(repo, s, ctx.now(), allowed(p, 'standups.configure', s.id)));
     res.json({ standups });
   });
 
@@ -26,14 +26,14 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   api.get('/standups/:id', async (req, res) => {
     const standup = await loadStandup(ctx, req, res);
     if (!standup) return;
-    res.json(await detail(standup, canManage(principalOf(req), standup.id)));
+    res.json(await detail(standup, allowed(principalOf(req), 'standups.configure', standup.id)));
   });
 
   // Admins only: the create flow picks a template, a space and a first roster.
   // A signed-in creator becomes the standup's admin; the operator token leaves it open.
   api.post('/standups', async (req, res) => {
     const p = principalOf(req);
-    if (p.kind !== 'admin') {
+    if (!allowed(p, 'standups.create')) {
       apiError(res, 403, 'forbidden', 'Only admins can create standups.');
       return;
     }
@@ -51,7 +51,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.patch('/standups/:id', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'standups.configure' });
     if (!standup) return;
     const result = await validateStandupConfig(repo, standup, req.body ?? {});
     if (!result.ok) {
@@ -70,7 +70,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
     ['unarchive', true],
   ] as const) {
     api.post(`/standups/:id/${action}`, async (req, res) => {
-      const standup = await loadStandup(ctx, req, res, { manage: true });
+      const standup = await loadStandup(ctx, req, res, { need: 'standups.archive' });
       if (!standup) return;
       await repo.updateStandup(standup.id, { active });
       res.json({ id: standup.id, active });
@@ -82,7 +82,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   api.delete('/standups/:id', async (req, res) => {
     const standup = await loadStandup(ctx, req, res);
     if (!standup) return;
-    if (principalOf(req).kind !== 'admin') return apiError(res, 403, 'forbidden', 'Only workspace admins can delete a standup.');
+    if (!allowed(principalOf(req), 'standups.delete')) return apiError(res, 403, 'forbidden', 'Only workspace admins can delete a standup.');
     if (standup.active) return apiError(res, 409, 'active', 'Archive the standup first; only archived standups can be deleted.');
     if (req.body?.confirm !== standup.name) {
       return apiError(res, 400, 'invalid', `Send { "confirm": "${standup.name}" } to delete this standup and all its history.`, 'confirm');
@@ -91,7 +91,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.post('/standups/:id/run-now', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'standups.configure' });
     if (!standup) return;
     res.json({ result: await ctx.scheduler.runNow(standup) });
   });
@@ -99,7 +99,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   // Manual reminder to everyone still expected today. Deliberately does not
   // touch remindedAt, so the scheduled reminder still fires as configured.
   api.post('/standups/:id/nudge', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'standups.configure' });
     if (!standup) return;
     const result = await nudgeToday(repo, ctx.adapter, standup, ctx.now());
     if (!result.ok) return apiError(res, result.status, result.code, result.message);
@@ -107,19 +107,19 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.get('/standups/:id/runs', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res);
+    const standup = await loadStandup(ctx, req, res, { need: 'reports.view' });
     if (!standup) return;
     res.json({ runs: await runsView(repo, standup, clampInt(req.query.limit, 14, 1, 90)) });
   });
 
   api.get('/standups/:id/runs/today', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res);
+    const standup = await loadStandup(ctx, req, res, { need: 'standups.view' });
     if (!standup) return;
     res.json(await todayView(repo, standup, ctx.now()));
   });
 
   api.get('/standups/:id/runs/:date', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res);
+    const standup = await loadStandup(ctx, req, res, { need: 'answers.view' });
     if (!standup) return;
     const date = String(req.params.date);
     if (!DATE_RE.test(date)) {
@@ -135,13 +135,13 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.get('/standups/:id/insights', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res);
+    const standup = await loadStandup(ctx, req, res, { need: 'reports.view' });
     if (!standup) return;
     res.json({ weeks: await weeklySeries(repo, standup, ctx.now(), clampInt(req.query.weeks, 8, 1, 26)) });
   });
 
   api.get('/standups/:id/export.csv', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'export' });
     if (!standup) return;
     const days = clampExportDays(req.query.days, 90);
     const today = ctx.now().setZone(standup.timezone);
@@ -156,7 +156,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
 
   // Roster candidates for managers, who cannot list arbitrary spaces.
   api.get('/standups/:id/members', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
     if (!standup) return;
     try {
       res.json({ members: await ctx.adapter.listSpaceMembers(standup.spaceName) });
@@ -167,7 +167,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
 
   // Derived from SECRET_KEY, so it only changes when that does; managers need it to check signatures.
   api.get('/standups/:id/webhook/secret', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'standups.configure' });
     if (!standup) return;
     if (!ctx.webhookSecret) {
       apiError(res, 503, 'unavailable', 'Webhook signing is not available on this server.');
@@ -177,7 +177,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.post('/standups/:id/participants', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
     if (!standup) return;
     const body = req.body ?? {};
     const userName = String(body.userName ?? '').trim();
@@ -201,7 +201,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.patch('/standups/:id/participants/:userName', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
     if (!standup) return;
     const userName = String(req.params.userName);
     const participant = (await repo.listParticipants(standup.id)).find((x) => x.userName === userName);
@@ -238,7 +238,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.post('/standups/:id/roster/sync', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
     if (!standup) return;
     if (!ctx.roster) return apiError(res, 503, 'unavailable', 'Group rosters are not available on this server.');
     if (!standup.rosterGroup) return apiError(res, 409, 'no_roster_group', 'This standup’s people are added by hand; set a roster group first.');
@@ -249,7 +249,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.delete('/standups/:id/participants/:userName', async (req, res) => {
-    const standup = await loadStandup(ctx, req, res, { manage: true });
+    const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
     if (!standup) return;
     // On a group roster, taking someone off must survive the next sync.
     const userName = String(req.params.userName);
