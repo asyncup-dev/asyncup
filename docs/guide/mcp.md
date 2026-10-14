@@ -22,7 +22,8 @@ On the same page, **New token**:
 
 - A **personal** token acts as you. It sees what you see in the web app and
   writes as you. Anyone signed in can make one.
-- A **service** token is admin-only, read-only, and sees the whole workspace.
+- A **service** token needs the `tokens.manage` permission. It is read-only
+  and sees the whole workspace.
   Use it for reports and dashboards, not for acting as a person.
 
 Pick only the scopes the assistant needs:
@@ -88,9 +89,12 @@ Results come back as structured JSON in the same shapes as the
 standup, not your blocker, the time-off policy says no) is an error result
 with a plain sentence the model can act on, not a protocol failure.
 
-Tools see exactly what the token's owner sees: a member sees their own
-standups, a manager the standups they run, an admin everything. Anonymous
-moods stay anonymous.
+Tools see exactly what the token's owner sees, with the owner's current
+[roles](./roles): a member sees their own standups, a manager the standups
+they run, an admin everything. A token is only offered the tools its owner's
+permissions could use somewhere. A Viewer's token has no `run_standup_now`
+tool, for example. Each call is checked again for the standup it names.
+Anonymous moods stay anonymous.
 
 ## Security
 

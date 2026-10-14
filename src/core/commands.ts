@@ -3,11 +3,12 @@ import { DateTime } from 'luxon';
 import { createStandup } from './create-standup.js';
 import type { ChatAdapter } from './adapter.js';
 import { runProgress } from './progress.js';
-import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, LIMITS, parseDays } from './validation.js';
+import { isEscalateDays, isReminderMinutes, isValidTime, isValidZone, LIMITS, looksLikeEmail, parseDays } from './validation.js';
 import type { BlockerService } from './blocker-service.js';
 import type { PollService } from './poll-service.js';
 import type { StandupService } from './standup-service.js';
 import { can, resolveAccess, type Permission } from './permissions.js';
+import { heldAt, RoleService, type RoleActor } from './roles.js';
 import { parseDateSpec, type Actor, type ScheduleService } from './schedule.js';
 import type { SettingsService } from './settings.js';
 import type { Repo } from '../db/repo.js';
@@ -48,6 +49,7 @@ const HELP_ALL = `*AsyncUp commands* (mention me in this space — prefix with \
 \`off @user <date|range> [reason]\` / \`working @user <date>\` — mark someone away or working on given days (\`off @user cancel <date>\` undoes)
 \`days @user mon-thu|adhoc|reset\` — someone's personal week
 \`admin @user…\` / \`unadmin @user…\` — who may change configuration
+\`role @user <role>\` / \`role @user remove <role>\` — grant or revoke a role on this standup, say Viewer (an email works instead of a mention); \`roles\` lists them
 \`time HH:MM\` — prompt time (participant's local time)
 \`deadline HH:MM\` — close time (standup timezone)
 \`remind <minutes>\` — nudge before the deadline (0 = off)
@@ -74,6 +76,8 @@ export const COMMAND_PERMISSIONS: Record<string, Permission> = {
   optional: 'people.manage',
   admin: 'people.manage',
   unadmin: 'people.manage',
+  role: 'people.manage',
+  roles: 'people.manage',
   vacation: 'schedules.manage',
   back: 'schedules.manage',
   off: 'schedules.manage',
@@ -179,6 +183,10 @@ export class CommandHandler {
         return this.addAdmins(standup, ctx.mentions);
       case 'unadmin':
         return this.removeAdmins(standup, ctx.mentions);
+      case 'role':
+        return this.roleCmd(standup, ctx, rest);
+      case 'roles':
+        return this.roleList(standup, ctx.sender);
       case 'time':
         return this.setTime(standup, arg, 'promptTime');
       case 'deadline':
@@ -419,6 +427,59 @@ export class CommandHandler {
     for (const m of mentions) await this.repo.removeAdmin(standup.id, m.userName);
     const now = await this.repo.listAdmins(standup.id);
     return `✅ Admins now: ${now.length ? now.map((a) => a.displayName).join(', ') : 'none (configuration is open to everyone)'}.`;
+  }
+
+  private async roleActor(standup: Standup, sender: Mention): Promise<RoleActor> {
+    return {
+      tenantId: standup.tenantId,
+      access: await resolveAccess(this.repo, { tenantId: standup.tenantId, userName: sender.userName }, false),
+      externalAdmin: false,
+      email: await this.repo.getUserEmail(sender.userName),
+      name: sender.displayName,
+    };
+  }
+
+  /** `role @user <role>` grants a role on this standup, `role @user remove <role>` revokes it. Roles follow email, so an email works too. */
+  private async roleCmd(standup: Standup, ctx: CommandContext, rest: string[]): Promise<string> {
+    const usage = 'Try `role @user Viewer` to grant a role on this standup, or `role @user remove Viewer`. `roles` lists them.';
+    const typed = rest.find((w) => looksLikeEmail(w));
+    const target = ctx.mentions[0];
+    if (ctx.mentions.length > 1 || (!target && !typed)) return usage;
+    const words = this.withoutMentions(rest.filter((w) => w !== typed), ctx.mentions);
+    const revoke = /^(remove|revoke)\b/i.test(words);
+    const name = (revoke ? words.replace(/^\S+/, '') : words).trim();
+    if (!name) return usage;
+    const roles = new RoleService(this.repo, this.now);
+    const role = (await roles.list(standup.tenantId)).find((r) => r.grantable && r.name.toLowerCase() === name.toLowerCase());
+    if (!role) return `⚠️ No role called “${name}” can be granted. \`roles\` lists the ones you can.`;
+    const email = (typed ?? (await this.repo.getUserEmail(target!.userName)))?.toLowerCase();
+    if (!email) return `⚠️ I don't know ${target!.displayName}'s email yet, and roles follow email. Ask them to message me once, or use \`role their@email ${role.name}\`.`;
+    const who = target?.displayName ?? email;
+    const actor = await this.roleActor(standup, ctx.sender);
+    if (revoke) {
+      const grant = (await this.repo.listGrants(standup.tenantId, { email, role: role.id })).find((g) => g.standupId === standup.id);
+      if (!grant) return `${who} doesn't hold ${role.name} on *${standup.name}*.`;
+      const r = await roles.revoke(actor, grant.id);
+      return r.ok ? `✅ ${who} no longer holds ${role.name} on *${standup.name}*.` : `⚠️ ${r.message}`;
+    }
+    const r = await roles.grant(actor, { email, displayName: target?.displayName, role: role.id, standupId: standup.id });
+    return r.ok ? `✅ ${who} now holds ${role.name} on *${standup.name}*.` : `⚠️ ${r.message}`;
+  }
+
+  /** Roles granted on this standup, and the ones the sender could grant here. */
+  private async roleList(standup: Standup, sender: Mention): Promise<string> {
+    const roles = new RoleService(this.repo, this.now);
+    const actor = await this.roleActor(standup, sender);
+    const all = await roles.list(standup.tenantId);
+    const held = heldAt(actor.access, standup.id);
+    const grantable = all.filter((r) => r.grantable && !r.workspaceOnly && r.permissions.every((p) => held.has(p)));
+    const grants = await roles.grants(actor, standup.id);
+    const lines = grants.map((g) => `• ${g.displayName} — ${all.find((r) => r.id === g.role)?.name ?? 'a deleted role'}`);
+    return [
+      `*Roles on ${standup.name}*`,
+      ...(lines.length ? lines : ['Nobody has a role granted here. Its admins and roster are shown by `status`.']),
+      grantable.length ? `You can grant: ${grantable.map((r) => r.name).join(', ')}. Use \`role @user <role>\`.` : 'There is no role you can grant here.',
+    ].join('\n');
   }
 
   private async setTime(standup: Standup, value: string, field: 'promptTime' | 'deadlineTime'): Promise<string> {

@@ -60,7 +60,7 @@ const fail = (status: RoleFailure['status'], code: string, message: string, fiel
 const hasWorkspaceOnly = (permissions: Permission[]) => permissions.some((p) => PERMISSIONS[p].workspaceOnly);
 
 /** What the actor holds at a scope: the workspace, or one standup on top of it. */
-const heldAt = (access: Access, standupId: number | null): Set<Permission> =>
+export const heldAt = (access: Access, standupId: number | null): Set<Permission> =>
   new Set([...access.workspace, ...(standupId === null ? [] : (access.standups.get(standupId) ?? []))]);
 
 /**

@@ -227,3 +227,46 @@ describe('grants', () => {
     expect(await repo.listGrants(TENANT)).toEqual([]);
   });
 });
+
+describe('roles in Chat', () => {
+  it('grants, lists and revokes roles on the standup, by mention or email', async () => {
+    const { send, s, repo, commands } = await startServer();
+    await repo.setUserEmail('users/bob', 'bob@o.com');
+    await repo.setUserEmail('users/alice', 'alice@o.com');
+    const ALICE = { userName: 'users/alice', displayName: 'Alice' };
+    const say = (text: string, mentions: { userName: string; displayName: string }[] = [], sender = { userName: 'users/bob', displayName: 'Bob' }) =>
+      commands.handle({ tenantId: TENANT, spaceName: 'spaces/team', text, mentions, sender });
+
+    expect(await say('role @Alice Viewer', [ALICE])).toBe('✅ Alice now holds Viewer on *Daily Standup*.');
+    expect((await repo.listGrants(TENANT))[0]).toMatchObject({ email: 'alice@o.com', displayName: 'Alice', role: 'viewer', standupId: s.id, grantedBy: 'Bob' });
+    expect(await say('role PAT@x.com viewer')).toBe('✅ pat@x.com now holds Viewer on *Daily Standup*.');
+    expect(await say('roles')).toBe('*Roles on Daily Standup*\n• Alice — Viewer\n• pat@x.com — Viewer\nYou can grant: Manager, Viewer. Use `role @user <role>`.');
+    expect(await say('role @Alice remove Viewer', [ALICE])).toBe('✅ Alice no longer holds Viewer on *Daily Standup*.');
+    expect(await say('role @Alice revoke viewer', [ALICE])).toBe("Alice doesn't hold Viewer on *Daily Standup*.");
+
+    expect(await say('role @Alice Admin', [ALICE])).toContain('can only be granted across the workspace');
+    expect(await say('role @Alice Nope', [ALICE])).toContain('No role called “Nope” can be granted');
+    expect(await say('role @Carol Viewer', [{ userName: 'users/carol', displayName: 'Carol' }])).toContain('I don\'t know Carol\'s email yet');
+    for (const [text, mentions] of [['role', []], ['role @Alice', [ALICE]], ['role @Alice @Carol Viewer', [ALICE, { userName: 'users/carol', displayName: 'Carol' }]]] as const) {
+      expect(await say(text, [...mentions])).toStartWith('Try `role @user Viewer`');
+    }
+    expect(await say('role @Alice Viewer', [ALICE], { userName: 'users/dan', displayName: 'Dan' })).toContain('🔒');
+
+    // Managing a standup's people is enough to grant, but not to revoke a role holding more than you do.
+    const keeper = (await send(null, 'POST', '/roles', { name: 'Roster keeper', permissions: ['people.manage'] })).body;
+    await repo.setUserEmail('users/dan', 'dan@o.com');
+    await send(null, 'POST', '/grants', { email: 'dan@o.com', role: keeper.id, standupId: s.id });
+    await send(null, 'POST', '/grants', { email: 'alice@o.com', role: 'viewer', standupId: s.id });
+    const dan = { userName: 'users/dan', displayName: 'Dan' };
+    expect(await say('role @Alice remove Viewer', [ALICE], dan)).toContain('You can only revoke roles whose permissions you hold here');
+    expect(await say('role @Alice Viewer', [ALICE], dan)).toContain('You can only grant roles whose permissions you hold here');
+    expect(await say('roles', [], dan)).toContain('You can grant: Roster keeper.');
+
+    // A standup with no admins yet: nobody granted, nothing to grant.
+    const open = await repo.createStandup({ tenantId: TENANT, spaceName: 'spaces/open', name: 'Open', timezone: 'UTC' });
+    expect(await commands.handle({ tenantId: TENANT, spaceName: 'spaces/open', text: 'roles', mentions: [], sender: { userName: 'users/erin', displayName: 'Erin' } })).toBe(
+      `*Roles on ${open.name}*\nNobody has a role granted here. Its admins and roster are shown by \`status\`.\nThere is no role you can grant here.`,
+    );
+  });
+});
+
