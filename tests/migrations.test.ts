@@ -7,8 +7,8 @@ import { POSTGRES_MIGRATIONS, Repo, SQLITE_MIGRATIONS } from '../src/db/repo.js'
 
 describe('migration 10 — AI removal', () => {
   it('keeps both dialect arrays aligned', () => {
-    expect(SQLITE_MIGRATIONS).toHaveLength(15);
-    expect(POSTGRES_MIGRATIONS).toHaveLength(15);
+    expect(SQLITE_MIGRATIONS).toHaveLength(16);
+    expect(POSTGRES_MIGRATIONS).toHaveLength(16);
     for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
       expect(migrations[9]).toContain('DROP COLUMN ai_enabled');
       expect(migrations[9]).toContain("'llmApiKey'");
@@ -45,7 +45,7 @@ describe('migration 10 — AI removal', () => {
     const columns = (check.query('PRAGMA table_info(standups)').all() as { name: string }[]).map((c) => c.name);
     expect(columns).not.toContain('ai_enabled');
     expect(columns).toContain('digest_enabled');
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(15);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(16);
     check.close();
   });
 });
@@ -89,7 +89,7 @@ describe('migration 11 — MCP tokens and activity', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(15);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(16);
     check.close();
   });
 });
@@ -130,7 +130,7 @@ describe('migration 12 — personal schedules', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(15);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(16);
     check.close();
   });
 });

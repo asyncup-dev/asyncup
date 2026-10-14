@@ -40,12 +40,12 @@ describe('access checks', () => {
     const other = await repo.createStandup({ tenantId: s.tenantId, spaceName: 'spaces/other', name: 'Other', timezone: s.timezone });
     await repo.addAdmin(other.id, 'users/alice', 'Alice');
 
-    const alice = await resolveAccess(repo, 'users/alice', false);
+    const alice = await resolveAccess(repo, { tenantId: s.tenantId, userName: 'users/alice' }, false);
     expect(alice.workspace.size).toBe(0);
     expect([...alice.standups.get(s.id)!]).toEqual(BUILT_IN_ROLES.member.permissions);
     expect([...alice.standups.get(other.id)!]).toEqual(BUILT_IN_ROLES.manager.permissions);
-    expect((await resolveAccess(repo, null, false)).standups.size).toBe(0);
-    expect([...(await resolveAccess(repo, 'users/alice', true)).workspace]).toEqual(BUILT_IN_ROLES.admin.permissions);
+    expect((await resolveAccess(repo, { tenantId: s.tenantId, userName: null }, false)).standups.size).toBe(0);
+    expect([...(await resolveAccess(repo, { tenantId: s.tenantId, userName: 'users/alice' }, true)).workspace]).toEqual(BUILT_IN_ROLES.admin.permissions);
   });
 });
 

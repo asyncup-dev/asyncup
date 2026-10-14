@@ -17,12 +17,13 @@ import { registerMcpRoutes } from './mcp.js';
 import { registerMemberRoutes } from './member.js';
 import { registerScheduleRoutes } from './schedule.js';
 import { registerPeopleRoutes } from './people.js';
+import { registerRoleRoutes } from './roles.js';
 import { registerSettingsRoutes } from './settings.js';
 import { registerSpaceRoutes } from './spaces.js';
 import { resolvePrincipal } from './principal.js';
 import { contractCheck } from './spec/check.js';
 import { buildOpenApi } from './spec/openapi.js';
-import { apiError, CSRF_HEADER, CSRF_VALUE, principalOf, type ApiContext, type ApiRequest } from './shared.js';
+import { apiError, CSRF_HEADER, CSRF_VALUE, meView, principalOf, type ApiContext, type ApiRequest } from './shared.js';
 import { registerStandupRoutes } from './standups.js';
 
 export { apiError, CSRF_HEADER, CSRF_VALUE } from './shared.js';
@@ -116,7 +117,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
 
   api.get('/me', (req, res) => {
     const p = principalOf(req);
-    res.json({ kind: p.kind, via: p.via, tenantId: p.tenantId, user: p.user, managedStandupIds: p.managedStandupIds });
+    res.json(meView(p));
   });
 
   registerStandupRoutes(api, ctx);
@@ -127,6 +128,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
   registerSettingsRoutes(api, ctx);
   registerSpaceRoutes(api, ctx);
   registerMcpRoutes(api, ctx);
+  registerRoleRoutes(api, ctx);
 
   api.use((_req, res) => apiError(res, 404, 'not_found', 'No such API route.'));
   app.use('/api/v1', api);

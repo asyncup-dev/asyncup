@@ -109,7 +109,7 @@ export class BlockerService {
     const allowed =
       blocker.userName === user.userName ||
       tags.some((t) => t.userName === user.userName) ||
-      can(await resolveAccess(this.repo, user.userName, false), 'blockers.manage', standup.id);
+      can(await resolveAccess(this.repo, { tenantId: standup.tenantId, userName: user.userName }, false), 'blockers.manage', standup.id);
     if (!allowed) return 'not_allowed';
 
     const date = this.now().setZone(standup.timezone).toISODate()!;

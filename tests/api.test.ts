@@ -5,6 +5,7 @@ import { EventRouter } from '../src/adapters/gchat/events.js';
 import { newSession, sealSession } from '../src/auth/session.js';
 import { createServer } from '../src/server.js';
 import { ANSWERS, makeStack, seedStandup, TENANT } from './helpers.js';
+import { BUILT_IN_ROLES } from '../src/core/permissions.js';
 
 const SECRET = 'api-test-secret';
 const OPERATOR = 'dash-secret';
@@ -70,7 +71,7 @@ describe('api: authentication', () => {
     const { asBearer } = await startServer();
     const res = await asBearer(OPERATOR, '/me');
     expect(res.status).toBe(200);
-    expect(await res.json() as any).toEqual({ kind: 'admin', via: 'token', tenantId: 'default', user: null, managedStandupIds: [] });
+    expect(await res.json() as any).toEqual({ kind: 'admin', via: 'token', tenantId: 'default', user: null, managedStandupIds: [], permissions: { workspace: BUILT_IN_ROLES.admin.permissions, standups: {} } });
   });
 
   it('derives admin, manager and member from the session', async () => {

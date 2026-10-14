@@ -253,8 +253,8 @@ export class ScheduleService {
   private async authority(target: Mention, actor: Actor, standups: Standup[]): Promise<Authority> {
     const self = actor.userName === target.userName;
     if (actor.admin) return { ok: true, self, governed: [] };
-    const access = await resolveAccess(this.repo, actor.userName, false);
-    const administered = new Set(standups.filter((s) => can(access, 'schedules.manage', s.id)).map((s) => s.id));
+    const access = standups.length ? await resolveAccess(this.repo, { tenantId: standups[0]!.tenantId, userName: actor.userName }, false) : null;
+    const administered = new Set(standups.filter((s) => can(access!, 'schedules.manage', s.id)).map((s) => s.id));
     if (!self) {
       return administered.size > 0 ? { ok: true, self, governed: [] } : { ok: false, message: `Only ${target.displayName}'s managers can change their schedule.` };
     }
@@ -412,8 +412,8 @@ export class ScheduleService {
     const standups = await this.repo.listStandupsForUser(person.userName);
     if (!actor.admin) {
       if (person.userName === actor.userName) return { ok: false, message: 'Your own requests go to your managers.' };
-      const access = await resolveAccess(this.repo, actor.userName, false);
-      if (!standups.some((s) => can(access, 'schedules.manage', s.id))) return { ok: false, message: `Only ${person.displayName}'s managers can decide this.` };
+      const access = standups.length ? await resolveAccess(this.repo, { tenantId: standups[0]!.tenantId, userName: actor.userName }, false) : null;
+      if (!access || !standups.some((s) => can(access, 'schedules.manage', s.id))) return { ok: false, message: `Only ${person.displayName}'s managers can decide this.` };
     }
     const at = this.now().toISO()!;
     for (const o of pending) await this.repo.setOverrideStatus(o.id, approve ? 'active' : 'declined', at, { byDisplayName: actor.displayName, note });

@@ -61,7 +61,7 @@ export class PollService {
     const poll = await this.repo.getPollById(pollId);
     if (!poll || poll.standupId !== standup.id) return 'not_found';
     if (poll.closedAt) return 'already_closed';
-    if (poll.createdBy !== by.userName && !can(await resolveAccess(this.repo, by.userName, false), 'standups.configure', standup.id)) {
+    if (poll.createdBy !== by.userName && !can(await resolveAccess(this.repo, { tenantId: standup.tenantId, userName: by.userName }, false), 'standups.configure', standup.id)) {
       return 'not_allowed';
     }
     await this.repo.closePoll(pollId, this.now().toISO()!);

@@ -5,9 +5,16 @@ import { vi } from 'vitest';
 import { App, buildRouter } from '../app';
 import type { Me } from '../lib/api';
 
-export const ADMIN: Me = { kind: 'admin', via: 'session', tenantId: 'default', user: { userName: 'users/1', email: 'asha@example.com', name: 'Asha Rao' }, managedStandupIds: [] };
-export const MEMBER: Me = { kind: 'member', via: 'session', tenantId: 'default', user: { userName: 'users/2', email: 'bob@example.com', name: 'Bob' }, managedStandupIds: [] };
-export const OPERATOR: Me = { kind: 'admin', via: 'token', tenantId: 'default', user: null, managedStandupIds: [] };
+const EVERYTHING: Me['permissions'] = {
+  workspace: [
+    'standups.view', 'standups.create', 'standups.configure', 'standups.archive', 'standups.delete', 'people.view', 'people.manage', 'schedules.manage',
+    'answers.view', 'blockers.view', 'blockers.manage', 'reports.view', 'export', 'settings.manage', 'sso.manage', 'tokens.manage', 'roles.manage',
+  ],
+  standups: {},
+};
+export const ADMIN: Me = { kind: 'admin', via: 'session', tenantId: 'default', user: { userName: 'users/1', email: 'asha@example.com', name: 'Asha Rao' }, managedStandupIds: [], permissions: EVERYTHING };
+export const MEMBER: Me = { kind: 'member', via: 'session', tenantId: 'default', user: { userName: 'users/2', email: 'bob@example.com', name: 'Bob' }, managedStandupIds: [], permissions: { workspace: [], standups: {} } };
+export const OPERATOR: Me = { kind: 'admin', via: 'token', tenantId: 'default', user: null, managedStandupIds: [], permissions: EVERYTHING };
 
 type Route = { status?: number; body: unknown | ((init?: RequestInit) => unknown) };
 

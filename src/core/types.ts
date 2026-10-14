@@ -317,6 +317,38 @@ export function blockerAnswers(submission: SubmissionInput): string[] {
     .map((a) => a.answer);
 }
 
+/** A role someone made: a named set of permissions. */
+export interface CustomRole {
+  id: number;
+  tenantId: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A role given to someone, by email, across the workspace (standupId null) or on one standup. */
+export interface RoleGrant {
+  id: number;
+  tenantId: string;
+  email: string;
+  displayName: string;
+  /** A built-in role key (admin, manager, viewer) or a custom role's id. */
+  role: string;
+  standupId: number | null;
+  grantedBy: string;
+  grantedAt: string;
+}
+
+export interface RoleAuditEntry {
+  id: number;
+  at: string;
+  actor: string;
+  action: string;
+  summary: string;
+}
+
 export interface McpToken {
   id: number;
   tenantId: string;

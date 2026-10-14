@@ -5,6 +5,7 @@ import { EventRouter } from '../src/adapters/gchat/events.js';
 import { newSession, sealSession } from '../src/auth/session.js';
 import { createServer } from '../src/server.js';
 import { ANSWERS, makeStack, seedStandup, TENANT, withBlocker } from './helpers.js';
+import { BUILT_IN_ROLES } from '../src/core/permissions.js';
 
 const SECRET = 'api-test-secret';
 const OPERATOR = 'dash-secret';
@@ -453,7 +454,15 @@ describe('mcp: ready for Claude Code', () => {
     await service.submit(run.id, BOB.userName, BOB.displayName, ANSWERS);
 
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['read'] })).secret);
-    expect((await call(alice, 'get_me')).json).toEqual({ kind: 'member', via: 'token', tenantId: TENANT, user: { userName: 'users/alice', email: '', name: 'alice' }, managedStandupIds: [], scopes: ['read'] });
+    expect((await call(alice, 'get_me')).json).toEqual({
+      kind: 'member',
+      via: 'token',
+      tenantId: TENANT,
+      user: { userName: 'users/alice', email: '', name: 'alice' },
+      managedStandupIds: [],
+      permissions: { workspace: [], standups: { [s.id]: BUILT_IN_ROLES.member.permissions } },
+      scopes: ['read'],
+    });
     const detail = (await call(alice, 'get_standup', { standupId: s.id })).json;
     expect(detail.participants.map((x: any) => x.userName)).toEqual(['users/alice', 'users/bob', 'users/carol']);
     expect(detail).toMatchObject({ admins: [BOB], permissions: { manage: false } });

@@ -6,6 +6,7 @@ import type {
   Blocker,
   BlockerTag,
   BlockerUpdate,
+  CustomRole,
   McpActivity,
   McpToken,
   Mood,
@@ -13,6 +14,8 @@ import type {
   Participant,
   Poll,
   PollVote,
+  RoleAuditEntry,
+  RoleGrant,
   Run,
   RunParticipant,
   RunStatus,
@@ -350,6 +353,36 @@ ALTER TABLE run_participants ADD COLUMN card_messages TEXT;
   `
 ALTER TABLE run_participants ADD COLUMN skip_note TEXT;
 ALTER TABLE run_participants ADD COLUMN skip_message TEXT;
+`,  // 16 — custom roles, who holds which role where, and a log of changes
+  `
+CREATE TABLE roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  permissions TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE role_grants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  standup_id INTEGER,
+  granted_by TEXT NOT NULL,
+  granted_at TEXT NOT NULL
+);
+CREATE INDEX idx_role_grants_email ON role_grants(tenant_id, email);
+CREATE TABLE role_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  summary TEXT NOT NULL
+);
 `,
 ];
 
@@ -624,8 +657,63 @@ ALTER TABLE run_participants ADD COLUMN card_messages TEXT;
   `
 ALTER TABLE run_participants ADD COLUMN skip_note TEXT;
 ALTER TABLE run_participants ADD COLUMN skip_message TEXT;
+`,  // 16 — custom roles and grants (mirrors the SQLite migration)
+  `
+CREATE TABLE roles (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  permissions TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE role_grants (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  standup_id INTEGER,
+  granted_by TEXT NOT NULL,
+  granted_at TEXT NOT NULL
+);
+CREATE INDEX idx_role_grants_email ON role_grants(tenant_id, email);
+CREATE TABLE role_audit (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  summary TEXT NOT NULL
+);
 `,
 ];
+
+function toRole(row: any): CustomRole {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    name: row.name,
+    description: row.description,
+    permissions: row.permissions ? row.permissions.split(',') : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toGrant(row: any): RoleGrant {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    email: row.email,
+    displayName: row.display_name,
+    role: row.role,
+    standupId: row.standup_id ?? null,
+    grantedBy: row.granted_by,
+    grantedAt: row.granted_at,
+  };
+}
 
 function toMcpToken(row: any): McpToken {
   return {
@@ -1951,6 +2039,7 @@ export class Repo {
       const r = await this.db.run('DELETE FROM runs WHERE standup_id = ?', [standupId]);
       await this.db.run('DELETE FROM participants WHERE standup_id = ?', [standupId]);
       await this.db.run('DELETE FROM standup_admins WHERE standup_id = ?', [standupId]);
+      await this.db.run('DELETE FROM role_grants WHERE standup_id = ?', [standupId]);
       await this.db.run('DELETE FROM schedule_change_digests WHERE standup_id = ?', [standupId]);
       await this.db.run('DELETE FROM standups WHERE id = ?', [standupId]);
       return { runs: r.changes, submissions: sub.changes, blockers: b.changes, polls: p.changes };
@@ -2076,6 +2165,87 @@ export class Repo {
 
   async deleteSetting(key: string): Promise<void> {
     await this.db.run('DELETE FROM settings WHERE key = ?', [key]);
+  }
+
+  // --- roles and grants ---
+
+  async createRole(input: { tenantId: string; name: string; description: string; permissions: string[]; at: string }): Promise<CustomRole> {
+    const id = await this.db.insert(
+      'INSERT INTO roles (tenant_id, name, description, permissions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [input.tenantId, input.name, input.description, input.permissions.join(','), input.at, input.at],
+    );
+    return (await this.getRole(input.tenantId, id))!;
+  }
+
+  async getRole(tenantId: string, id: number): Promise<CustomRole | null> {
+    const row = await this.db.get('SELECT * FROM roles WHERE tenant_id = ? AND id = ?', [tenantId, id]);
+    return row ? toRole(row) : null;
+  }
+
+  async listRoles(tenantId: string): Promise<CustomRole[]> {
+    return (await this.db.all('SELECT * FROM roles WHERE tenant_id = ? ORDER BY name', [tenantId])).map(toRole);
+  }
+
+  async updateRole(id: number, change: { name: string; description: string; permissions: string[]; at: string }): Promise<void> {
+    await this.db.run('UPDATE roles SET name = ?, description = ?, permissions = ?, updated_at = ? WHERE id = ?', [
+      change.name,
+      change.description,
+      change.permissions.join(','),
+      change.at,
+      id,
+    ]);
+  }
+
+  async deleteRole(id: number): Promise<void> {
+    await this.db.run('DELETE FROM roles WHERE id = ?', [id]);
+  }
+
+  async createGrant(input: Omit<RoleGrant, 'id'>): Promise<RoleGrant> {
+    const id = await this.db.insert(
+      'INSERT INTO role_grants (tenant_id, email, display_name, role, standup_id, granted_by, granted_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [input.tenantId, input.email, input.displayName, input.role, input.standupId, input.grantedBy, input.grantedAt],
+    );
+    return (await this.getGrant(input.tenantId, id))!;
+  }
+
+  async getGrant(tenantId: string, id: number): Promise<RoleGrant | null> {
+    const row = await this.db.get('SELECT * FROM role_grants WHERE tenant_id = ? AND id = ?', [tenantId, id]);
+    return row ? toGrant(row) : null;
+  }
+
+  /** Every grant in the tenant, or one person's, or those of one role. */
+  async listGrants(tenantId: string, filter: { email?: string; role?: string } = {}): Promise<RoleGrant[]> {
+    const where = ['tenant_id = ?'];
+    const args: unknown[] = [tenantId];
+    if (filter.email !== undefined) {
+      where.push('email = ?');
+      args.push(filter.email);
+    }
+    if (filter.role !== undefined) {
+      where.push('role = ?');
+      args.push(filter.role);
+    }
+    const rows = await this.db.all(`SELECT * FROM role_grants WHERE ${where.join(' AND ')} ORDER BY display_name, id`, args);
+    return rows.map(toGrant);
+  }
+
+  async deleteGrant(id: number): Promise<void> {
+    await this.db.run('DELETE FROM role_grants WHERE id = ?', [id]);
+  }
+
+  async logRoleChange(input: { tenantId: string; at: string; actor: string; action: string; summary: string }): Promise<void> {
+    await this.db.run('INSERT INTO role_audit (tenant_id, at, actor, action, summary) VALUES (?, ?, ?, ?, ?)', [
+      input.tenantId,
+      input.at,
+      input.actor,
+      input.action,
+      input.summary,
+    ]);
+  }
+
+  async listRoleAudit(tenantId: string, limit: number): Promise<RoleAuditEntry[]> {
+    const rows = await this.db.all('SELECT * FROM role_audit WHERE tenant_id = ? ORDER BY id DESC LIMIT ?', [tenantId, limit]);
+    return rows.map((r: any) => ({ id: r.id, at: r.at, actor: r.actor, action: r.action, summary: r.summary }));
   }
 
   // --- DM space cache (used by the Google Chat adapter) ---
