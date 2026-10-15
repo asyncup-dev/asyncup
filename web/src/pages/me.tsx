@@ -268,7 +268,7 @@ export function MePage() {
           <section className="card">
             <div className="card-head"><span className="t-h3 grow">Mood</span></div>
             <div className="card-body">
-              <p className="t-small secondary" style={{ margin: 0 }}>Where a standup keeps moods anonymous, only the team average is ever shown. Your individual moods stay yours.</p>
+              <p className="t-small secondary" style={{ margin: 0 }}>Moods are never posted in the space. Where a standup keeps moods anonymous, others see only the team average and comments without names.</p>
               <div className="row-wrap" aria-hidden="true">{Object.values(MOOD_EMOJI).reverse().map((e) => <span key={e} className="badge">{e}</span>)}</div>
               {submissions.data ? <div className="t-caption">{moodSummary(submissions.data.map((s) => s.mood)) ? `Your recent answers: ${moodSummary(submissions.data.map((s) => s.mood))}` : 'No mood picked recently.'}</div> : null}
             </div>

@@ -58,6 +58,7 @@ describe('member console', () => {
     expect(screen.getAllByText('Mood', { selector: 'dt' })).toHaveLength(1);
     expect(screen.getByText('Engineering · late · edited · 🙂')).toBeInTheDocument();
     expect(screen.getByText('Your recent answers: mostly 🙂')).toBeInTheDocument();
+    expect(screen.getByText(/Moods are never posted in the space\..*comments without names\./)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'View all' })).not.toBeInTheDocument();
 
     // a skip needs a one-line reason, and can be called off
