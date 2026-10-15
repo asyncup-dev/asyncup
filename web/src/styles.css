@@ -204,7 +204,7 @@ a:hover {
   background: var(--bg-surface-2);
   color: var(--text-muted);
 }
-.content { padding: var(--space-6) var(--space-7); display: grid; gap: var(--space-5); align-content: start; }
+.content { container: content / inline-size; padding: var(--space-6) var(--space-7); display: grid; gap: var(--space-5); align-content: start; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
 
 .avatar {
@@ -254,12 +254,15 @@ a:hover {
 .topbar-mark { display: none; }
 .tabbar { display: none; }
 
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
+  .topbar .search { display: none; }
+}
+
+@media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .sidebar { display: none; }
   .topbar { padding: 0 var(--space-4); }
   .topbar-mark { display: inline-flex; }
-  .topbar .search { display: none; }
   .content { padding: var(--space-4); padding-bottom: calc(65px + var(--space-6)); }
   .tabbar {
     position: fixed;
@@ -277,21 +280,8 @@ a:hover {
   .tab-item:hover { text-decoration: none; }
   .tab-item[aria-current='page'] { color: var(--accent-text); }
   .tab-item svg { width: 16px; height: 16px; }
-  .page-header { flex-direction: column; align-items: stretch; }
-  .stats { grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
-  .stat { padding: var(--space-3); }
-  .stat .value { font-size: 20px; line-height: 24px; }
-  .stats .stat:nth-child(n + 4) { display: none; }
-  /* Tables collapse to cards; each cell is labelled by its column. */
-  .table thead { display: none; }
-  .table, .table tbody, .table tr, .table td { display: block; }
-  .table tr { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); }
-  .table td { padding: 2px 0; border: 0; }
-  .table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 88px; color: var(--text-muted); font-size: 12px; }
-  .table td:empty { display: none; }
-  .standup-header .btn { flex: 1; }
-  .tabs { overflow-x: auto; }
 }
+
 
 /* Setup walkthrough */
 .setup { display: grid; grid-template-columns: 320px 1fr; min-height: 100%; }
@@ -384,9 +374,9 @@ a:hover {
 .tab[aria-current='page'] { color: var(--text-primary); border-bottom-color: var(--accent-primary); }
 .overview { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: var(--space-5); align-items: start; }
 .overview .col { display: grid; gap: var(--space-5); }
-.card-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5) 0; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5) 0; }
 .card-head .grow { flex: 1; }
-.card-body { padding: var(--space-4) var(--space-5) var(--space-5); display: grid; gap: var(--space-3); }
+.card-body { container-type: inline-size; padding: var(--space-4) var(--space-5) var(--space-5); display: grid; gap: var(--space-3); }
 .today-grid { display: grid; grid-template-columns: 112px 1fr; gap: var(--space-7); }
 .ring { position: relative; width: 112px; height: 112px; }
 .ring svg { transform: rotate(-90deg); }
@@ -414,12 +404,6 @@ a:hover {
 .qa dt { color: var(--text-muted); font-size: 13px; margin: 0; }
 .qa dd { margin: 0; }
 
-@media (max-width: 900px) {
-  .overview, .history { grid-template-columns: 1fr; }
-  .today-grid { grid-template-columns: 1fr; }
-  .run-row { grid-template-columns: 1fr auto; }
-  .run-row .progress-inline { display: none; }
-}
 
 /* Dialogs */
 .scrim { position: fixed; inset: 0; background: rgba(16, 24, 40, 0.45); display: grid; place-items: center; z-index: 10; padding: var(--space-4); }
@@ -435,7 +419,7 @@ a:hover {
 .override-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); }
 .override-row + .override-row { border-top: 1px solid var(--border-default); }
 .override-row .grow { flex: 1; min-width: 0; }
-.request { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
+.request { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
 .request + .request { border-top: 1px solid var(--border-default); }
 .dialog { width: min(440px, 100%); padding: var(--space-5); display: grid; gap: var(--space-4); box-shadow: var(--shadow-modal); }
 
@@ -446,10 +430,12 @@ a:hover {
 .settings-nav a:hover { background: var(--bg-hover); text-decoration: none; }
 .settings-nav a[aria-current='page'] { background: var(--accent-soft); color: var(--accent-text); }
 .settings-pane { display: grid; gap: var(--space-5); max-width: 916px; }
-.settings-rows { display: grid; }
+.settings-rows { container-type: inline-size; display: grid; }
 .settings-row { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: var(--space-4); align-items: center; padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border-default); }
-.settings-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.settings-control .input { max-width: 340px; }
+.settings-row > * { min-width: 0; }
+.settings-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.settings-control > * { max-width: 100%; }
+.settings-control .input { max-width: min(340px, 100%); }
 .chip-tabs { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .chip-tab { height: 28px; padding: 0 var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-pill); background: var(--bg-surface); color: var(--text-secondary); font: inherit; cursor: pointer; }
 .chip-tab[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-primary); }
@@ -466,10 +452,47 @@ a:hover {
 .insights { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: var(--space-5); align-items: start; }
 .bar-row { display: grid; grid-template-columns: 24px 130px 1fr 44px 50px 90px; gap: var(--space-3); align-items: center; }
 
-@media (max-width: 900px) {
-  .settings, .insights { grid-template-columns: 1fr; }
-  .settings-nav { grid-auto-flow: column; overflow-x: auto; }
-  .settings-row { grid-template-columns: 1fr; }
-  .bar-row { grid-template-columns: 24px 1fr 44px; }
+/* Responsive layout. Kept last so these win over the base rules above. Pages
+   follow the width of the content area; cards and rows follow their own. */
+@container content (max-width: 1100px) {
+  .overview, .history, .insights { grid-template-columns: minmax(0, 1fr); }
+}
+@container content (max-width: 760px) {
+  .settings { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .settings-nav { grid-auto-flow: column; justify-content: start; overflow-x: auto; }
+  .settings-nav a { white-space: nowrap; }
+}
+@container content (max-width: 700px) {
+  .page-header { flex-direction: column; align-items: stretch; }
+  .stats { grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+  .stat { padding: var(--space-3); }
+  .stat .value { font-size: 20px; line-height: 24px; }
+  .stats .stat:nth-child(n + 4) { display: none; }
+  .standup-header .btn { flex: 1; }
+  .tabs { overflow-x: auto; }
+}
+@container content (max-width: 560px) {
+  .run-row { grid-template-columns: 1fr auto; }
+  .run-row .progress-inline { display: none; }
+}
+/* Tables collapse to cards when their container is narrow; each cell is labelled by its column. */
+@container (max-width: 640px) {
+  .table thead { display: none; }
+  .table, .table tbody, .table tr, .table td { display: block; }
+  .table tr { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); }
+  .table td { padding: 2px 0; border: 0; }
+  .table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 88px; color: var(--text-muted); font-size: 12px; }
+  .table td:empty { display: none; }
+}
+/* A settings row stacks its label above the control when its card is narrow. */
+@container (max-width: 560px) {
+  .settings-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+  .copy-row { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 520px) {
+  .bar-row { grid-template-columns: 24px minmax(0, 1fr) 44px; }
   .bar-row > :nth-child(3), .bar-row > :nth-child(5), .bar-row > :nth-child(6) { display: none; }
+}
+@container (max-width: 420px) {
+  .today-grid { grid-template-columns: 1fr; }
 }
