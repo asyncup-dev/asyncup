@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft |
+| Status | Done |
 | Size | Feature (new dependency, settings) |
 | Figma | [Specs › 004 Spelling suggestions](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=159-26) |
 | PR | — |
@@ -97,9 +97,11 @@ How it works:
 
 - Dependency: `harper.js` 2.10.0 (Apache-2.0), the slim binary. It adds
   about 72 MB to the installed packages.
-- A `SpellChecker` in the server starts `bun src/spell/worker.ts` on
-  first use and talks to it a JSON line at a time. It stops the child
-  after 30 idle minutes. Measured on 15 Oct 2026: about 0.38 s to start,
+- `HarperEngine` (`src/integrations/harper.ts`) starts
+  `bun src/spell/worker.ts` on first use and talks to it a JSON line at a
+  time. It stops the child after 30 idle minutes, counted from the last
+  answer, and replaces a child that stops answering. Starting has its own
+  ten-second allowance: a cold start took 1.3 s end to end locally. Measured on 15 Oct 2026: about 0.38 s to start,
   about 0.5 ms per answer, and about 350 MB in the child. The server
   itself stays near 27 MB. Freeing the linter inside the server, or in
   a worker thread, did not give the memory back; ending the process did.
