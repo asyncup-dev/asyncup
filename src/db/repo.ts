@@ -27,6 +27,19 @@ import type {
   Submission,
 } from '../core/types.js';
 
+/** A roster row whether on or off, with what roster syncs need to know about it. */
+export interface RosterRow {
+  userName: string;
+  displayName: string;
+  active: boolean;
+  source: 'manual' | 'group';
+  keptOff: boolean;
+  /** Seen in the standup's space at least once, so leaving it takes them off. */
+  inSpace: boolean;
+  /** When a space sync took them off for leaving; cleared when they come back or a manager acts. */
+  leftSpaceAt: string | null;
+}
+
 /**
  * SQLite migrations tracked via PRAGMA user_version.
  * Never edit an existing entry — append a new one (and mirror it for Postgres).
@@ -386,6 +399,10 @@ CREATE TABLE role_audit (
 `,  // 17 — why someone chose their mood, read only with moods.comments
   `
 ALTER TABLE submissions ADD COLUMN mood_comment TEXT;
+`,  // 18 — rosters picked from the space follow people who leave it
+  `
+ALTER TABLE participants ADD COLUMN in_space INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE participants ADD COLUMN left_space_at TEXT;
 `,
 ];
 
@@ -693,6 +710,10 @@ CREATE TABLE role_audit (
 `,  // 17 — mood comments (mirrors the SQLite migration)
   `
 ALTER TABLE submissions ADD COLUMN mood_comment TEXT;
+`,  // 18 — space membership (mirrors the SQLite migration)
+  `
+ALTER TABLE participants ADD COLUMN in_space INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE participants ADD COLUMN left_space_at TEXT;
 `,
 ];
 
@@ -1077,17 +1098,40 @@ export class Repo {
       `INSERT INTO participants (standup_id, user_name, display_name, mandatory, active)
        VALUES (?, ?, ?, ?, 1)
        ON CONFLICT (standup_id, user_name)
-       DO UPDATE SET display_name = excluded.display_name, active = 1, kept_off = 0`,
+       DO UPDATE SET display_name = excluded.display_name, active = 1, kept_off = 0, left_space_at = NULL`,
       [input.standupId, input.userName, input.displayName, input.mandatory === false ? 0 : 1],
     );
   }
 
   // --- roster from a Google Group ---
 
-  /** Every roster row, on or off, with where it came from — what a group sync compares against. */
-  async listRosterRows(standupId: number): Promise<{ userName: string; displayName: string; active: boolean; source: 'manual' | 'group'; keptOff: boolean }[]> {
-    const rows = await this.db.all('SELECT user_name, display_name, active, source, kept_off FROM participants WHERE standup_id = ? ORDER BY display_name', [standupId]);
-    return rows.map((r: any) => ({ userName: r.user_name, displayName: r.display_name, active: !!r.active, source: r.source === 'group' ? 'group' : 'manual', keptOff: !!r.kept_off }));
+  /** Every roster row, on or off, with where it came from — what a roster sync compares against. */
+  async listRosterRows(standupId: number): Promise<RosterRow[]> {
+    const rows = await this.db.all('SELECT user_name, display_name, active, source, kept_off, in_space, left_space_at FROM participants WHERE standup_id = ? ORDER BY display_name', [standupId]);
+    return rows.map((r: any) => ({
+      userName: r.user_name,
+      displayName: r.display_name,
+      active: !!r.active,
+      source: r.source === 'group' ? 'group' : 'manual',
+      keptOff: !!r.kept_off,
+      inSpace: !!r.in_space,
+      leftSpaceAt: r.left_space_at ?? null,
+    }));
+  }
+
+  // --- roster picked from the space ---
+
+  /** Only people seen in the space can later be taken off for leaving it. */
+  async markInSpace(standupId: number, userName: string): Promise<void> {
+    await this.db.run('UPDATE participants SET in_space = 1 WHERE standup_id = ? AND user_name = ? AND active = 1', [standupId, userName]);
+  }
+
+  async leaveSpace(standupId: number, userName: string, at: string): Promise<void> {
+    await this.db.run('UPDATE participants SET active = 0, left_space_at = ? WHERE standup_id = ? AND user_name = ?', [at, standupId, userName]);
+  }
+
+  async rejoinSpace(standupId: number, userName: string): Promise<void> {
+    await this.db.run('UPDATE participants SET active = 1, left_space_at = NULL WHERE standup_id = ? AND user_name = ? AND left_space_at IS NOT NULL', [standupId, userName]);
   }
 
   /** A group member joins (or rejoins) the roster unless they were taken off by hand; their name follows the directory. */
@@ -1108,7 +1152,7 @@ export class Repo {
 
   /** Taken off by hand on a group roster: off, and kept off by later syncs. */
   async excludeParticipant(standupId: number, userName: string): Promise<boolean> {
-    const result = await this.db.run('UPDATE participants SET active = 0, kept_off = 1 WHERE standup_id = ? AND user_name = ?', [standupId, userName]);
+    const result = await this.db.run('UPDATE participants SET active = 0, kept_off = 1, left_space_at = NULL WHERE standup_id = ? AND user_name = ?', [standupId, userName]);
     return result.changes > 0;
   }
 
@@ -1294,7 +1338,7 @@ export class Repo {
 
   async removeParticipant(standupId: number, userName: string): Promise<boolean> {
     const result = await this.db.run(
-      'UPDATE participants SET active = 0 WHERE standup_id = ? AND user_name = ?',
+      'UPDATE participants SET active = 0, left_space_at = NULL WHERE standup_id = ? AND user_name = ?',
       [standupId, userName],
     );
     return result.changes > 0;
@@ -2000,7 +2044,7 @@ export class Repo {
 
   /** Offboarding (SCIM deactivate): drop the person from every roster. */
   async removeParticipantEverywhere(userName: string): Promise<number> {
-    const result = await this.db.run('UPDATE participants SET active = 0 WHERE user_name = ? AND active = 1', [userName]);
+    const result = await this.db.run('UPDATE participants SET active = 0, left_space_at = NULL WHERE user_name = ? AND (active = 1 OR left_space_at IS NOT NULL)', [userName]);
     return result.changes;
   }
 

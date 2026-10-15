@@ -82,7 +82,7 @@ describe('RosterSync', () => {
     expect(await offline.sync(await standup())).toEqual({ ok: false, message: 'Reading Google Groups needs the service-account key under Settings › Google Chat.' });
     expect(logs).toEqual(['roster sync for "Devs" failed: Reading Google Groups needs the service-account key under Settings › Google Chat.']);
     const plain = await seedStandup(repo, { spaceName: 'spaces/plain' });
-    expect(await offline.sync(plain)).toMatchObject({ ok: false, message: expect.stringContaining('added by hand') });
+    expect(await offline.sync(plain)).toMatchObject({ ok: false, message: 'Google Chat is not connected, so the space can’t be checked.' });
     expect(offline.stale(plain, 10)).toBe(false);
   });
 
@@ -248,10 +248,11 @@ describe('roster API', () => {
     expect(await res.json()).toEqual({ error: { code: 'roster_unavailable', message: 'AsyncUp can’t read devs@example.com.' } });
     expect(((await (await op('/standups')).json()) as any).standups[0].roster.error).toBe('AsyncUp can’t read devs@example.com.');
 
-    // no group set
+    // without a group the space is checked instead, never 409 (spec 002, criterion 16)
     await repo.updateStandup(id, { rosterGroup: null });
     res = await op(`/standups/${id}/roster/sync`, { method: 'POST' });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(502);
+    expect(((await res.json()) as any).error.message).toBe('The space listed no members, so nobody was taken off.');
   });
 
   it('syncs as soon as a group is set, and validates it', async () => {

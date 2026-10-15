@@ -159,8 +159,12 @@ export async function runView(repo: Repo, standup: Standup, date: string, opts: 
 
 /** One standup with its roster and admins. */
 export async function standupDetailView(repo: Repo, standup: Standup, now: DateTime, manage: boolean) {
+  const summary = await summarise(repo, standup, now, manage);
+  const rows = await repo.listRosterRows(standup.id);
   return {
-    ...(await summarise(repo, standup, now, manage)),
+    ...summary,
+    // People a space sync took off for leaving, until they come back.
+    roster: { ...summary.roster, leftSpace: rows.filter((r) => !r.active && r.leftSpaceAt).map((r) => ({ ...person(r), at: r.leftSpaceAt! })) },
     participants: await Promise.all(
       (await repo.listParticipants(standup.id)).map(async (x) => ({
         userName: x.userName,
@@ -176,7 +180,7 @@ export async function standupDetailView(repo: Repo, standup: Standup, now: DateT
     ),
     admins: (await repo.listAdmins(standup.id)).map(person),
     // Group members taken off by hand: shown as off, and kept off by syncs.
-    keptOff: (await repo.listRosterRows(standup.id)).filter((r) => r.keptOff && !r.active).map(person),
+    keptOff: rows.filter((r) => r.keptOff && !r.active).map(person),
   };
 }
 

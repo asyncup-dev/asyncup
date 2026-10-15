@@ -67,9 +67,17 @@ rosters](./directory)). Per person:
 | Mon–Sun | The days they work. Unticked days mean no prompt, and never missing. The standup's own off days are greyed out |
 
 **Roster** switches between *Picked from the space* and *Everyone in a Google
-Group*. With a group, **Sync now** and the last sync time appear, and people
-you untick stay off. The create form uses the same grid, with everyone in the
-space ticked to start.
+Group*. Either way, **Last sync** shows when the roster was last checked, with
+**Sync now** and the last error.
+
+- *Picked from the space*: anyone who leaves the space comes off the standup,
+  and comes back with their old settings if they rejoin. **Last sync** lists
+  who is off because they left, with the date. Someone you take off by hand
+  stays off, even if they rejoin.
+- *Everyone in a Google Group*: people you untick stay off
+  ([Directory and group rosters](./directory)).
+
+The create form uses the same grid, with everyone in the space ticked to start.
 
 Personal weeks, days off and time-off approvals also live under **Team → Edit
 schedule**, **My page → My schedule** and **Team → Requests** — see

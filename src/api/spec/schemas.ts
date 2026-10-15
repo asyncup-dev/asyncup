@@ -113,6 +113,14 @@ export const StandupDetail = named(
     ),
     admins: z.array(Person),
     keptOff: z.array(Person).describe('Roster-group members taken off by hand; syncs keep them off.'),
+    roster: z
+      .strictObject({
+        group: z.string().nullable(),
+        syncedAt: timestamp.nullable(),
+        error: z.string().nullable(),
+        leftSpace: z.array(z.strictObject({ userName: z.string(), displayName: z.string(), at: timestamp })).describe('On a roster picked from the space: people taken off for leaving it, until they rejoin or a manager acts.'),
+      })
+      .describe('`group` is the Google Group the roster follows, or null when people are picked from the space. `syncedAt` and `error` cover either kind of sync.'),
   }),
 );
 
@@ -207,7 +215,7 @@ export const RosterSynced = named(
     skipped: z.array(z.strictObject({ email: z.string(), reason: z.string() })),
     syncedAt: timestamp,
   }),
-  'Names added and removed by this sync, and group members who can’t be on a standup, with why.',
+  'Names added and removed by this sync, and group members who can’t be on a standup, with why. For a roster picked from the space, added means put back after rejoining and removed means taken off for leaving.',
 );
 
 export const AddedParticipant = named(

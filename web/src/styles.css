@@ -439,6 +439,7 @@ a:hover {
 .settings-rows { container-type: inline-size; display: grid; }
 .settings-row { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: var(--space-4); align-items: center; padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border-default); }
 .settings-row > * { min-width: 0; }
+.left-space { flex-basis: 100%; display: grid; gap: var(--space-1); }
 .settings-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
 .settings-control > * { max-width: 100%; }
 .settings-control .input { max-width: min(340px, 100%); }

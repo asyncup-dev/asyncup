@@ -43,7 +43,7 @@ Every error has one shape:
 { "error": { "code": "not_found", "message": "No such standup.", "field": "optional" } }
 ```
 
-Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `active` (delete a standup that isn't archived), `lockout`, `chat_unavailable`, `unavailable`, `no_roster_group`, `roster_unavailable` (Google refused the group read, with the fix), `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`, `refused` (a time-off policy said no, with the reason), `escalation` (a role or grant would give more than you hold), `built_in` (built-in roles can't be changed), `in_use` (a role someone holds), `workspace_only` (that role can only be granted across the workspace).
+Codes: `unauthenticated`, `bad_token`, `csrf`, `forbidden`, `not_found`, `invalid` (with `field`), `duplicate`, `active` (delete a standup that isn't archived), `lockout`, `chat_unavailable`, `unavailable`, `roster_unavailable` (Google refused the group read or the space check, with why), `already_submitted`, `no_open_run`, `last_admin`, `needs_user`, `not_tagged`, `not_allowed`, `already_acknowledged`, `resolved`, `not_linked`, `refused` (a time-off policy said no, with the reason), `escalation` (a role or grant would give more than you hold), `built_in` (built-in roles can't be changed), `in_use` (a role someone holds), `workspace_only` (that role can only be granted across the workspace).
 
 ## Endpoints
 
@@ -101,7 +101,10 @@ The same object plus:
   standup), `otherStandups` (how many other standups they're on) and `source`
   (`manual` or `group`);
 - `admins`;
-- `keptOff`: group members taken off by hand, whom syncs keep off.
+- `keptOff`: group members taken off by hand, whom syncs keep off;
+- `roster`: `group`, `syncedAt` and `error` for either kind of roster, and
+  `leftSpace`: on a roster picked from the space, people taken off for leaving
+  it, each with `at`, until they rejoin or a manager acts.
 
 Returns `404` for a standup the caller may not see — including one in another
 tenant.
@@ -135,7 +138,7 @@ Each route needs a permission on that standup: `standups.configure` for `PATCH`,
 | `DELETE` | `/standups/:id/participants/:userName` | `204`. On a group roster the person is kept off: later syncs don't add them back |
 | `GET` | `/standups/:id/webhook/secret` | `{ secret }`: the key the standup's webhooks are signed with ([webhooks](./configuration#outbound-webhooks)); `503 unavailable` when the server has no signing key |
 | `GET` | `/standups/:id/members` | Members of the standup's Chat space, as roster candidates; `502 chat_unavailable` carries Google's reason |
-| `POST` | `/standups/:id/roster/sync` | Sync a group roster now → `{ added: [names], removed: [names], skipped: [{ email, reason }], syncedAt }`. `409 no_roster_group` when the standup doesn't follow a group, `502 roster_unavailable` when Google refuses (the message names the admin role to grant), `503` when the server has no group support |
+| `POST` | `/standups/:id/roster/sync` | Sync the roster now → `{ added: [names], removed: [names], skipped: [{ email, reason }], syncedAt }`. A group roster follows the group. A roster picked from the space is checked against the space: `removed` were taken off for leaving it, `added` put back after rejoining. `502 roster_unavailable` when Google refuses or the space can't be checked (the message says why, and nobody is taken off), `503` when the server has no roster support |
 | `GET` | `/standups/:id/export.csv?days=90` | CSV download |
 
 ### Runs

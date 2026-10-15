@@ -6,6 +6,7 @@ Workspace directory as its service account. That buys three things:
 | Feature | What it needs |
 | --- | --- |
 | **Rosters that follow a Google Group**: joiners are added, leavers dropped | The admin role below |
+| **Google Groups in a space**: on a roster picked from the space, members of a group in the space count as in it | The admin role below |
 | **User lookups**: Workspace admins recognised at Google sign-in, accounts outside the Workspace refused, SAML and SCIM users linked to their Chat identity straight away, emails found for Calendar out-of-office | The admin role below |
 | **Calendar out-of-office**: people with an *Out of office* event are marked away | [Domain-wide delegation](#calendar-ooo) |
 
@@ -63,6 +64,27 @@ How a group roster behaves:
 
 Group joiners are not checked for whether the bot can DM them. Make sure the
 app reaches everyone in the group ([step 4](./distribution)).
+
+## Rosters picked from the space {#space-rosters}
+
+A roster picked from the space is checked against the space on the same
+schedule: every hour, and again in the hour before each run.
+
+| Event | Result |
+| --- | --- |
+| Someone on the roster leaves the space | Taken off the standup, and out of today's run unless they've answered. Their history stays |
+| They rejoin the space | Put back with their old settings, from the next run |
+| You take someone off by hand | They stay off, even if they rejoin |
+| Someone was added from outside the space (API or MCP) | Never taken off, because they were never seen in the space |
+| Someone joins the space | Nothing. You pick who is on the standup |
+
+When a Google Group is a member of the space, its people count as in the
+space. AsyncUp reads the group with the admin role above. If it can't, or
+Google Chat doesn't answer, or the space lists nobody, nobody is taken off and
+**Settings → People → Last sync** says why.
+
+The first check after an upgrade only notes who is in the space, so nobody
+comes off until they leave after that.
 
 ## User lookups
 
