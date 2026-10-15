@@ -1,12 +1,10 @@
 import type { PromptState } from '../../core/adapter.js';
 import { describeDates, type TimeOffRequest } from '../../core/schedule.js';
 import { DateTime } from 'luxon';
-import { moodEmoji as moodEmojiFor } from '../../core/insights.js';
 import { LIMITS } from '../../core/validation.js';
 import {
   isBlockerQuestion,
   isRealBlocker,
-  MOOD_EMOJI,
   MOOD_LABEL,
   MOODS,
   type Blocker,
@@ -154,7 +152,7 @@ export function standupDialog(
   moodEnabled: boolean,
   prefill: string[],
   endpoint: string | null = null,
-  again: { error?: string; mood?: string } = {},
+  again: { error?: string; mood?: string; moodComment?: string } = {},
 ) {
   const widgets: any[] = [
     ...(again.error ? [errorLine(again.error)] : []),
@@ -176,6 +174,15 @@ export function standupDialog(
         label: 'How is your mood today? (required)',
         type: 'DROPDOWN',
         items: MOODS.map((m) => ({ text: MOOD_LABEL[m], value: m, selected: m === again.mood })),
+      },
+    });
+    widgets.push({
+      textInput: {
+        name: 'moodComment',
+        label: 'Want to say why? (optional)',
+        type: 'SINGLE_LINE',
+        value: again.moodComment || undefined,
+        hintText: 'Only people allowed to read mood comments see this. It is never posted in the space.',
       },
     });
   }
@@ -427,12 +434,12 @@ export function threadParentText(standup: Standup, run: Run): string {
 }
 
 /** One participant's answers, posted (or updated) as a reply in the day's thread. */
-export function submissionMessage(submission: Submission, anonymousMood = false) {
+/** Mood is personal, so it never appears here. */
+export function submissionMessage(submission: Submission) {
   const flags = [
     submission.late ? 'Submitted late' : null,
     submission.editedAt ? 'edited' : null,
   ].filter(Boolean);
-  const showMood = submission.mood && !anonymousMood;
 
   return {
     cardsV2: [
@@ -440,7 +447,7 @@ export function submissionMessage(submission: Submission, anonymousMood = false)
         cardId: `submission-${submission.id}`,
         card: {
           header: {
-            title: `${showMood ? MOOD_EMOJI[submission.mood!] : '📝'} ${submission.displayName}`,
+            title: `📝 ${submission.displayName}`,
             subtitle: flags.length ? flags.join(' · ') : undefined,
           },
           sections: [
@@ -478,7 +485,6 @@ export function summaryText(summary: RunSummary): string {
   } else if (summary.mandatoryTotal > 0) {
     lines.push('🎉 Everyone submitted!');
   }
-  if (summary.teamMood !== null) lines.push(`💭 Team mood today: ${moodEmojiFor(summary.teamMood)} ${summary.teamMood}/5`);
   if (summary.away.length > 0) lines.push(`🏖️ Away: ${summary.away.join(', ')}`);
   if (summary.optionalSubmitted > 0) lines.push(`➕ ${summary.optionalSubmitted} optional submitted`);
   if (summary.lateCount > 0) lines.push(`⏰ ${summary.lateCount} late`);

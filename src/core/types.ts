@@ -51,7 +51,7 @@ export interface Standup {
   /** null = DEFAULT_QUESTIONS */
   questions: string[] | null;
   moodEnabled: boolean;
-  /** Hide per-person mood on cards; the wrap-up shows the team aggregate instead. */
+  /** Hide who felt what in the web app, the API and MCP. Mood never appears in the Chat space. */
   moodAnonymous: boolean;
   digestEnabled: boolean;
   /** Who may mark people away and whether a manager must approve — see TIME_OFF_POLICIES. */
@@ -211,6 +211,8 @@ export interface Answer {
 export interface SubmissionInput {
   answers: Answer[];
   mood: Mood | null;
+  /** Why they feel that way; only people allowed to read mood comments see it. */
+  moodComment?: string | null;
 }
 
 export interface Submission extends SubmissionInput {
@@ -223,6 +225,7 @@ export interface Submission extends SubmissionInput {
   editedAt: string | null;
   /** Chat message resource name of the posted card (for edits). */
   messageName: string | null;
+  moodComment: string | null;
 }
 
 export interface Blocker {
@@ -270,7 +273,7 @@ export interface RunSummary {
   optionalSubmitted: number;
   lateCount: number;
   openBlockers: number;
-  /** Average mood (1-5) of today's submissions — only set when mood is anonymous. */
+  /** Average mood (1-5) when moods are anonymous; for webhooks only, never posted in the space. */
   teamMood: number | null;
 }
 
@@ -281,8 +284,6 @@ export interface WeeklyDigest {
   runCount: number;
   participationPct: number;
   prevParticipationPct: number | null;
-  avgMood: number | null;
-  prevAvgMood: number | null;
   blockersOpened: number;
   blockersResolved: number;
   openBlockers: { displayName: string; text: string; ageDays: number }[];

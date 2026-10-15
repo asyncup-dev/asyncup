@@ -45,13 +45,12 @@ const submission: Submission = {
   late: false,
   submittedAt: '2026-06-10T04:30:00Z',
   editedAt: null,
-  messageName: 'spaces/team/messages/sub-1',
+  messageName: 'spaces/team/messages/sub-1', moodComment: null,
 };
 
 const summary: RunSummary = {
   standupName: 'Daily Standup',
   date: '2026-06-10',
-  teamMood: null,
   mandatoryTotal: 2,
   mandatorySubmitted: 2,
   missingMandatory: [],
@@ -59,6 +58,7 @@ const summary: RunSummary = {
   optionalSubmitted: 0,
   lateCount: 0,
   openBlockers: 0,
+  teamMood: null,
 };
 
 const blocker: Blocker = {
@@ -207,7 +207,7 @@ describe('GoogleChatAdapter', () => {
     expect(calls[0]!.method).toBe('update');
     expect(calls[0]!.params.name).toBe('spaces/team/messages/sub-1');
     expect(calls[0]!.params.updateMask).toBe('cardsV2');
-    expect(calls[0]!.params.requestBody.cardsV2[0].card.header.title).toBe('😄 Alice');
+    expect(calls[0]!.params.requestBody.cardsV2[0].card.header.title).toBe('📝 Alice');
   });
 
   it('posts plain text to a space directly, or into a thread when a key is given', async () => {

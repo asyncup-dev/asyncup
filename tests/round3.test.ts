@@ -99,41 +99,36 @@ describe('Calendar OOO sync', () => {
   });
 });
 
-describe('Anonymous mood', () => {
-  it('hides per-person mood on cards and shows the team average in the wrap-up', async () => {
-    const { repo, service } = await makeStack();
-    const standup = await seedStandup(repo);
-    await repo.updateStandup(standup.id, { moodAnonymous: true });
-    const run = await repo.createRun(standup.id, '2026-06-10', 'k');
-    await service.submit(run.id, 'users/alice', 'Alice', { ...ANSWERS, mood: 'great' }); // 5
-    await service.submit(run.id, 'users/bob', 'Bob', { ...ANSWERS, mood: 'okay' }); // 3
+describe('Mood stays out of the space', () => {
+  for (const moodAnonymous of [false, true]) {
+    it(`keeps moods off posted answers and the wrap-up (anonymous: ${moodAnonymous})`, async () => {
+      const { repo, service } = await makeStack();
+      const standup = await seedStandup(repo);
+      await repo.updateStandup(standup.id, { moodAnonymous });
+      const run = await repo.createRun(standup.id, '2026-06-10', 'k');
+      await service.submit(run.id, 'users/alice', 'Alice', { ...ANSWERS, mood: 'great', moodComment: 'Shipped it' });
+      await service.submit(run.id, 'users/bob', 'Bob', { ...ANSWERS, mood: 'struggling' });
 
-    const summary = await service.buildSummary(run.id);
-    expect(summary.teamMood).toBe(4);
-    expect(summaryText(summary)).toContain('💭 Team mood today: 🙂 4/5');
-
-    const sub = (await repo.getSubmission(run.id, 'users/alice'))!;
-    const card = JSON.stringify(submissionMessage(sub, true));
-    expect(card).toContain('📝 Alice');
-    expect(card).not.toContain('😄');
-  });
-
-  it('keeps teamMood null when mood is not anonymous', async () => {
-    const { repo, service } = await makeStack();
-    const standup = await seedStandup(repo);
-    const run = await repo.createRun(standup.id, '2026-06-10', 'k');
-    await service.submit(run.id, 'users/alice', 'Alice', ANSWERS);
-    expect((await service.buildSummary(run.id)).teamMood).toBeNull();
-  });
+      const summary = await service.buildSummary(run.id);
+      // The webhook still gets the anonymous average; the posted wrap-up never shows mood.
+      expect(summary.teamMood).toBe(moodAnonymous ? 3 : null);
+      expect(summaryText(summary)).not.toMatch(/mood/i);
+      for (const name of ['users/alice', 'users/bob']) {
+        const card = JSON.stringify(submissionMessage((await repo.getSubmission(run.id, name))!));
+        expect(card).toContain('📝');
+        expect(card).not.toMatch(/😄|😫|Shipped it/);
+      }
+    });
+  }
 
   it('is configured via `mood anon`', async () => {
     const { commands, repo } = await makeStack();
     await commands.handle(ctx('setup'));
-    expect(await commands.handle(ctx('mood anon'))).toContain('anonymous');
+    expect(await commands.handle(ctx('mood anon'))).toContain('web app only, without names');
     const standup = (await repo.listStandupsBySpace(TENANT, 'spaces/team'))[0]!;
     expect(standup.moodEnabled).toBe(true);
     expect(standup.moodAnonymous).toBe(true);
-    expect(await commands.handle(ctx('mood on'))).toContain('moods show');
+    expect(await commands.handle(ctx('mood on'))).toContain('never in this space');
     expect((await repo.listStandupsBySpace(TENANT, 'spaces/team'))[0]!.moodAnonymous).toBe(false);
   });
 });

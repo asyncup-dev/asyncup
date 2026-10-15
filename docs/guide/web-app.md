@@ -28,7 +28,8 @@ detects a working Chat connection and skips straight to the standup step.
 - **Standups** — stats strip (submitted today, participation, open blockers,
   missing), the table, and per standup: **Overview** (today's run polled live,
   recent runs, open blockers, schedule), **History** (every run with full
-  answers, CSV export), **Insights** (participation by person, mood and blocker
+  answers, CSV export, and mood comments for people allowed to read them),
+  **Insights** (participation by person, mood and blocker
   charts) and **Settings** (schedule with time pickers, questions, mood, the
   People grid and roster group, escalation, webhook with a signed test, digest,
   and a Danger zone to archive, unarchive or delete).

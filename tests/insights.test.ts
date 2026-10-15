@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { buildWeeklyDigest, digestText, moodEmoji, trendsText } from '../src/core/insights.js';
+import { buildWeeklyDigest, digestText, trendsText } from '../src/core/insights.js';
 import type { WeeklyDigest } from '../src/core/types.js';
 import { ANSWERS, makeStack, seedStandup, withBlocker } from './helpers.js';
 
@@ -29,23 +29,10 @@ const baseDigest: WeeklyDigest = {
   runCount: 3,
   participationPct: 80,
   prevParticipationPct: null,
-  avgMood: null,
-  prevAvgMood: null,
   blockersOpened: 0,
   blockersResolved: 0,
   openBlockers: [],
 };
-
-describe('moodEmoji', () => {
-  it('maps the 1–5 scale to the five mood faces', () => {
-    expect(moodEmoji(5)).toBe('😄');
-    expect(moodEmoji(4.5)).toBe('😄');
-    expect(moodEmoji(4)).toBe('🙂');
-    expect(moodEmoji(3)).toBe('😐');
-    expect(moodEmoji(2)).toBe('😕');
-    expect(moodEmoji(1.4)).toBe('😫');
-  });
-});
 
 describe('Weekly digest', () => {
   it('compares the week with the previous one and lists blockers still open', async () => {
@@ -58,8 +45,6 @@ describe('Weekly digest', () => {
       runCount: 1,
       participationPct: 50,
       prevParticipationPct: 100,
-      avgMood: 2,
-      prevAvgMood: 4,
       blockersOpened: 1,
       blockersResolved: 0,
     });
@@ -67,24 +52,22 @@ describe('Weekly digest', () => {
 
     const text = digestText(digest);
     expect(text).toContain('Participation: *50%* (-50 vs last week)');
-    expect(text).toContain('Mood: 😕 *2/5* (-2 vs last week)');
+    // Moods were recorded both weeks, but mood is personal and stays out of the space.
+    expect(text).not.toMatch(/mood/i);
     expect(text).toContain('Blockers: 1 opened · 0 resolved');
     expect(text).toContain('*Still open:*');
     expect(text).toContain('⚠️ Alice: Waiting on API keys (2d)');
   });
 
-  it('shows flat and improving deltas, and skips mood when nothing was recorded', () => {
-    const flat = digestText({ ...baseDigest, prevParticipationPct: 80, avgMood: 3.5, prevAvgMood: 3.5 });
+  it('shows flat and improving deltas', () => {
+    const flat = digestText({ ...baseDigest, prevParticipationPct: 80 });
     expect(flat).toContain('Participation: *80%* (=)');
-    expect(flat).toContain('Mood: 🙂 *3.5/5* (=)');
 
-    const up = digestText({ ...baseDigest, prevParticipationPct: 60, avgMood: 4.2, prevAvgMood: 3.9 });
+    const up = digestText({ ...baseDigest, prevParticipationPct: 60 });
     expect(up).toContain('(+20 vs last week)');
-    expect(up).toContain('Mood: 🙂 *4.2/5* (+0.3 vs last week)');
 
     const first = digestText(baseDigest);
     expect(first).toContain('Participation: *80%*\n');
-    expect(first).not.toContain('Mood:');
     expect(first).not.toContain('Still open');
   });
 
@@ -101,19 +84,20 @@ describe('Weekly digest', () => {
 });
 
 describe('Trends', () => {
-  it('lists participation and mood per week, marking weeks without runs', async () => {
+  it('lists participation per week, never mood, marking weeks without runs', async () => {
     const { repo, standup, clock } = await seedTwoWeeks();
     clock.set('2026-06-10T12:00');
 
     const text = await trendsText(repo, standup, clock.now(), 3);
     expect(text).toContain('*Daily Standup* — last 3 weeks');
     expect(text).toContain('25 May ▸ no runs');
-    expect(text).toContain('01 Jun ▸ participation 100% · mood 🙂 4/5');
-    expect(text).toContain('08 Jun ▸ participation 50% · mood 😕 2/5');
+    expect(text).toContain('01 Jun ▸ participation 100%\n');
+    expect(text).toContain('08 Jun ▸ participation 50%\n');
+    expect(text).not.toMatch(/mood/i);
     expect(text).toContain('⚠️ 1 open blocker — try `blockers`');
   });
 
-  it('pluralises open blockers and omits the mood when none was recorded', async () => {
+  it('pluralises open blockers', async () => {
     const { repo, service, standup, clock } = await makeStack().then(async (stack) => ({
       ...stack,
       standup: await seedStandup(stack.repo),

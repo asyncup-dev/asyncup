@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   'people.manage': { label: 'Manage people', description: 'Add and remove people, mark them required, make managers', workspaceOnly: false },
   'schedules.manage': { label: 'Manage schedules', description: 'Change people’s weeks and days off, and decide time-off requests', workspaceOnly: false },
   'answers.view': { label: 'Read answers', description: 'Read each day’s answers', workspaceOnly: false },
+  'moods.comments': { label: 'Read mood comments', description: 'Read why people chose their mood. Names are hidden on standups that keep moods anonymous', workspaceOnly: false },
   'blockers.view': { label: 'See blockers', description: 'See blockers and their updates', workspaceOnly: false },
   'blockers.manage': { label: 'Resolve blockers', description: 'Resolve anyone’s blocker', workspaceOnly: false },
   'reports.view': { label: 'See reports', description: 'See run history and insights', workspaceOnly: false },

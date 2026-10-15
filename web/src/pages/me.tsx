@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { api, MOOD_EMOJI } from '../lib/api';
+import type { MySubmissions } from '../../../src/api/spec/schemas.ts';
+import { api, MOOD_EMOJI, moodWithComment } from '../lib/api';
 import { useMe } from '../lib/auth';
 import { closesIn, daysLabel, longDate, shortDate, zoneAbbr } from '../lib/format';
 import { timezoneOptions } from '../lib/setup';
@@ -22,15 +23,7 @@ export interface MyStandups {
   chat?: { dmUrl: string | null };
   standups: MyStandup[];
 }
-export interface MySubmission {
-  date: string;
-  standupName: string;
-  submittedAt: string;
-  editedAt: string | null;
-  late: boolean;
-  mood: string | null;
-  answers: { question: string; answer: string }[];
-}
+export type MySubmission = MySubmissions['submissions'][number];
 
 export function greeting(hour: number): string {
   return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -200,6 +193,12 @@ export function MePage() {
                         <dd>{a.answer || <span className="muted">—</span>}</dd>
                       </div>
                     ))}
+                    {sub.mood && sub.moodComment ? (
+                      <>
+                        <dt>Mood</dt>
+                        <dd>{moodWithComment(sub.mood, sub.moodComment)}</dd>
+                      </>
+                    ) : null}
                   </dl>
                 </div>
               ))}
@@ -269,7 +268,7 @@ export function MePage() {
           <section className="card">
             <div className="card-head"><span className="t-h3 grow">Mood</span></div>
             <div className="card-body">
-              <p className="t-small secondary" style={{ margin: 0 }}>Where a standup keeps moods anonymous, only the team average is ever shown. Your individual moods stay yours.</p>
+              <p className="t-small secondary" style={{ margin: 0 }}>Moods are never posted in the space. Where a standup keeps moods anonymous, others see only the team average and comments without names.</p>
               <div className="row-wrap" aria-hidden="true">{Object.values(MOOD_EMOJI).reverse().map((e) => <span key={e} className="badge">{e}</span>)}</div>
               {submissions.data ? <div className="t-caption">{moodSummary(submissions.data.map((s) => s.mood)) ? `Your recent answers: ${moodSummary(submissions.data.map((s) => s.mood))}` : 'No mood picked recently.'}</div> : null}
             </div>

@@ -154,7 +154,7 @@ describe('cards (reminder, blocker, poll, thread and summary variants)', () => {
     expect(threadParentText(standup, run)).toBe('📅 *Daily Standup* — Wed, 10 Jun 2026');
   });
 
-  it('submission card hides the mood when the standup is anonymous', () => {
+  it('submission card never shows the mood, whatever was picked', () => {
     const submission: Submission = {
       id: 1,
       runId: 7,
@@ -165,21 +165,20 @@ describe('cards (reminder, blocker, poll, thread and summary variants)', () => {
       late: false,
       submittedAt: '2026-06-10T04:30:00Z',
       editedAt: null,
-      messageName: null,
+      messageName: null, moodComment: null,
     };
-    const header: any = submissionMessage(submission, true).cardsV2[0]!.card.header;
+    const header: any = submissionMessage(submission).cardsV2[0]!.card.header;
     expect(header.title).toBe('📝 Alice');
     expect(header.subtitle).toBeUndefined();
   });
 
-  it('summary text handles no mandatory participants, team mood, optional, late and a single blocker', () => {
+  it('summary text handles no mandatory participants, optional, late and a single blocker, and never mood', () => {
     expect(summaryText({ ...summary, mandatoryTotal: 0, mandatorySubmitted: 0 })).toBe(
       '📊 *Daily Standup* — Wed, 10 Jun 2026 wrap-up\nNo mandatory participants expected today.',
     );
 
     const rich = summaryText({
       ...summary,
-      teamMood: 4.2,
       optionalSubmitted: 1,
       lateCount: 1,
       openBlockers: 1,
@@ -188,7 +187,6 @@ describe('cards (reminder, blocker, poll, thread and summary variants)', () => {
       '📊 *Daily Standup* — Wed, 10 Jun 2026 wrap-up',
       '✅ *2/2* mandatory submitted',
       '🎉 Everyone submitted!',
-      '💭 Team mood today: 🙂 4.2/5',
       '➕ 1 optional submitted',
       '⏰ 1 late',
       '⚠️ 1 open blocker',

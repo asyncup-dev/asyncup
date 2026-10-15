@@ -62,7 +62,7 @@ describe('settings › roles', () => {
     const user = userEvent.setup();
     const table = within(await screen.findByRole('table', { name: 'Roles' }));
     expect(table.getByText('Everything')).toBeInTheDocument();
-    expect(table.getByText('2 of 17')).toBeInTheDocument();
+    expect(table.getByText(`2 of ${ALL.length}`)).toBeInTheDocument();
     expect(table.getByText('Everyone on a standup')).toBeInTheDocument();
     expect(table.getByText('Each standup’s managers · 0 grants')).toBeInTheDocument();
     expect(table.getByRole('link', { name: '1 grant' })).toBeInTheDocument();
@@ -72,6 +72,8 @@ describe('settings › roles', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('Viewer (copy)');
     await user.click(screen.getByRole('checkbox', { name: /^Export/ }));
     await user.click(screen.getByRole('checkbox', { name: /^Resolve blockers/ }));
+    // The mood comments permission is offered like any other (spec 001, criterion 20).
+    expect(screen.getByRole('checkbox', { name: /^Read mood comments/ })).not.toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Create role' }));
     await waitFor(() => expect(bodies[0]).toEqual({ name: 'Viewer (copy)', description: 'Reads everything.', permissions: ['standups.view', 'people.view', 'answers.view', 'blockers.view', 'blockers.manage', 'reports.view'] }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Create role' })).not.toBeInTheDocument());

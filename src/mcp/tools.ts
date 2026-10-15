@@ -203,14 +203,14 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'read',
     {
       title: 'Get a run',
-      description: 'One run with every submission and its answers. Omit date for today. Moods are withheld per person when the standup keeps them anonymous.',
+      description: 'One run with every submission and its answers. Omit date for today. Moods are withheld per person when the standup keeps them anonymous. moodComments is included only when the owner may read mood comments.',
       inputSchema: z.object({ standupId: ID, date: ISO_DATE.optional() }),
       outputSchema: S.RunDetail,
       need: 'answers.view',
     },
     async ({ standupId, date }) => {
       const standup = await standupFor(standupId, 'answers.view');
-      const run = await runView(repo, standup, date ?? deps.now().setZone(standup.timezone).toISODate()!);
+      const run = await runView(repo, standup, date ?? deps.now().setZone(standup.timezone).toISODate()!, { moodComments: allowed(p, 'moods.comments', standup.id) });
       if (!run) throw new ToolRefused('No run on that date.');
       return run;
     },
@@ -314,12 +314,12 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       'submit',
       {
         title: 'Submit my answers',
-        description: 'Submit, or replace, the owner’s answers for today’s run. answers[] must match the standup’s questions in order (get_standup lists them), and every answer is required: answer a blockers question with "none" when there are none. mood is required when the standup asks for it.',
-        inputSchema: z.object({ standupId: ID, answers: z.array(z.string().trim().min(1).max(LIMITS.textMax)).min(1), mood: z.enum(MOODS).nullable().default(null) }),
+        description: 'Submit, or replace, the owner’s answers for today’s run. answers[] must match the standup’s questions in order (get_standup lists them), and every answer is required: answer a blockers question with "none" when there are none. mood is required when the standup asks for it; moodComment is optional and only people allowed to read mood comments see it.',
+        inputSchema: z.object({ standupId: ID, answers: z.array(z.string().trim().min(1).max(LIMITS.textMax)).min(1), mood: z.enum(MOODS).nullable().default(null), moodComment: z.string().trim().max(LIMITS.textMax).optional() }),
         outputSchema: Submitted,
         write: { destructive: true, idempotent: true },
       },
-      async ({ standupId, answers, mood }) => {
+      async ({ standupId, answers, mood, moodComment }) => {
         const who = me();
         const standup = await standupFor(standupId);
         const questions = standupQuestions(standup);
@@ -327,7 +327,7 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
         if (standup.moodEnabled && !mood) throw new ToolRefused(`This standup asks for a mood: one of ${MOODS.join(', ')}.`);
         const run = await repo.getRun(standup.id, deps.now().setZone(standup.timezone).toISODate()!);
         if (!run) throw new ToolRefused('Today’s run has not opened yet.');
-        const result = await service.submit(run.id, who.userName, who.displayName, { answers: questions.map((question, i) => ({ question, answer: answers[i]! })), mood });
+        const result = await service.submit(run.id, who.userName, who.displayName, { answers: questions.map((question, i) => ({ question, answer: answers[i]! })), mood, moodComment: standup.moodEnabled ? moodComment || null : null });
         if (!result.ok) throw new ToolRefused(SUBMIT_REASONS[result.reason]);
         return { result: 'submitted' as const, date: run.date };
       },

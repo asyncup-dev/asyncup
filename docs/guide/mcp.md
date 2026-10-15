@@ -32,7 +32,7 @@ Pick only the scopes the assistant needs:
 | --- | --- |
 | `read` | `get_me`, `list_standups`, `get_standup`, `get_my_standups`, `list_runs`, `get_run`, `list_blockers`, `get_team`, `get_insights`, `get_schedule`, `list_time_off_requests` |
 | `blockers:write` | `acknowledge_blocker`, `update_blocker`, `resolve_blocker` |
-| `submit` | `submit_answers` (every answer required, and the mood when the standup asks for one), `skip_today` (takes a one-line `reason`, posted in the day's thread) |
+| `submit` | `submit_answers` (every answer required, and the mood when the standup asks for one; `moodComment` is optional), `skip_today` (takes a one-line `reason`, posted in the day's thread) |
 | `schedule` | `update_my_settings` (timezone, vacation), `set_working_days`, `set_days_off`, `cancel_day_off`, `decide_time_off_request` |
 | `manage` | `run_standup_now`, `nudge_standup` — only on standups you manage |
 
@@ -94,7 +94,7 @@ Tools see exactly what the token's owner sees, with the owner's current
 they run, an admin everything. A token is only offered the tools its owner's
 permissions could use somewhere. A Viewer's token has no `run_standup_now`
 tool, for example. Each call is checked again for the standup it names.
-Anonymous moods stay anonymous.
+Anonymous moods stay anonymous, and `get_run` includes mood comments only when the owner may read them.
 
 ## Security
 

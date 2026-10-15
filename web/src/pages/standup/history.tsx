@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAccess } from '../../lib/access';
-import { MOOD_EMOJI } from '../../lib/api';
+import { MOOD_EMOJI, MOOD_LABEL, moodWithComment } from '../../lib/api';
 import { clock, longDate, monthOf, names, pct, shortDate } from '../../lib/format';
 import { useRun, useRuns, useStandup } from '../../lib/standups';
 import { useStandupId } from './layout';
@@ -19,6 +19,9 @@ export function HistoryPage() {
   const access = useAccess();
   const answers = access.can('answers.view', id);
   const run = useRun(id, answers ? selected : null);
+  const comments = run.data?.moodComments ?? [];
+  const named = new Map(comments.filter((c) => c.person).map((c) => [c.person!.userName, c]));
+  const nameless = comments.filter((c) => !c.person);
   const zone = standup.data?.schedule.timezone ?? 'UTC';
   const questionLabel = (q: string, i: number) => (standup.data?.questions[i] === q ? ['Yesterday', 'Today', 'Blockers'][i] ?? q : q) || q;
   return (
@@ -66,6 +69,7 @@ export function HistoryPage() {
             </div>
             <div className="card-body">
               {run.data.submissions.length === 0 ? <span className="t-small muted">No answers were submitted.</span> : null}
+              {/* Present only for people allowed to read mood comments. */}
               {run.data.submissions.slice(0, shown).map((sub) => (
                 <div key={sub.userName} className="submission">
                   <div className="person-row">
@@ -80,9 +84,29 @@ export function HistoryPage() {
                         <dd>{a.answer || <span className="muted">—</span>}</dd>
                       </div>
                     ))}
+                    {named.get(sub.userName) ? (
+                      <>
+                        <dt>Mood</dt>
+                        <dd>{moodWithComment(named.get(sub.userName)!.mood, named.get(sub.userName)!.comment)}</dd>
+                      </>
+                    ) : null}
                   </dl>
                 </div>
               ))}
+              {nameless.length ? (
+                <div className="submission" aria-label="Mood comments">
+                  <div className="t-medium">Mood comments · {nameless.length}</div>
+                  <div className="t-caption">Moods on {standup.data?.name ?? 'this standup'} are anonymous, so comments show without names, sorted by mood.</div>
+                  <ul className="mood-comments">
+                    {nameless.map((c, i) => (
+                      <li key={i}>
+                        <span className="t-medium">{MOOD_EMOJI[c.mood]} {MOOD_LABEL[c.mood]}</span>
+                        <span>“{c.comment}”</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {run.data.submissions.length > shown ? (
                 <button type="button" className="btn btn-ghost" onClick={() => setShown(shown + PAGE)}>Show {Math.min(PAGE, run.data.submissions.length - shown)} more submissions</button>
               ) : null}

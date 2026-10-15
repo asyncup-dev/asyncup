@@ -7,8 +7,8 @@ import { POSTGRES_MIGRATIONS, Repo, SQLITE_MIGRATIONS } from '../src/db/repo.js'
 
 describe('migration 10 — AI removal', () => {
   it('keeps both dialect arrays aligned', () => {
-    expect(SQLITE_MIGRATIONS).toHaveLength(16);
-    expect(POSTGRES_MIGRATIONS).toHaveLength(16);
+    expect(SQLITE_MIGRATIONS).toHaveLength(17);
+    expect(POSTGRES_MIGRATIONS).toHaveLength(17);
     for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
       expect(migrations[9]).toContain('DROP COLUMN ai_enabled');
       expect(migrations[9]).toContain("'llmApiKey'");
@@ -46,7 +46,7 @@ describe('migration 10 — AI removal', () => {
     const columns = (check.query('PRAGMA table_info(standups)').all() as { name: string }[]).map((c) => c.name);
     expect(columns).not.toContain('ai_enabled');
     expect(columns).toContain('digest_enabled');
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(16);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(17);
     check.close();
   }, 30_000);
 });
@@ -90,7 +90,7 @@ describe('migration 11 — MCP tokens and activity', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(16);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(17);
     check.close();
   });
 });
@@ -131,7 +131,7 @@ describe('migration 12 — personal schedules', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(16);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(17);
     check.close();
   });
 });
@@ -178,5 +178,31 @@ describe('migration 15 — skip reasons', () => {
       expect(migrations[14]).toContain('ALTER TABLE run_participants ADD COLUMN skip_note TEXT');
       expect(migrations[14]).toContain('ALTER TABLE run_participants ADD COLUMN skip_message TEXT');
     }
+  });
+});
+
+describe('migration 17 — mood comments', () => {
+  it('adds the column in both dialects', () => {
+    for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) expect(migrations[16]).toContain('ALTER TABLE submissions ADD COLUMN mood_comment TEXT');
+  });
+
+  it('upgrades a v16 database, keeping answers and leaving their comment empty', async () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), 'asyncup-mig-')), 'v16.db');
+    const raw = new Database(dbPath);
+    for (const migration of SQLITE_MIGRATIONS.slice(0, 16)) raw.exec(migration);
+    raw.exec(`
+      PRAGMA user_version = 16;
+      INSERT INTO standups (tenant_id, space_name, name, timezone) VALUES ('default', 'spaces/x', 'Engineering', 'UTC');
+      INSERT INTO runs (standup_id, date, thread_key, status) VALUES (1, '2026-10-15', 'k', 'open');
+      INSERT INTO submissions (run_id, user_name, display_name, answers, mood, late, submitted_at) VALUES (1, 'users/a', 'Asha', '[]', 'meh', 0, '2026-10-15T09:00:00Z');
+    `);
+    raw.close();
+
+    const repo = await Repo.sqlite(dbPath);
+    const before = (await repo.getSubmission(1, 'users/a'))!;
+    expect(before).toMatchObject({ mood: 'meh', moodComment: null });
+    const after = await repo.updateSubmission(before.id, [], 'meh', 'Short night', '2026-10-15T09:05:00Z');
+    expect(after.moodComment).toBe('Short night');
+    await repo.close();
   });
 });

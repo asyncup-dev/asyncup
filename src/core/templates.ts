@@ -48,7 +48,7 @@ export const TEMPLATES: readonly StandupTemplate[] = [
   {
     id: 'mood-check-in',
     name: 'Mood check-in',
-    description: 'A light three-times-a-week pulse. Moods are anonymous; the team average is what gets shared.',
+    description: 'A light three-times-a-week pulse. Moods are anonymous; managers see the team average in the web app.',
     questions: ['How is your week going?', 'Anything the team should know?'],
     days: ['mon', 'wed', 'fri'],
     promptTime: '10:00',

@@ -87,7 +87,7 @@ export class GoogleChatAdapter implements ChatAdapter {
     return this.postInThread(
       standup.spaceName,
       run.threadKey,
-      submissionMessage(submission, standup.moodAnonymous),
+      submissionMessage(submission),
     );
   }
 
@@ -95,7 +95,7 @@ export class GoogleChatAdapter implements ChatAdapter {
     await (await this.getClient()).spaces.messages.update({
       name: submission.messageName!,
       updateMask: 'cardsV2',
-      requestBody: submissionMessage(submission, standup.moodAnonymous),
+      requestBody: submissionMessage(submission),
     });
   }
 

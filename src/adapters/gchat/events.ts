@@ -6,7 +6,7 @@ import type { PollService } from '../../core/poll-service.js';
 import type { StandupService } from '../../core/standup-service.js';
 import { describeDates, parseDateSpec, type ScheduleService } from '../../core/schedule.js';
 import type { Repo } from '../../db/repo.js';
-import { cleanSkipNote } from '../../core/validation.js';
+import { cleanSkipNote, LIMITS } from '../../core/validation.js';
 import {
   isBlockerQuestion,
   MOODS,
@@ -221,7 +221,9 @@ export class EventRouter {
       if (!run) return dialogError('This standup prompt is no longer valid.');
       const standup = (await this.repo.getStandupById(run.standupId))!;
       const prefill = await this.service.getPrefill(standup, run, user.userName);
-      return standupDialog(runId, standupQuestions(standup), standup.moodEnabled, prefill, await this.endpoint());
+      // Editing keeps the mood and its comment as they were.
+      const existing = await this.repo.getSubmission(run.id, user.userName);
+      return standupDialog(runId, standupQuestions(standup), standup.moodEnabled, prefill, await this.endpoint(), { mood: existing?.mood ?? undefined, moodComment: existing?.moodComment ?? undefined });
     }
 
     if (fn === SUBMIT_DIALOG_FN) {
@@ -342,15 +344,20 @@ export class EventRouter {
 
     const values = questions.map((_, i) => getFormValue(event, `q${i}`).trim());
     const picked = getFormValue(event, 'mood');
+    const moodComment = standup.moodEnabled ? getFormValue(event, 'moodComment').trim() : '';
     const missing = questions.filter((_, i) => !values[i]).map((q) => `"${q}"${isBlockerQuestion(q) ? ' (write "none" if you have no blockers)' : ''}`);
     if (standup.moodEnabled && !MOODS.includes(picked as Mood)) missing.push('your mood');
+    const again = { mood: picked, moodComment };
     if (missing.length) {
-      return standupDialog(runId, questions, standup.moodEnabled, values, await this.endpoint(), { error: `Every field is required. Still empty: ${missing.join(', ')}.`, mood: picked });
+      return standupDialog(runId, questions, standup.moodEnabled, values, await this.endpoint(), { ...again, error: `Every field is required. Still empty: ${missing.join(', ')}.` });
+    }
+    if (moodComment.length > LIMITS.textMax) {
+      return standupDialog(runId, questions, standup.moodEnabled, values, await this.endpoint(), { ...again, error: `Keep it to ${LIMITS.textMax} characters.` });
     }
     const answers: Answer[] = questions.map((question, i) => ({ question, answer: values[i]! }));
     const mood: Mood | null = standup.moodEnabled ? (picked as Mood) : null;
 
-    const result = await this.service.submit(runId, user.userName, user.displayName, { answers, mood });
+    const result = await this.service.submit(runId, user.userName, user.displayName, { answers, mood, moodComment: moodComment || null });
 
     if (result.ok) {
       if (result.edited) return dialogOk('✏️ Updated — your card in the team space was refreshed.');
