@@ -155,6 +155,10 @@ describe('HarperEngine (criteria 9, 10, 11)', () => {
     writeFileSync(quick, "process.stdout.write('ready\\n'); for await (const line of console) { if (line) { process.stdout.write(JSON.stringify({ id: JSON.parse(line).id, lints: [] }) + '\\n'); process.exit(0); } }");
     const slow = new HarperEngine(300, 60_000, silent);
     await expect(slow.lint(['x'], 'en-GB')).rejects.toThrow('no answer within 300 ms');
+    const never = join(dir, 'never.ts');
+    writeFileSync(never, 'for await (const _ of console) {}');
+    const stuck = new HarperEngine(300, 60_000, never, 300);
+    await expect(stuck.lint(['x'], 'en-GB')).rejects.toThrow('not started within 300 ms');
     expect((slow as any).child).toBeNull(); // the next request gets a fresh one
     slow.stop();
     slow.stop();

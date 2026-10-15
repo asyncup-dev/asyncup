@@ -61,9 +61,9 @@ Cost and failure
 10. The checker runs in its own process, started at the first answer
     and stopped after 30 minutes without one, so its memory (about
     350 MB) is only held while people are answering.
-11. If the checker can't start or doesn't answer within two seconds,
-    the answer is saved unchecked and the failure is logged. Spelling
-    never blocks an answer.
+11. If the checker can't start within ten seconds, or doesn't answer
+    within two, the answer is saved unchecked and the failure is logged.
+    Spelling never blocks an answer.
 
 Web app
 

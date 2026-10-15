@@ -58,8 +58,8 @@ the installed packages.
 
 It checks spelling and typos only, never grammar or style. Names on any
 roster are accepted, and admins can add words under **Words to accept**, one
-per line. If the checker doesn't answer within two seconds, the answer is
-saved unchecked: spelling never blocks anyone. The web app's page language
+per line. If the checker can't start within ten seconds, or doesn't answer
+within two, the answer is saved unchecked: spelling never blocks anyone. The web app's page language
 follows the same setting, so the browser's own spell check uses it too.
 
 Per-standup settings (schedule, questions, mood, people, roster group,

@@ -19,6 +19,8 @@ export class HarperEngine implements SpellEngine {
     private timeoutMs = 2_000,
     private idleMs = 30 * 60_000,
     private worker = WORKER,
+    /** Starting Harper takes about a second on a small server; Chat waits up to 30. */
+    private startMs = 10_000,
   ) {}
 
   async lint(texts: string[], dialect: SpellingDialect): Promise<RawLint[]> {
@@ -29,13 +31,13 @@ export class HarperEngine implements SpellEngine {
     this.idle = null;
     const id = ++this.next;
     const answer = new Promise<RawLint[]>((resolve) => this.waiting.set(id, resolve));
-    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer within ${this.timeoutMs} ms`)), this.timeoutMs).unref());
+    const within = <T>(promise: Promise<T>, ms: number, what: string) =>
+      Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${what} within ${ms} ms`)), ms).unref())]);
     try {
-      return await Promise.race([child.ready.then(() => {
-        child.proc.stdin.write(JSON.stringify({ id, texts }) + '\n');
-        child.proc.stdin.flush();
-        return answer;
-      }), timeout]);
+      await within(child.ready, this.startMs, 'not started');
+      child.proc.stdin.write(JSON.stringify({ id, texts }) + '\n');
+      child.proc.stdin.flush();
+      return await within(answer, this.timeoutMs, 'no answer');
     } catch (err) {
       // A child that stopped answering is replaced on the next request.
       this.stop();
