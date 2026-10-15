@@ -238,6 +238,7 @@ a:hover {
 .table td { padding: var(--space-3); border-bottom: 1px solid var(--border-default); vertical-align: middle; }
 .table tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover { background: var(--bg-hover); }
+.table td .row { flex-wrap: wrap; }
 .people-matrix .center { text-align: center; }
 .people-matrix tr.muted td { color: var(--text-muted); }
 .people-matrix input[type='checkbox']:disabled { opacity: 0.35; }
@@ -384,6 +385,9 @@ a:hover {
 .cols-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-6); }
 .people-list { display: grid; gap: var(--space-2); }
 .person-row { display: flex; align-items: center; gap: var(--space-2); min-height: 24px; }
+/* Rows inside cards may shrink below their content; badges keep their size. */
+.card-body > *, .person-row > * { min-width: 0; }
+.person-row .badge { flex: none; }
 .person-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kv { display: grid; grid-template-columns: 90px 1fr; gap: var(--space-2) var(--space-3); }
 .kv dt { color: var(--text-secondary); margin: 0; }
