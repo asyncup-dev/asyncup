@@ -1,5 +1,6 @@
 import { GroupAccessError, type GroupDirectory, type GroupListing } from '../src/core/groups.js';
 import { RosterSync } from '../src/core/roster-sync.js';
+import { LeavePresence, type LeaveWriter, type OooEvent } from '../src/core/leave-presence.js';
 import { DateTime } from 'luxon';
 import { ScheduleService } from '../src/core/schedule.js';
 import { FakeAdapter } from '../src/adapters/fake/adapter.js';
@@ -65,6 +66,8 @@ export async function makeStack(
   const blockers = new BlockerService(repo, adapter, clock.now);
   const groups = new FakeGroups();
   const roster = new RosterSync(repo, async () => groups, clock.now, () => {}, service, adapter);
+  const leaveWriter = new FakeLeaveWriter();
+  const leave = new LeavePresence(repo, settings, async () => leaveWriter, clock.now);
   const scheduler = new Scheduler(
     repo,
     adapter,
@@ -75,6 +78,7 @@ export async function makeStack(
       ooo: async () => opts.ooo ?? null,
       directory: async () => opts.directory ?? null,
       roster,
+      leave,
       get schedule() {
         return scheduleRef.current;
       },
@@ -82,12 +86,49 @@ export async function makeStack(
     webhooks,
   );
   const polls = new PollService(repo, adapter, clock.now);
-  const schedule = new ScheduleService(repo, adapter, clock.now, webhooks, () => {});
+  const schedule = new ScheduleService(repo, adapter, clock.now, webhooks, () => {}, async () => (await settings.get()).leaveInChat);
   scheduleRef.current = schedule;
   const commands = new CommandHandler(repo, settings, clock.now, blockers, adapter, polls, schedule, service);
   commands.attachRunner(scheduler);
 
-  return { repo, adapter, service, blockers, polls, settings, scheduler, commands, clock, schedule, groups, roster };
+  return { repo, adapter, service, blockers, polls, settings, scheduler, commands, clock, schedule, groups, roster, leave, leaveWriter };
+}
+
+/** Chat statuses and calendars as Google would keep them, per email; `fail` makes the next calls throw. */
+export class FakeLeaveWriter implements LeaveWriter {
+  statuses = new Map<string, { text: string; emoji: string; expireTime: string | null }>();
+  events = new Map<string, OooEvent & { email: string }>();
+  calls: string[] = [];
+  fail: { status?: Error; calendar?: Error } = {};
+  private next = 0;
+
+  async setStatus(email: string, status: { text: string; emoji: string; expireTime: string | null }): Promise<void> {
+    this.calls.push(`status ${email} ${status.text}`);
+    if (this.fail.status) throw this.fail.status;
+    this.statuses.set(email, status);
+  }
+  async clearStatus(email: string, text: string): Promise<void> {
+    this.calls.push(`clear ${email} ${text}`);
+    if (this.fail.status) throw this.fail.status;
+    if (this.statuses.get(email)?.text === text) this.statuses.delete(email);
+  }
+  async createOutOfOffice(email: string, event: OooEvent): Promise<string> {
+    this.calls.push(`create ${email}`);
+    if (this.fail.calendar) throw this.fail.calendar;
+    const id = `ev${++this.next}`;
+    this.events.set(id, { ...event, email });
+    return id;
+  }
+  async updateOutOfOffice(email: string, id: string, event: OooEvent): Promise<void> {
+    this.calls.push(`update ${email} ${id}`);
+    if (this.fail.calendar) throw this.fail.calendar;
+    this.events.set(id, { ...event, email });
+  }
+  async deleteOutOfOffice(email: string, id: string): Promise<void> {
+    this.calls.push(`delete ${email} ${id}`);
+    if (this.fail.calendar) throw this.fail.calendar;
+    this.events.delete(id);
+  }
 }
 
 /** Google Groups as the tests want them: a listing per group email, or an error to throw. */

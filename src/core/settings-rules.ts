@@ -70,7 +70,7 @@ const TOKEN_OFF_MSG =
 
 /** Secrets keep their stored value on an empty save; an explicit clear wipes them. */
 const SECRET_FIELDS = new Set<keyof AppSettings>(['serviceAccountJson', 'oauthClientSecret']);
-const BOOL_FIELDS = new Set<keyof AppSettings>(['calendarOoo', 'tokenSignIn', 'setupComplete', 'mcpEnabled']);
+const BOOL_FIELDS = new Set<keyof AppSettings>(['calendarOoo', 'leaveInChat', 'tokenSignIn', 'setupComplete', 'mcpEnabled']);
 
 const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => string | null>> = {
   chatAudience: badAudience,
@@ -85,6 +85,7 @@ const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => string | nu
   samlAdminGroup: () => null,
   oauthClientSecret: () => null,
   mcpDefaultScopes: badMcpScopes,
+  leaveDeclineMode: (v) => (['none', 'new', 'all'].includes(v) ? null : 'Choose none, new or all.'),
 };
 
 const EDITABLE_FIELDS: (keyof AppSettings)[] = [...BOOL_FIELDS, ...(Object.keys(FIELD_CHECKS) as (keyof AppSettings)[])];

@@ -55,6 +55,8 @@ export class EventRouter {
     /** The app's events URL when known — add-on builds address card clicks to it. */
     private endpoint: () => Promise<string | null> = async () => null,
     private schedule: ScheduleService | null = null,
+    /** Whether leave shows in Chat and Calendar, so replies can say so. */
+    private leaveShown: () => Promise<boolean> = async () => false,
   ) {}
 
   async handle(event: any): Promise<object> {
@@ -111,7 +113,7 @@ export class EventRouter {
       const affected = await this.repo.setVacationForUser(user.userName, true);
       return {
         text: affected
-          ? `🏖️ Vacation mode ON across ${affected} standup${affected === 1 ? '' : 's'} — you won't be prompted or counted as missing. DM me \`back\` when you return.`
+          ? `🏖️ Vacation mode ON across ${affected} standup${affected === 1 ? '' : 's'} — you won't be prompted or counted as missing. DM me \`back\` when you return.${(await this.leaveShown()) ? ' Your Chat status will show it.' : ''}`
           : "You're not on any standup roster yet.",
       };
     }
@@ -119,7 +121,7 @@ export class EventRouter {
       const affected = await this.repo.setVacationForUser(user.userName, false);
       return {
         text: affected
-          ? `👋 Welcome back! Vacation mode is off — prompts resume with the next run.`
+          ? `👋 Welcome back! Vacation mode is off — prompts resume with the next run.${(await this.leaveShown()) ? ' Your “On leave” status is cleared.' : ''}`
           : "You're not on any standup roster yet.",
       };
     }

@@ -27,6 +27,35 @@ import type {
   Submission,
 } from '../core/types.js';
 
+/** What AsyncUp has written to Chat and Calendar for one period of someone's leave. */
+export interface LeaveRow {
+  id: number;
+  userName: string;
+  /** Dated days off, or vacation mode (no dates). */
+  kind: 'dated' | 'vacation';
+  startDate: string | null;
+  endDate: string | null;
+  /** The Calendar out-of-office event, once created. */
+  eventId: string | null;
+  /** The Chat custom status text AsyncUp set, or null when none is set. */
+  statusText: string | null;
+  /** The leave is over or cancelled; the row goes once its status and event are cleaned up. */
+  gone: boolean;
+  error: string | null;
+  errorAt: string | null;
+}
+
+/** One roster row of a person, with what working out their leave needs. */
+export interface PersonRow {
+  standupId: number;
+  displayName: string;
+  workingDays: string | null;
+  onVacation: boolean;
+  timezone: string | null;
+  standupTimezone: string;
+  standupDays: string;
+}
+
 /** A roster row whether on or off, with what roster syncs need to know about it. */
 export interface RosterRow {
   userName: string;
@@ -403,6 +432,21 @@ ALTER TABLE submissions ADD COLUMN mood_comment TEXT;
   `
 ALTER TABLE participants ADD COLUMN in_space INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE participants ADD COLUMN left_space_at TEXT;
+`,  // 19 — leave shown in Chat and Calendar: what AsyncUp has written, per person and period
+  `
+CREATE TABLE leave_presence (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  start_date TEXT,
+  end_date TEXT,
+  event_id TEXT,
+  status_text TEXT,
+  gone INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  error_at TEXT
+);
+CREATE INDEX idx_leave_presence_user ON leave_presence(user_name);
 `,
 ];
 
@@ -714,6 +758,21 @@ ALTER TABLE submissions ADD COLUMN mood_comment TEXT;
   `
 ALTER TABLE participants ADD COLUMN in_space INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE participants ADD COLUMN left_space_at TEXT;
+`,  // 19 — leave presence (mirrors the SQLite migration)
+  `
+CREATE TABLE leave_presence (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  start_date TEXT,
+  end_date TEXT,
+  event_id TEXT,
+  status_text TEXT,
+  gone INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  error_at TEXT
+);
+CREATE INDEX idx_leave_presence_user ON leave_presence(user_name);
 `,
 ];
 
@@ -1154,6 +1213,73 @@ export class Repo {
   async excludeParticipant(standupId: number, userName: string): Promise<boolean> {
     const result = await this.db.run('UPDATE participants SET active = 0, kept_off = 1, left_space_at = NULL WHERE standup_id = ? AND user_name = ?', [standupId, userName]);
     return result.changes > 0;
+  }
+
+  // --- leave shown in Chat and Calendar ---
+
+  /** Active days off from a date on, for working out leave periods. */
+  async listDaysOffFrom(fromDate: string): Promise<{ userName: string; date: string }[]> {
+    const rows = await this.db.all(`SELECT user_name, date FROM schedule_overrides WHERE status = 'active' AND working = 0 AND date >= ? ORDER BY user_name, date`, [fromDate]);
+    return rows.map((r: any) => ({ userName: r.user_name, date: r.date }));
+  }
+
+  /** People on vacation on every standup they're on: what My standups › Vacation mode sets. */
+  async listVacationUsers(): Promise<string[]> {
+    const rows = await this.db.all('SELECT user_name FROM participants WHERE active = 1 GROUP BY user_name HAVING MIN(on_vacation) = 1');
+    return rows.map((r: any) => r.user_name);
+  }
+
+  async listPersonRows(userName: string): Promise<PersonRow[]> {
+    const rows = await this.db.all(
+      `SELECT p.standup_id, p.display_name, p.working_days, p.on_vacation, p.timezone, s.timezone AS standup_timezone, s.days
+       FROM participants p JOIN standups s ON s.id = p.standup_id
+       WHERE p.user_name = ? AND p.active = 1 AND s.active = 1 ORDER BY p.standup_id`,
+      [userName],
+    );
+    return rows.map((r: any) => ({
+      standupId: r.standup_id,
+      displayName: r.display_name,
+      workingDays: r.working_days ?? null,
+      onVacation: !!r.on_vacation,
+      timezone: r.timezone ?? null,
+      standupTimezone: r.standup_timezone,
+      standupDays: r.days,
+    }));
+  }
+
+  async listLeaveRows(userName?: string): Promise<LeaveRow[]> {
+    const rows = userName
+      ? await this.db.all('SELECT * FROM leave_presence WHERE user_name = ? ORDER BY id', [userName])
+      : await this.db.all('SELECT * FROM leave_presence ORDER BY id');
+    return rows.map((r: any) => ({
+      id: r.id,
+      userName: r.user_name,
+      kind: r.kind === 'vacation' ? 'vacation' : 'dated',
+      startDate: r.start_date ?? null,
+      endDate: r.end_date ?? null,
+      eventId: r.event_id ?? null,
+      statusText: r.status_text ?? null,
+      gone: !!r.gone,
+      error: r.error ?? null,
+      errorAt: r.error_at ?? null,
+    }));
+  }
+
+  async addLeaveRow(input: { userName: string; kind: 'dated' | 'vacation'; startDate: string | null; endDate: string | null }): Promise<LeaveRow> {
+    const id = await this.db.insert('INSERT INTO leave_presence (user_name, kind, start_date, end_date) VALUES (?, ?, ?, ?)', [input.userName, input.kind, input.startDate, input.endDate]);
+    return { id, ...input, eventId: null, statusText: null, gone: false, error: null, errorAt: null };
+  }
+
+  async updateLeaveRow(id: number, change: Partial<Pick<LeaveRow, 'startDate' | 'endDate' | 'eventId' | 'statusText' | 'gone' | 'error' | 'errorAt'>>): Promise<void> {
+    const columns: Record<string, string> = { startDate: 'start_date', endDate: 'end_date', eventId: 'event_id', statusText: 'status_text', gone: 'gone', error: 'error', errorAt: 'error_at' };
+    const keys = Object.keys(change).filter((k) => k in columns);
+    if (keys.length === 0) return;
+    const values = keys.map((k) => (k === 'gone' ? ((change as any)[k] ? 1 : 0) : (change as any)[k]));
+    await this.db.run(`UPDATE leave_presence SET ${keys.map((k) => `${columns[k]} = ?`).join(', ')} WHERE id = ?`, [...values, id]);
+  }
+
+  async deleteLeaveRow(id: number): Promise<void> {
+    await this.db.run('DELETE FROM leave_presence WHERE id = ?', [id]);
   }
 
   async setRosterSync(standupId: number, at: string, error: string | null): Promise<void> {

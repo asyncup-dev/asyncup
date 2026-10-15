@@ -102,9 +102,18 @@ describe('api: settings', () => {
     expect(s.setupComplete).toBe(true);
     expect((await ok.json() as any).setup.chatConfigured).toBe(true);
 
+    // Leave in Chat and Calendar (spec 003, criteria 1, 2, 15)
+    let workspace = (await (await patch({ leaveInChat: true, leaveDeclineMode: 'new' })).json() as any).workspace;
+    expect(workspace).toMatchObject({ leaveInChat: true, leaveDeclineMode: 'new', leaveSyncError: null });
+    await settings.update({ leaveSyncError: 'Alice’s Chat status couldn’t be updated: Google refused it (403).', leaveSyncErrorAt: '2026-06-10T04:30:00.000Z' });
+    workspace = (await (await op('/settings')).json() as any).workspace;
+    expect(workspace.leaveSyncError).toEqual({ message: 'Alice’s Chat status couldn’t be updated: Google refused it (403).', at: '2026-06-10T04:30:00.000Z' });
+
     for (const [body, field] of [
       [{ chatAudience: 'my-project-slug' }, 'chatAudience'],
       [{ calendarOoo: 'no' }, 'calendarOoo'],
+      [{ leaveInChat: 'yes' }, 'leaveInChat'],
+      [{ leaveDeclineMode: 'sometimes' }, 'leaveDeclineMode'],
       [{ tokenSignIn: false }, 'tokenSignIn'],
       [{ nonsense: 'x' }, 'nonsense'],
       [{ constructor: 'x' }, 'constructor'],

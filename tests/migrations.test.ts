@@ -7,8 +7,8 @@ import { POSTGRES_MIGRATIONS, Repo, SQLITE_MIGRATIONS } from '../src/db/repo.js'
 
 describe('migration 10 — AI removal', () => {
   it('keeps both dialect arrays aligned', () => {
-    expect(SQLITE_MIGRATIONS).toHaveLength(18);
-    expect(POSTGRES_MIGRATIONS).toHaveLength(18);
+    expect(SQLITE_MIGRATIONS).toHaveLength(19);
+    expect(POSTGRES_MIGRATIONS).toHaveLength(19);
     for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
       expect(migrations[9]).toContain('DROP COLUMN ai_enabled');
       expect(migrations[9]).toContain("'llmApiKey'");
@@ -46,7 +46,7 @@ describe('migration 10 — AI removal', () => {
     const columns = (check.query('PRAGMA table_info(standups)').all() as { name: string }[]).map((c) => c.name);
     expect(columns).not.toContain('ai_enabled');
     expect(columns).toContain('digest_enabled');
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(18);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(19);
     check.close();
   }, 30_000);
 });
@@ -90,7 +90,7 @@ describe('migration 11 — MCP tokens and activity', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(18);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(19);
     check.close();
   });
 });
@@ -131,7 +131,7 @@ describe('migration 12 — personal schedules', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(18);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(19);
     check.close();
   });
 });
@@ -228,6 +228,31 @@ describe('migration 18 — space membership', () => {
 
     const repo = await Repo.sqlite(dbPath);
     expect(await repo.listRosterRows(1)).toEqual([{ userName: 'users/a', displayName: 'Asha', active: true, source: 'manual', keptOff: false, inSpace: false, leftSpaceAt: null }]);
+    await repo.close();
+  });
+});
+
+describe('migration 19 — leave in Chat and Calendar', () => {
+  it('adds the leave_presence table in both dialects', () => {
+    for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
+      expect(migrations[18]).toContain('CREATE TABLE leave_presence');
+      expect(migrations[18]).toContain('CREATE INDEX idx_leave_presence_user ON leave_presence(user_name)');
+    }
+  });
+
+  it('upgrades a v18 database to an empty table the repo can use', async () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), 'asyncup-mig-')), 'v18.db');
+    const raw = new Database(dbPath);
+    for (const migration of SQLITE_MIGRATIONS.slice(0, 18)) raw.exec(migration);
+    raw.exec('PRAGMA user_version = 18;');
+    raw.close();
+
+    const repo = await Repo.sqlite(dbPath);
+    expect(await repo.listLeaveRows()).toEqual([]);
+    const row = await repo.addLeaveRow({ userName: 'users/a', kind: 'vacation', startDate: null, endDate: null });
+    await repo.updateLeaveRow(row.id, { statusText: 'On leave', gone: true });
+    await repo.updateLeaveRow(row.id, {});
+    expect(await repo.listLeaveRows('users/a')).toEqual([{ ...row, statusText: 'On leave', gone: true }]);
     await repo.close();
   });
 });
