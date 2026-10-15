@@ -130,8 +130,17 @@ export async function todayView(repo: Repo, standup: Standup, now: DateTime) {
   };
 }
 
-/** One run with full submissions, or null when there was none that day. */
-export async function runView(repo: Repo, standup: Standup, date: string) {
+/** Why people chose their mood: named, or nameless and sorted (lowest mood first) on anonymous standups. */
+function moodCommentsView(standup: Standup, submissions: Submission[]) {
+  const withComment = submissions.filter((s) => s.mood && s.moodComment);
+  if (!standup.moodAnonymous) return withComment.map((s) => ({ person: person(s), mood: s.mood!, comment: s.moodComment! }));
+  return withComment
+    .map((s) => ({ person: null, mood: s.mood!, comment: s.moodComment! }))
+    .sort((a, b) => MOOD_SCORE[a.mood] - MOOD_SCORE[b.mood] || a.comment.localeCompare(b.comment));
+}
+
+/** One run with full submissions, or null when there was none that day. Comments only when the caller may read them. */
+export async function runView(repo: Repo, standup: Standup, date: string, opts: { moodComments?: boolean } = {}) {
   const run = await repo.getRun(standup.id, date);
   if (!run) return null;
   const submissions = await repo.listSubmissions(run.id);
@@ -144,6 +153,7 @@ export async function runView(repo: Repo, standup: Standup, date: string) {
     missing: progress.missingMandatory.map(person),
     submissions: submissions.map((s) => submissionView(standup, s)),
     teamMood: standup.moodAnonymous ? averageMood(submissions) : null,
+    ...(opts.moodComments ? { moodComments: moodCommentsView(standup, submissions) } : {}),
   };
 }
 

@@ -55,7 +55,7 @@ const HELP_ALL = `*AsyncUp commands* (mention me in this space — prefix with \
 \`remind <minutes>\` — nudge before the deadline (0 = off)
 \`timezone <IANA>\` · \`days mon,tue,…\` — schedule
 \`questions\` / \`questions set Q1 | Q2 | …\` / \`questions reset\` — customize the form
-\`mood on|off|anon\` — mood question (\`anon\` hides who felt what; the wrap-up shows the team average)
+\`mood on|off|anon\` — mood question, seen in the web app only (\`anon\` hides who felt what there too)
 \`escalate @user\` / \`escalate days N\` / \`escalate off\` — DM someone when blockers stay open
 \`digest on|off\` — weekly digest
 \`blocker <id> tag @user…\` / \`blocker <id> update <text>\` / \`blocker <id> resolve\` — work a blocker together
@@ -554,11 +554,11 @@ export class CommandHandler {
     switch (value.toLowerCase()) {
       case 'on':
         await this.repo.updateStandup(standup.id, { moodEnabled: true, moodAnonymous: false });
-        return '✅ Mood question on — moods show on each card.';
+        return '✅ Mood question on. Moods are seen in the web app only, never in this space.';
       case 'anon':
       case 'anonymous':
         await this.repo.updateStandup(standup.id, { moodEnabled: true, moodAnonymous: true });
-        return '✅ Mood question on, *anonymous* — cards hide who felt what; the wrap-up shows the team average instead.';
+        return '✅ Mood question on, *anonymous*. Moods are seen in the web app only, without names.';
       case 'off':
         await this.repo.updateStandup(standup.id, { moodEnabled: false });
         return '✅ Mood question off.';

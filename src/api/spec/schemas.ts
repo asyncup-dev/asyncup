@@ -166,6 +166,12 @@ export const Submission = named(
   '`mood` is null when the standup keeps moods anonymous.',
 );
 
+export const MoodComment = named(
+  'MoodComment',
+  z.strictObject({ person: Person.nullable(), mood: Mood, comment: z.string() }),
+  '`person` is null when the standup keeps moods anonymous.',
+);
+
 export const RunDetail = named(
   'RunDetail',
   z.strictObject({
@@ -176,7 +182,9 @@ export const RunDetail = named(
     missing: z.array(Person),
     submissions: z.array(Submission),
     teamMood: z.number().nullable(),
+    moodComments: z.array(MoodComment).optional(),
   }),
+  '`moodComments` is present only for callers holding `moods.comments` on the standup. On anonymous standups it has no names and is sorted by mood, then text.',
 );
 
 export const WeekPoint = named(
@@ -306,10 +314,12 @@ export const MySubmissions = named(
         editedAt: timestamp.nullable(),
         late: z.boolean(),
         mood: Mood.nullable(),
+        moodComment: z.string().nullable(),
         answers: z.array(Answer),
       }),
     ),
   }),
+  'Your own answers, including your own mood comment.',
 );
 
 export const Skipped = named('Skipped', z.strictObject({ result: z.literal('skipped'), date }));
@@ -602,6 +612,7 @@ export type Blocker = z.infer<typeof Blocker>;
 export type TeamMember = z.infer<typeof TeamMember>;
 export type Template = z.infer<typeof Template>;
 export type MyStandups = z.infer<typeof MyStandups>;
+export type MySubmissions = z.infer<typeof MySubmissions>;
 export type Override = z.infer<typeof Override>;
 export type Schedule = z.infer<typeof Schedule>;
 export type Settings = z.infer<typeof Settings>;

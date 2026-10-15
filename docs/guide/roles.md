@@ -33,6 +33,7 @@ Built-in roles can't be changed. Copy one to start a custom role.
 | --- | --- | --- | --- | --- | --- |
 | `standups.view` | See a standup, who is on it and how today is going | ✓ | ✓ | ✓ | ✓ |
 | `answers.view` | Read each day's answers | ✓ | ✓ | ✓ | ✓ |
+| `moods.comments` | Read why people chose their mood, without names where moods are anonymous | ✓ | | | |
 | `blockers.view` | See blockers and their updates | ✓ | ✓ | ✓ | ✓ |
 | `reports.view` | See run history and insights | ✓ | ✓ | ✓ | ✓ |
 | `people.view` | See the Team directory | ✓ | ✓ | ✓ | |
@@ -52,7 +53,8 @@ Built-in roles can't be changed. Copy one to start a custom role.
 The last six are **workspace-only**: they mean nothing on a single standup.
 Some things don't need a permission. People always answer, skip and manage
 their own days off (within the time-off policy), the owner and tagged people work a blocker, and anonymous
-moods stay anonymous for every role.
+moods stay anonymous for every role. Mood never appears in the Chat space, and
+everyone sees their own mood comment.
 
 ## Custom roles
 

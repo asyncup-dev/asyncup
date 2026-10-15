@@ -36,6 +36,7 @@ export function registerMemberRoutes(api: Router, ctx: ApiContext): void {
         editedAt: submission.editedAt,
         late: submission.late,
         mood: submission.mood,
+        moodComment: submission.moodComment,
         answers: submission.answers,
       })),
     });

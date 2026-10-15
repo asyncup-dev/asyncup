@@ -89,10 +89,12 @@ describe('Repo', () => {
       displayName: 'Alice',
       answers: ANSWERS.answers,
       mood: ANSWERS.mood,
+      moodComment: 'Short night',
       late: false,
       submittedAt: '2026-06-10T10:00:00Z',
     });
     expect(sub.answers).toHaveLength(3);
+    expect(sub.moodComment).toBe('Short night');
     expect(sub.editedAt).toBeNull();
 
     await repo.setSubmissionMessageName(sub.id, 'messages/abc');
@@ -100,10 +102,12 @@ describe('Repo', () => {
       sub.id,
       [{ question: 'What did you do yesterday?', answer: 'Changed my mind' }],
       'great',
+      null,
       '2026-06-10T10:30:00Z',
     );
     expect(edited.answers[0]!.answer).toBe('Changed my mind');
     expect(edited.mood).toBe('great');
+    expect(edited.moodComment).toBeNull();
     expect(edited.editedAt).toBe('2026-06-10T10:30:00Z');
     expect(edited.messageName).toBe('messages/abc');
 
@@ -114,6 +118,7 @@ describe('Repo', () => {
         displayName: 'Alice',
         answers: ANSWERS.answers,
         mood: null,
+        moodComment: null,
         late: false,
         submittedAt: '2026-06-10T11:00:00Z',
       }),
@@ -131,6 +136,7 @@ describe('Repo', () => {
       displayName: 'Alice',
       answers: ANSWERS.answers,
       mood: 'good',
+      moodComment: null,
       late: false,
       submittedAt: '2026-06-09T10:00:00Z',
     });

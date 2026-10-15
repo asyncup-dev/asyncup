@@ -44,10 +44,6 @@ function participationPct(stats: RangeStats): number {
   return stats.expected === 0 ? 100 : Math.round((stats.submitted / stats.expected) * 100);
 }
 
-function avgMood(stats: RangeStats): number | null {
-  return stats.moodCount === 0 ? null : roundMood(stats.moodSum / stats.moodCount);
-}
-
 /** One consistent 1-decimal rounding for averaged moods. */
 export function roundMood(value: number): number {
   return Math.round(value * 10) / 10;
@@ -88,14 +84,6 @@ export async function weeklySeries(
   return points;
 }
 
-export function moodEmoji(score: number): string {
-  if (score >= 4.5) return '😄';
-  if (score >= 3.5) return '🙂';
-  if (score >= 2.5) return '😐';
-  if (score >= 1.5) return '😕';
-  return '😫';
-}
-
 /** The last configured weekday of the standup's week (ISO: mon=1 … sun=7). */
 export function lastConfiguredWeekday(standup: Standup): number {
   const configured = standupDays(standup).map((d) => WEEKDAYS.indexOf(d) + 1);
@@ -119,8 +107,6 @@ export async function buildWeeklyDigest(repo: Repo, standup: Standup, runDate: s
     runCount: current.runCount,
     participationPct: participationPct(current),
     prevParticipationPct: previous.runCount > 0 ? participationPct(previous) : null,
-    avgMood: avgMood(current),
-    prevAvgMood: previous.runCount > 0 ? avgMood(previous) : null,
     blockersOpened: await repo.countBlockersOpenedBetween(standup.id, weekStart, weekEnd),
     blockersResolved: await repo.countBlockersResolvedBetween(standup.id, weekStart, weekEnd),
     openBlockers: (await repo.listOpenBlockers(standup.id)).map((b) => ({
@@ -141,15 +127,6 @@ export function digestText(digest: WeeklyDigest): string {
   }
   lines.push(participation);
 
-  if (digest.avgMood !== null) {
-    let mood = `Mood: ${moodEmoji(digest.avgMood)} *${digest.avgMood}/5*`;
-    if (digest.prevAvgMood !== null) {
-      const delta = Math.round((digest.avgMood - digest.prevAvgMood) * 10) / 10;
-      mood += delta === 0 ? ' (=)' : ` (${delta > 0 ? '+' : ''}${delta} vs last week)`;
-    }
-    lines.push(mood);
-  }
-
   lines.push(`Blockers: ${digest.blockersOpened} opened · ${digest.blockersResolved} resolved`);
   if (digest.openBlockers.length > 0) {
     lines.push('*Still open:*');
@@ -167,10 +144,7 @@ export async function trendsText(repo: Repo, standup: Standup, now: DateTime, we
       lines.push(`${week.label} ▸ no runs`);
       continue;
     }
-    lines.push(
-      `${week.label} ▸ participation ${week.participationPct}%` +
-        (week.mood !== null ? ` · mood ${moodEmoji(week.mood)} ${week.mood}/5` : ''),
-    );
+    lines.push(`${week.label} ▸ participation ${week.participationPct}%`);
   }
   const open = (await repo.listOpenBlockers(standup.id)).length;
   if (open > 0) lines.push(`⚠️ ${open} open blocker${open === 1 ? '' : 's'} — try \`blockers\``);

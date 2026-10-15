@@ -5,10 +5,10 @@ import type { Repo } from '../db/repo.js';
 import { runProgress } from './progress.js';
 import { roundMood } from './insights.js';
 import {
+  MOOD_SCORE,
   blockerAnswers,
   isTodayQuestion,
   isYesterdayQuestion,
-  MOOD_SCORE,
   standupQuestions,
   type Run,
   type RunSummary,
@@ -60,6 +60,7 @@ export class StandupService {
         existing.id,
         input.answers,
         input.mood,
+        input.moodComment ?? null,
         this.now().toISO()!,
       );
       await this.repo.deleteBlockersOpenedBy(run.id, userName);
@@ -77,6 +78,7 @@ export class StandupService {
       displayName,
       answers: input.answers,
       mood: input.mood,
+      moodComment: input.moodComment ?? null,
       late,
       submittedAt: this.now().toISO()!,
     });
@@ -234,14 +236,9 @@ export class StandupService {
     const submitted = progress.done.filter((p) => p.mandatory).length;
     const missing = progress.missingMandatory.map((p) => p.displayName);
 
-    // With anonymous mood, the wrap-up shows the aggregate instead of per-person emoji.
-    let teamMood: number | null = null;
-    if (standup.moodAnonymous) {
-      const moods = submissions.filter((s) => s.mood !== null).map((s) => MOOD_SCORE[s.mood!]);
-      if (moods.length > 0) {
-        teamMood = roundMood(moods.reduce((a, b) => a + b, 0) / moods.length);
-      }
-    }
+    // Kept for the wrap_up webhook; the posted wrap-up never shows mood.
+    const moods = standup.moodAnonymous ? submissions.flatMap((s) => (s.mood ? [MOOD_SCORE[s.mood]] : [])) : [];
+    const teamMood = moods.length ? roundMood(moods.reduce((a, b) => a + b, 0) / moods.length) : null;
 
     return {
       standupName: standup.name,

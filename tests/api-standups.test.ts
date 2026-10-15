@@ -400,7 +400,7 @@ describe('api: member', () => {
     expect((await (await as(bob, '/me/standups')).json() as any).standups[0].today).toBe('closed');
 
     const subs = await (await as(alice, '/me/submissions?limit=5')).json() as any;
-    expect(subs.submissions).toEqual([{ date: '2026-06-10', standupName: 'Daily Standup', submittedAt: expect.any(String), editedAt: null, late: false, mood: 'good', answers: ANSWERS.answers }]);
+    expect(subs.submissions).toEqual([{ date: '2026-06-10', standupName: 'Daily Standup', submittedAt: expect.any(String), editedAt: null, late: false, mood: 'good', moodComment: null, answers: ANSWERS.answers }]);
 
     const patch = (body: unknown) => as(alice, '/me', { method: 'PATCH', body: json(body) });
     expect((await (await patch({ onVacation: 'yes' })).json() as any).error.field).toBe('onVacation');

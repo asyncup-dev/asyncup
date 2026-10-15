@@ -12,7 +12,11 @@ in a Google Chat DM.
    question and the mood are required: if one is empty, the form comes back
    with a red line naming it and your answers kept. Answer the blockers
    question with "none" when there are none.
+   After the mood there's an optional **Want to say why?** box, up to 200
+   characters. Only people allowed to read mood comments see it, and it is
+   never posted in the space.
 2. Your answers post as your card under today's thread in the team space.
+   Your mood never appears there: it's seen in the web app only.
    "Yesterday" comes pre-filled from your previous "today".
 3. Plans changed? Your DM card now shows *Submitted at …* with **Edit
    answers** until the deadline. Editing updates the posted card in place,

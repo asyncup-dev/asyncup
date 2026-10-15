@@ -15,8 +15,8 @@ const MINE = {
   ],
 };
 const SUBS = [
-  { date: '2026-09-15', standupName: 'Engineering', submittedAt: 'x', editedAt: null, late: false, mood: 'good', answers: [{ question: 'Y', answer: 'Landed the SAML endpoint.' }, { question: 'T', answer: '' }, { question: 'B', answer: 'None' }] },
-  { date: '2026-09-14', standupName: 'Engineering', submittedAt: 'x', editedAt: 'y', late: true, mood: 'good', answers: [] },
+  { date: '2026-09-15', standupName: 'Engineering', submittedAt: 'x', editedAt: null, late: false, mood: 'good', moodComment: 'The new rota works', answers: [{ question: 'Y', answer: 'Landed the SAML endpoint.' }, { question: 'T', answer: '' }, { question: 'B', answer: 'None' }] },
+  { date: '2026-09-14', standupName: 'Engineering', submittedAt: 'x', editedAt: 'y', late: true, mood: 'good', moodComment: null, answers: [] },
 ];
 
 function server(over: Record<string, { status?: number; body: unknown }> = {}) {
@@ -53,6 +53,9 @@ describe('member console', () => {
     expect(screen.getByText('optional')).toBeInTheDocument();
 
     expect(await screen.findByText('Landed the SAML endpoint.')).toBeInTheDocument();
+    // People always see their own mood comment (spec 001, criterion 16).
+    expect(screen.getByText('🙂 Good — “The new rota works”')).toBeInTheDocument();
+    expect(screen.getAllByText('Mood', { selector: 'dt' })).toHaveLength(1);
     expect(screen.getByText('Engineering · late · edited · 🙂')).toBeInTheDocument();
     expect(screen.getByText('Your recent answers: mostly 🙂')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'View all' })).not.toBeInTheDocument();

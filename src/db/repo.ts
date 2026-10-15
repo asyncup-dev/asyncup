@@ -383,6 +383,9 @@ CREATE TABLE role_audit (
   action TEXT NOT NULL,
   summary TEXT NOT NULL
 );
+`,  // 17 — why someone chose their mood, read only with moods.comments
+  `
+ALTER TABLE submissions ADD COLUMN mood_comment TEXT;
 `,
 ];
 
@@ -687,6 +690,9 @@ CREATE TABLE role_audit (
   action TEXT NOT NULL,
   summary TEXT NOT NULL
 );
+`,  // 17 — mood comments (mirrors the SQLite migration)
+  `
+ALTER TABLE submissions ADD COLUMN mood_comment TEXT;
 `,
 ];
 
@@ -832,6 +838,7 @@ function toSubmission(row: any): Submission {
     submittedAt: row.submitted_at,
     editedAt: row.edited_at ?? null,
     messageName: row.message_name ?? null,
+    moodComment: row.mood_comment ?? null,
   };
 }
 
@@ -1511,18 +1518,20 @@ export class Repo {
     displayName: string;
     answers: Answer[];
     mood: Mood | null;
+    moodComment: string | null;
     late: boolean;
     submittedAt: string;
   }): Promise<Submission> {
     const id = await this.db.insert(
-      `INSERT INTO submissions (run_id, user_name, display_name, answers, mood, late, submitted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO submissions (run_id, user_name, display_name, answers, mood, mood_comment, late, submitted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         input.runId,
         input.userName,
         input.displayName,
         JSON.stringify(input.answers),
         input.mood,
+        input.moodComment,
         input.late ? 1 : 0,
         input.submittedAt,
       ],
@@ -1530,10 +1539,11 @@ export class Repo {
     return (await this.getSubmissionById(id))!;
   }
 
-  async updateSubmission(id: number, answers: Answer[], mood: Mood | null, editedAt: string): Promise<Submission> {
-    await this.db.run('UPDATE submissions SET answers = ?, mood = ?, edited_at = ? WHERE id = ?', [
+  async updateSubmission(id: number, answers: Answer[], mood: Mood | null, moodComment: string | null, editedAt: string): Promise<Submission> {
+    await this.db.run('UPDATE submissions SET answers = ?, mood = ?, mood_comment = ?, edited_at = ? WHERE id = ?', [
       JSON.stringify(answers),
       mood,
+      moodComment,
       editedAt,
       id,
     ]);

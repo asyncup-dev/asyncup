@@ -149,7 +149,7 @@ Today's run needs `standups.view`; the run list and insights need `reports.view`
 | `GET /standups/:id/runs/:date` | One run with full submissions and answers |
 | `GET /standups/:id/insights?weeks=8` | Weekly participation, mood and blocker series |
 
-Moods are withheld per person when the standup keeps them anonymous; only the team average is returned.
+Moods are withheld per person when the standup keeps them anonymous; only the team average is returned. A run includes `moodComments` only for callers holding `moods.comments` on the standup: each with `person`, `mood` and `comment`, or with `person: null`, sorted by mood then text, when moods are anonymous.
 
 ### Blockers
 
@@ -177,7 +177,7 @@ Schedules of others need `schedules.manage` on a standup the person is on:
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/me/standups` | `linked: false` until the account has a Chat identity; otherwise `timezone` (own override or `null`), `chat.dmUrl` (deep link to the bot's DM once one exists) and each standup with `today` = `submitted`, `waiting`, `closed` or `null` plus `progress` (`{ submitted, expected }` while a run exists) |
-| `GET` | `/me/submissions?limit=10` | My recent answers |
+| `GET` | `/me/submissions?limit=10` | My recent answers, with my own `moodComment` |
 | `PATCH` | `/me` | `{ timezone?: string \| null, onVacation?: boolean }`; `409 not_linked` without a Chat identity |
 | `GET` | `/me/schedule` | My personal week (`workingDays`, `workingDaysLabel`), the `policies` of my standups and upcoming `overrides` (each with `status`, `setBy`, `channel`, `decidedBy`) |
 | `PATCH` | `/me/schedule` | `{ workingDays: "mon-thu" \| "adhoc" \| "reset" }` — the same words the DM `days` command takes; `400 invalid` otherwise |

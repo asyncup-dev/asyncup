@@ -22,7 +22,7 @@ hero:
 features:
   - icon: 💬
     title: One-tap standups
-    details: A DM card opens one form — yesterday, today, blockers, plus a mood dropdown. Edit until the deadline; the posted card updates in place.
+    details: A DM card opens one form — yesterday, today, blockers, plus a private mood with an optional comment. Edit until the deadline; the posted card updates in place.
   - icon: 🧵
     title: Tidy date threads
     details: Every answer lands as one card per person under the day's thread. The wrap-up posts the count and exactly who's missing.
@@ -75,7 +75,7 @@ import { withBase } from 'vitepress'
     <div class="au-step">
       <span class="num">3</span>
       <h3>The wrap-up holds the line</h3>
-      <p>At the deadline: who submitted, who didn't, who's away and why, open blockers, team mood — plus a weekly digest with trends.</p>
+      <p>At the deadline: who submitted, who didn't, who's away and why, open blockers — plus a weekly digest with trends. Moods stay private, in the web app.</p>
     </div>
   </div>
 </div>

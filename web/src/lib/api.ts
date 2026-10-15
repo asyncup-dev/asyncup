@@ -98,3 +98,10 @@ export const AWAY_LABEL: Record<AwayReason, string> = { vacation: 'Vacation', ca
 
 export const MOOD_EMOJI: Record<string, string> = { great: '😄', good: '🙂', okay: '😐', meh: '😕', struggling: '😫' };
 
+export const MOOD_LABEL: Record<string, string> = { great: 'Great', good: 'Good', okay: 'Okay', meh: 'Meh', struggling: 'Struggling' };
+
+/** "😕 Meh — “Short night”", as a mood comment reads in the web app. */
+export function moodWithComment(mood: string, comment: string): string {
+  return `${MOOD_EMOJI[mood] ?? ''} ${MOOD_LABEL[mood] ?? mood} — “${comment}”`;
+}
+

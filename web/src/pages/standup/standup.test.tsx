@@ -260,6 +260,22 @@ describe('standup history', () => {
     expect(within(screen.getAllByRole('button', { name: /Sept/ })[1]!).getByText('1 missing')).toBeInTheDocument();
   });
 
+  it('shows mood comments by name, or nameless in their own list on anonymous standups (spec 001, criteria 13–14)', async () => {
+    server({ 'GET /api/v1/standups/1/runs/2026-09-16': { body: { ...RUN_15, date: '2026-09-16', moodComments: [{ person: { userName: 'users/p0', displayName: 'Alice Rao' }, mood: 'meh', comment: 'Short night' }] } } });
+    renderApp('/standups/1/history');
+    expect(await screen.findByText('😕 Meh — “Short night”')).toBeInTheDocument();
+    expect(screen.getAllByText('Mood')).toHaveLength(1);
+    expect(screen.queryByLabelText('Mood comments')).not.toBeInTheDocument();
+    cleanup();
+
+    server({ 'GET /api/v1/standups/1/runs/2026-09-16': { body: { ...RUN_15, date: '2026-09-16', moodComments: [{ person: null, mood: 'struggling', comment: 'Too many meetings' }, { person: null, mood: 'meh', comment: 'Short night' }] } } });
+    renderApp('/standups/1/history');
+    const list = await screen.findByLabelText('Mood comments');
+    expect(within(list).getByText('Mood comments · 2')).toBeInTheDocument();
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['😫 Struggling — “Too many meetings”', '😕 Meh — “Short night”']);
+    expect(screen.queryByText('Mood')).not.toBeInTheDocument();
+  });
+
   it('handles a standup with no runs', async () => {
     server({ 'GET /api/v1/standups/1/runs?limit=90': { body: { runs: [] } } });
     renderApp('/standups/1/history');

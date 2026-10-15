@@ -126,7 +126,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 400, 'invalid', 'Date must be YYYY-MM-DD.', 'date');
       return;
     }
-    const run = await runView(repo, standup, date);
+    const run = await runView(repo, standup, date, { moodComments: allowed(principalOf(req), 'moods.comments', standup.id) });
     if (!run) {
       apiError(res, 404, 'not_found', 'No run on that date.');
       return;

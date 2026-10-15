@@ -334,6 +334,25 @@ describe('mcp: tools', () => {
     expect((await call(erin, 'submit_answers', three)).error).toContain('not on this standup’s roster today');
   });
 
+  it('takes a mood comment and returns comments only to owners allowed to read them (criteria 6, 15)', async () => {
+    const { mint, cookieFor, connect, call, repo, openRun } = await startServer();
+    const s = await seedStandup(repo);
+    await repo.updateStandup(s.id, { moodEnabled: true });
+    await openRun(s.id);
+    const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['read', 'submit'] })).secret);
+    const root = await connect((await mint(cookieFor('root', true), { name: 'r', scopes: ['read'] })).secret);
+    const answers = { standupId: s.id, answers: ['Shipped', 'Billing', 'none'], mood: 'meh' };
+    expect((await call(alice, 'submit_answers', { ...answers, moodComment: 'x'.repeat(201) })).error).toBeDefined();
+    expect((await call(alice, 'submit_answers', { ...answers, moodComment: ' Short night ' })).json.result).toBe('submitted');
+    expect((await repo.getSubmission((await repo.getRun(s.id, '2026-06-10'))!.id, 'users/alice'))!.moodComment).toBe('Short night');
+    expect((await call(root, 'get_run', { standupId: s.id })).json.moodComments).toEqual([{ person: { userName: 'users/alice', displayName: 'alice' }, mood: 'meh', comment: 'Short night' }]);
+    expect('moodComments' in (await call(alice, 'get_run', { standupId: s.id })).json).toBe(false);
+    // With mood off the comment is dropped.
+    await repo.updateStandup(s.id, { moodEnabled: false });
+    await call(alice, 'submit_answers', { ...answers, mood: null, moodComment: 'Still here' });
+    expect((await repo.getSubmission((await repo.getRun(s.id, '2026-06-10'))!.id, 'users/alice'))!.moodComment).toBeNull();
+  });
+
   it('refuses write tools on a token with no person behind it, and drops submit without the service', async () => {
     const { repo, connect, call } = await startServer();
     await seedStandup(repo);

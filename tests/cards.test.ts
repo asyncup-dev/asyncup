@@ -66,28 +66,33 @@ describe('cards', () => {
     const dialog: any = standupDialog(7, QUESTIONS, true, ['From last time', '', '']);
     const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;
     const inputs = widgets.filter((w: any) => w.textInput).map((w: any) => w.textInput);
-    expect(inputs.map((i: any) => i.name)).toEqual(['q0', 'q1', 'q2']);
-    expect(inputs.map((i: any) => i.label)).toEqual(QUESTIONS.map((q) => `${q} (required)`));
+    expect(inputs.map((i: any) => i.name)).toEqual(['q0', 'q1', 'q2', 'moodComment']);
+    expect(inputs.slice(0, 3).map((i: any) => i.label)).toEqual(QUESTIONS.map((q) => `${q} (required)`));
     expect(inputs[0].value).toBe('From last time');
     expect(inputs[1].value).toBeUndefined();
     const mood = widgets.find((w: any) => w.selectionInput)?.selectionInput;
     expect(mood.items).toHaveLength(5);
     expect(mood.label).toBe('How is your mood today? (required)');
+    // The optional comment comes straight after the mood, with its privacy promise.
+    expect(widgets.indexOf(widgets.find((w: any) => w.textInput?.name === 'moodComment'))).toBe(widgets.indexOf(widgets.find((w: any) => w.selectionInput)) + 1);
+    expect(inputs[3]).toEqual({ name: 'moodComment', label: 'Want to say why? (optional)', type: 'SINGLE_LINE', value: undefined, hintText: 'Only people allowed to read mood comments see this. It is never posted in the space.' });
     expect(JSON.stringify(widgets)).toContain('"submitStandup"');
   });
 
   it('dialog can come back with an error line, the answers kept and the mood still picked', () => {
-    const dialog: any = standupDialog(7, QUESTIONS, true, ['Did X', 'Will <b>Y</b>', ''], null, { error: 'Still empty: "Any blockers?"', mood: 'good' });
+    const dialog: any = standupDialog(7, QUESTIONS, true, ['Did X', 'Will <b>Y</b>', ''], null, { error: 'Still empty: "Any blockers?"', mood: 'good', moodComment: 'Busy week' });
     const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;
     expect(widgets[0].textParagraph.text).toBe('<font color="#d93025"><b>⚠️ Still empty: "Any blockers?"</b></font>');
     expect(widgets[2].textInput.value).toBe('Will <b>Y</b>');
     expect(widgets.find((w: any) => w.selectionInput).selectionInput.items.filter((i: any) => i.selected).map((i: any) => i.value)).toEqual(['good']);
+    expect(widgets.find((w: any) => w.textInput?.name === 'moodComment').textInput.value).toBe('Busy week');
   });
 
   it('dialog omits the mood dropdown when disabled and supports custom questions', () => {
     const dialog: any = standupDialog(7, ['What shipped?'], false, ['']);
     const widgets = dialog.actionResponse.dialogAction.dialog.body.sections[0].widgets;
     expect(widgets.filter((w: any) => w.selectionInput)).toHaveLength(0);
+    expect(widgets.some((w: any) => w.textInput?.name === 'moodComment')).toBe(false);
     expect(widgets[0].textInput.label).toBe('What shipped? (required)');
   });
 
@@ -106,10 +111,11 @@ describe('cards', () => {
       late: false,
       submittedAt: '2026-06-10T04:30:00Z',
       editedAt: null,
-      messageName: null,
+      messageName: null, moodComment: null,
     };
     const clean = JSON.stringify(submissionMessage(base));
-    expect(clean).toContain('😄 Alice');
+    expect(clean).toContain('📝 Alice');
+    expect(clean).not.toContain('😄');
     expect(clean).toContain('✅ None');
 
     const flagged = JSON.stringify(
@@ -130,7 +136,6 @@ describe('cards', () => {
     const summary: RunSummary = {
       standupName: 'Daily Standup',
       date: '2026-06-10',
-      teamMood: null,
       mandatoryTotal: 7,
       mandatorySubmitted: 5,
       missingMandatory: ['Asha', 'Rohit'],
@@ -138,6 +143,7 @@ describe('cards', () => {
       optionalSubmitted: 1,
       lateCount: 2,
       openBlockers: 3,
+      teamMood: null,
     };
     const text = summaryText(summary);
     expect(text).toContain('*5/7* mandatory submitted');

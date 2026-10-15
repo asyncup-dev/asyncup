@@ -40,7 +40,7 @@ space. `status` without a `#id` prefix reports every standup in the space.
 | `questions` | Show the current question list |
 | `questions set Q1 \| Q2 \| …` | Replace the questions (1–10, pipe-separated) |
 | `questions reset` | Back to the default three questions |
-| `mood on\|off\|anon` (also `anonymous`) | Mood dropdown; `anon` hides who felt what — the wrap-up shows the team average instead |
+| `mood on\|off\|anon` (also `anonymous`) | Mood dropdown, with an optional comment. Moods are seen in the web app only, never in the space; `anon` hides who felt what there too |
 | `escalate @user` | DM this person when blockers stay open too long |
 | `escalate days N` / `escalate off` | Escalation threshold (default 2 days) / disable |
 | `digest on\|off` | Weekly digest posted after the last run of the week |
@@ -50,7 +50,7 @@ space. `status` without a `#id` prefix reports every standup in the space.
 | Command | Effect |
 | --- | --- |
 | `status` | Configuration + today's progress (submitted / pending / away) |
-| `trends` | Last 4 weeks: participation % and average mood |
+| `trends` | Last 4 weeks: participation % (mood stays out of the space) |
 | `blockers` | Open blockers with ids, age, who's tagged, and update counts |
 | `export` | How to download a CSV of submissions |
 
@@ -114,7 +114,8 @@ Anyone can DM the bot directly:
   one-line reason, posts it in the day's thread, and lists you as away, not
   missing. *Undo skip* removes that thread reply.
 - **Every field is required:** each question and the mood is marked
-  *(required)*. Submitting with one empty brings the form back with a red line
+  *(required)*. The mood comment, *Want to say why?*, is the one optional
+  field. Submitting with one empty brings the form back with a red line
   naming what's missing and your answers kept; nothing posts until all are
   filled. (Google Chat can't grey out Submit for apps yet.) Answer the blockers
   question with "none" when there are none. The skip reason works the same way.
