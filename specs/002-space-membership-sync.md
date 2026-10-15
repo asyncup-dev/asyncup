@@ -5,7 +5,7 @@
 | Status | Done |
 | Size | Cross-cutting (migration, API change) |
 | Figma | [Specs › 002 Space membership sync](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=148-23) |
-| PR | — |
+| PR | [#102](https://github.com/asyncup-dev/asyncup/pull/102) |
 
 ## Problem
 
