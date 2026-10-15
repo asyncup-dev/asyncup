@@ -1218,9 +1218,9 @@ export class Repo {
   // --- leave shown in Chat and Calendar ---
 
   /** Active days off from a date on, for working out leave periods. */
-  async listDaysOffFrom(fromDate: string): Promise<{ userName: string; date: string }[]> {
-    const rows = await this.db.all(`SELECT user_name, date FROM schedule_overrides WHERE status = 'active' AND working = 0 AND date >= ? ORDER BY user_name, date`, [fromDate]);
-    return rows.map((r: any) => ({ userName: r.user_name, date: r.date }));
+  async listDaysOffFrom(fromDate: string): Promise<{ userName: string; displayName: string; date: string }[]> {
+    const rows = await this.db.all(`SELECT user_name, display_name, date FROM schedule_overrides WHERE status = 'active' AND working = 0 AND date >= ? ORDER BY user_name, date`, [fromDate]);
+    return rows.map((r: any) => ({ userName: r.user_name, displayName: r.display_name, date: r.date }));
   }
 
   /** People on vacation on every standup they're on: what My standups › Vacation mode sets. */

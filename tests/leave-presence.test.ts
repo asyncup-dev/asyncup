@@ -190,6 +190,17 @@ describe('when Google says no', () => {
   });
 });
 
+describe('people off every roster', () => {
+  it('are still named by the name on their days off', async () => {
+    const { leave, off, settings, repo, standup } = await leaveStack();
+    await repo.setUserEmail(alice.userName, '');
+    await off(['2026-06-12']);
+    await repo.removeParticipant(standup.id, alice.userName);
+    await leave.sweep();
+    expect((await settings.get()).leaveSyncError).toStartWith('Alice’s out-of-office event');
+  });
+});
+
 describe('older wiring', () => {
   it('says nothing about Chat and writes on the real clock when not told otherwise', async () => {
     const { repo, adapter, settings } = await leaveStack();

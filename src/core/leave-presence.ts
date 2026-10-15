@@ -70,7 +70,11 @@ export class LeavePresence {
     if (!s.leaveInChat) return;
     const from = this.now().minus({ days: LOOKBACK_DAYS }).toISODate()!;
     const daysOff = new Map<string, string[]>();
-    for (const d of await this.repo.listDaysOffFrom(from)) daysOff.set(d.userName, [...(daysOff.get(d.userName) ?? []), d.date]);
+    const names = new Map<string, string>();
+    for (const d of await this.repo.listDaysOffFrom(from)) {
+      daysOff.set(d.userName, [...(daysOff.get(d.userName) ?? []), d.date]);
+      names.set(d.userName, d.displayName);
+    }
     const vacation = new Set(await this.repo.listVacationUsers());
     const rows = await this.repo.listLeaveRows();
     const people = new Set([...daysOff.keys(), ...vacation, ...rows.map((r) => r.userName)]);
@@ -78,7 +82,7 @@ export class LeavePresence {
     const failures: string[] = [];
     for (const userName of people) {
       const mine = rows.filter((r) => r.userName === userName);
-      const failure = await this.person(userName, daysOff.get(userName) ?? [], vacation.has(userName), mine, writer, s.leaveDeclineMode as DeclineMode);
+      const failure = await this.person(userName, names.get(userName) ?? userName, daysOff.get(userName) ?? [], vacation.has(userName), mine, writer, s.leaveDeclineMode as DeclineMode);
       if (failure) failures.push(failure);
     }
     const still = (await this.repo.listLeaveRows()).some((r) => r.error);
@@ -87,9 +91,10 @@ export class LeavePresence {
   }
 
   /** Brings one person in step; returns the last failure, if any. */
-  private async person(userName: string, dates: string[], onVacation: boolean, rows: LeaveRow[], writer: LeaveWriter | null, decline: DeclineMode): Promise<string | null> {
+  private async person(userName: string, fallbackName: string, dates: string[], onVacation: boolean, rows: LeaveRow[], writer: LeaveWriter | null, decline: DeclineMode): Promise<string | null> {
     const people = await this.repo.listPersonRows(userName);
-    const name = people[0]?.displayName ?? userName;
+    // Someone off every roster still has a name on their days off.
+    const name = people[0]?.displayName ?? fallbackName;
     const zone = people.find((p) => p.timezone)?.timezone ?? people[0]?.standupTimezone ?? (await this.settings.get()).defaultTimezone;
     const today = this.now().setZone(zone).toISODate()!;
     const works = (date: string) => people.length === 0 || people.some((p) => worksOn(p, date));
