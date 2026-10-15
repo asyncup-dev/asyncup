@@ -394,6 +394,9 @@ export const Settings = named(
       leaveInChat: z.boolean().describe('Days off and vacation mode shown as people’s Chat status and a Calendar out-of-office event.'),
       leaveDeclineMode: z.enum(['none', 'new', 'all']).describe('What the out-of-office event does with clashing invites.'),
       leaveSyncError: z.strictObject({ message: z.string(), at: timestamp }).nullable().describe('The latest failure writing someone’s leave to Chat or Calendar.'),
+      spelling: z
+        .strictObject({ enabled: z.boolean(), dialect: z.enum(['en-GB', 'en-US']), words: z.array(z.string()) })
+        .describe('Likely typos in Chat answers pointed out once before posting; `words` are never flagged.'),
     }),
     signIn: z.strictObject({
       tokenSignIn: z.boolean(),
@@ -535,6 +538,9 @@ export const SettingsPatch = named(
       calendarOoo: z.boolean(),
       leaveInChat: z.boolean(),
       leaveDeclineMode: z.enum(['none', 'new', 'all']),
+      spellingEnabled: z.boolean(),
+      spellingDialect: z.enum(['en-GB', 'en-US']),
+      spellingWords: z.string().describe('One word or phrase per line.'),
       tokenSignIn: z.boolean(),
       setupComplete: z.boolean(),
       mcpEnabled: z.boolean(),

@@ -70,7 +70,7 @@ const TOKEN_OFF_MSG =
 
 /** Secrets keep their stored value on an empty save; an explicit clear wipes them. */
 const SECRET_FIELDS = new Set<keyof AppSettings>(['serviceAccountJson', 'oauthClientSecret']);
-const BOOL_FIELDS = new Set<keyof AppSettings>(['calendarOoo', 'leaveInChat', 'tokenSignIn', 'setupComplete', 'mcpEnabled']);
+const BOOL_FIELDS = new Set<keyof AppSettings>(['calendarOoo', 'leaveInChat', 'spellingEnabled', 'tokenSignIn', 'setupComplete', 'mcpEnabled']);
 
 const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => string | null>> = {
   chatAudience: badAudience,
@@ -86,6 +86,8 @@ const FIELD_CHECKS: Partial<Record<keyof AppSettings, (v: string) => string | nu
   oauthClientSecret: () => null,
   mcpDefaultScopes: badMcpScopes,
   leaveDeclineMode: (v) => (['none', 'new', 'all'].includes(v) ? null : 'Choose none, new or all.'),
+  spellingDialect: (v) => (v === 'en-GB' || v === 'en-US' ? null : 'Choose en-GB or en-US.'),
+  spellingWords: (v) => (v.length > 5000 ? 'Keep the word list under 5,000 characters.' : null),
 };
 
 const EDITABLE_FIELDS: (keyof AppSettings)[] = [...BOOL_FIELDS, ...(Object.keys(FIELD_CHECKS) as (keyof AppSettings)[])];

@@ -176,16 +176,21 @@ describe('server edge cases', () => {
 describe('web app under /app', () => {
   it('serves the built bundle with an SPA fallback, and 404s when there is no build', async () => {
     const dist = mkdtempSync(join(tmpdir(), 'asyncup-web-'));
-    writeFileSync(join(dist, 'index.html'), '<!doctype html><title>AsyncUp</title><div id="root"></div>');
+    writeFileSync(join(dist, 'index.html'), '<!doctype html><html lang="en"><title>AsyncUp</title><div id="root"></div>');
     mkdirSync(join(dist, 'assets'));
     writeFileSync(join(dist, 'assets', 'app.js'), 'console.log(1)');
-    const { url } = await startServer({ webDist: dist });
+    const { url, settings } = await startServer({ webDist: dist });
     for (const path of ['/app', '/app/', '/app/standups', '/app/settings/mcp']) {
       const res = await fetch(`${url}${path}`);
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toContain('text/html');
-      expect(await res.text()).toContain('id="root"');
+      const page = await res.text();
+      expect(page).toContain('id="root"');
+      expect(page).toContain('<html lang="en-GB">');
     }
+    // The page language follows the spelling setting (spec 004, criterion 12).
+    await settings.update({ spellingDialect: 'en-US' });
+    expect(await (await fetch(`${url}/app`)).text()).toContain('<html lang="en-US">');
     const asset = await fetch(`${url}/app/assets/app.js`);
     expect(asset.status).toBe(200);
     expect(asset.headers.get('content-type')).toContain('javascript');

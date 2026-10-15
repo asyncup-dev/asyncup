@@ -1,3 +1,4 @@
+import { typoNotice, type Spelling } from '../../core/spelling.js';
 import { IANAZone } from 'luxon';
 import type { BlockerService } from '../../core/blocker-service.js';
 import type { PromptState } from '../../core/adapter.js';
@@ -57,6 +58,7 @@ export class EventRouter {
     private schedule: ScheduleService | null = null,
     /** Whether leave shows in Chat and Calendar, so replies can say so. */
     private leaveShown: () => Promise<boolean> = async () => false,
+    private spelling: Spelling | null = null,
   ) {}
 
   async handle(event: any): Promise<object> {
@@ -355,6 +357,10 @@ export class EventRouter {
     }
     if (moodComment.length > LIMITS.textMax) {
       return standupDialog(runId, questions, standup.moodEnabled, values, await this.endpoint(), { ...again, error: `Keep it to ${LIMITS.textMax} characters.` });
+    }
+    if (this.spelling && event?.common?.parameters?.spellingShown !== '1') {
+      const typos = await this.spelling.typos([...values, moodComment]);
+      if (typos.length) return standupDialog(runId, questions, standup.moodEnabled, values, await this.endpoint(), { ...again, notice: typoNotice(typos) });
     }
     const answers: Answer[] = questions.map((question, i) => ({ question, answer: values[i]! }));
     const mood: Mood | null = standup.moodEnabled ? (picked as Mood) : null;

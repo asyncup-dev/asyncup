@@ -21,6 +21,8 @@ import { deriveWebhookSecret } from './core/crypto.js';
 import { WebhookNotifier } from './core/webhooks.js';
 import { RosterSync } from './core/roster-sync.js';
 import { LeavePresence } from './core/leave-presence.js';
+import { Spelling } from './core/spelling.js';
+import { HarperEngine } from './integrations/harper.js';
 import { createServer } from './server.js';
 
 const config = loadConfig();
@@ -61,6 +63,7 @@ const router = new EventRouter(
   async () => chatEndpointUrl((await settings.get()).chatAudience),
   schedule,
   leaveShown,
+  new Spelling(settings, repo, new HarperEngine(), (msg) => console.log(`[spelling] ${msg}`)),
 );
 
 // Integrations are resolved from settings per use, so settings changes

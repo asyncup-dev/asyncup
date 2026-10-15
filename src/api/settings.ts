@@ -1,3 +1,4 @@
+import { acceptedWords } from '../core/spelling.js';
 import type { Request, Response, Router } from 'express';
 import { MCP_SCOPE_HELP, parseScopes } from '../core/mcp-scopes.js';
 import { googleSignInOn, LOCKOUT_MSG, locksOut, samlSignInOn, stageFieldValue } from '../core/settings-rules.js';
@@ -48,6 +49,7 @@ function view(s: AppSettings) {
       leaveInChat: s.leaveInChat,
       leaveDeclineMode: s.leaveDeclineMode,
       leaveSyncError: s.leaveSyncError ? { message: s.leaveSyncError, at: s.leaveSyncErrorAt } : null,
+      spelling: { enabled: s.spellingEnabled, dialect: s.spellingDialect, words: acceptedWords(s.spellingWords) },
     },
     signIn: {
       tokenSignIn: s.tokenSignIn,

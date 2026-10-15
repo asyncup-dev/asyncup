@@ -152,10 +152,11 @@ export function standupDialog(
   moodEnabled: boolean,
   prefill: string[],
   endpoint: string | null = null,
-  again: { error?: string; mood?: string; moodComment?: string } = {},
+  again: { error?: string; notice?: string; mood?: string; moodComment?: string } = {},
 ) {
   const widgets: any[] = [
     ...(again.error ? [errorLine(again.error)] : []),
+    ...(again.notice ? [{ textParagraph: { text: `<b>${html(again.notice)}</b>` } }] : []),
     ...questions.map((question, i) => ({
       textInput: {
         name: `q${i}`,
@@ -191,7 +192,8 @@ export function standupDialog(
   widgets.push({
     buttonList: {
       buttons: [
-        { text: 'Submit', onClick: { action: clickAction(SUBMIT_DIALOG_FN, [{ key: 'runId', value: String(runId) }], endpoint) } },
+        // Once typos have been pointed out, the next submit goes through as typed.
+        { text: 'Submit', onClick: { action: clickAction(SUBMIT_DIALOG_FN, [{ key: 'runId', value: String(runId) }, ...(again.notice ? [{ key: 'spellingShown', value: '1' }] : [])], endpoint) } },
       ],
     },
   });
