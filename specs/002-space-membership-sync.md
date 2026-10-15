@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft |
+| Status | Done |
 | Size | Cross-cutting (migration, API change) |
 | Figma | [Specs › 002 Space membership sync](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=148-23) |
 | PR | — |
@@ -135,10 +135,12 @@ Failure cases: the Chat API errors, the app was removed from the
 space, a group in the space can't be read, or the space lists nobody.
 In each case nobody comes off, and the error shows in Settings.
 
-To check before building: Chat names a group member `groups/{id}`. The
-Admin SDK takes a group's unique ID as the group key, and I expect this
-is the same ID, but I haven't confirmed it. If it isn't, the group can't
-be read, and criterion 10 keeps everyone on until it's fixed.
+Not yet confirmed against a real Workspace: Chat names a group member
+`groups/{id}` (a Cloud Identity group), and the check passes that ID to
+the Admin SDK, which accepts a group's unique ID as the group key.
+Google's docs (checked 15 Oct 2026) don't say the two IDs are the same.
+If they aren't, the group can't be read, and criterion 10 keeps everyone
+on and says why in Settings.
 
 ## Open questions
 
