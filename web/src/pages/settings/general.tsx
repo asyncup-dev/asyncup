@@ -52,7 +52,7 @@ export function GeneralSettings() {
           </select>
         </SettingsRow>
         {s.workspace.leaveSyncError ? (
-          <SettingsRow label="Latest problem" hint="Retried with the hourly roster check.">
+          <SettingsRow label="Latest problem" hint="Retried an hour later.">
             <div className="alert">
               {s.workspace.leaveSyncError.message}{' '}
               {new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: s.workspace.defaultTimezone }).format(new Date(s.workspace.leaveSyncError.at))}

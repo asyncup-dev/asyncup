@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft |
+| Status | Done |
 | Size | Cross-cutting (migration, new Google scopes, settings) |
 | Figma | [Specs › 003 Leave in Chat and Calendar](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=154-26) |
 | PR | — |
@@ -82,9 +82,9 @@ Telling people
     their request, the confirmation adds: "Your Chat status and
     calendar will show it." (or "Their…" for a manager).
 15. When writing to Chat or Calendar fails, for example a missing
-    scope or no known email for the person, it is retried with the
-    hourly roster check, and Settings › General shows the latest
-    failure with the person and when.
+    scope or no known email for the person, it is retried an hour
+    later, and Settings › General shows the latest failure with the
+    person and when.
 
 ## Non-goals
 
@@ -115,10 +115,10 @@ How it works:
 - A `LeavePresence` service works out each person's periods from their
   active days off, their personal week and their vacation mode. It
   compares them with the `leave_presence` rows, and makes Chat and
-  Calendar match. It runs for that person when their days off or
-  vacation change, and for everyone with the hourly roster check. That
-  hourly run sets statuses whose first day has come, and retries
-  failures. It is idempotent, so a restart never writes twice.
+  Calendar match. It runs on every scheduler tick (each minute) and only
+  calls Google for a difference, so changes show within a minute and
+  statuses start on their first day. A failed write waits an hour before
+  a retry. It is idempotent, so a restart never writes twice.
 - Chat: `users.availability.patch` with `updateMask=customStatus`, as
   the person, through domain-wide delegation. Clearing reads the status
   first (`users.availability.get`) and clears it only if the text is
