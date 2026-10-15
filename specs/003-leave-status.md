@@ -5,7 +5,7 @@
 | Status | Done |
 | Size | Cross-cutting (migration, new Google scopes, settings) |
 | Figma | [Specs › 003 Leave in Chat and Calendar](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=154-26) |
-| PR | — |
+| PR | [#103](https://github.com/asyncup-dev/asyncup/pull/103) |
 
 ## Problem
 
