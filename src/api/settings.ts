@@ -41,7 +41,14 @@ function saIdentity(json: string): { email: string | null; clientId: string | nu
 function view(s: AppSettings) {
   return {
     chat: { audience: s.chatAudience, serviceAccount: { set: !!s.serviceAccountJson, ...saIdentity(s.serviceAccountJson) } },
-    workspace: { defaultTimezone: s.defaultTimezone, calendarOoo: s.calendarOoo, workspaceAdminEmail: s.workspaceAdminEmail },
+    workspace: {
+      defaultTimezone: s.defaultTimezone,
+      calendarOoo: s.calendarOoo,
+      workspaceAdminEmail: s.workspaceAdminEmail,
+      leaveInChat: s.leaveInChat,
+      leaveDeclineMode: s.leaveDeclineMode,
+      leaveSyncError: s.leaveSyncError ? { message: s.leaveSyncError, at: s.leaveSyncErrorAt } : null,
+    },
     signIn: {
       tokenSignIn: s.tokenSignIn,
       google: { clientId: s.oauthClientId, clientSecret: { set: !!s.oauthClientSecret }, on: googleSignInOn(s) },

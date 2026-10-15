@@ -9,6 +9,7 @@ Workspace directory as its service account. That buys three things:
 | **Google Groups in a space**: on a roster picked from the space, members of a group in the space count as in it | The admin role below |
 | **User lookups**: Workspace admins recognised at Google sign-in, accounts outside the Workspace refused, SAML and SCIM users linked to their Chat identity straight away, emails found for Calendar out-of-office | The admin role below |
 | **Calendar out-of-office**: people with an *Out of office* event are marked away | [Domain-wide delegation](#calendar-ooo) |
+| **Leave in Chat and Calendar**: days off and vacation mode shown as a Chat status and an out-of-office event | [Domain-wide delegation](#leave-in-chat) |
 
 No domain-wide delegation is needed for the first two. Google recommends an
 admin role on the service account instead, and that is what AsyncUp uses.
@@ -140,3 +141,24 @@ When a run opens, people with an *Out of office* event that day are marked
 away, listed under *Away* and never counted as missing. AsyncUp needs each
 person's email to check their calendar: it comes from the Directory (the admin
 role above), or is learned the first time the person uses the bot.
+
+## Leave in Chat and Calendar {#leave-in-chat}
+
+AsyncUp sets each person's Chat custom status and adds an out-of-office event
+to their calendar, as that person. Google only lets a user change their own
+status, so this needs **domain-wide delegation** too.
+
+1. In the Admin console: **Security → Access and data control → API controls →
+   Domain-wide delegation**. Edit the service account's entry (or add one with
+   its client ID) and add both scopes:
+   `https://www.googleapis.com/auth/chat.users.availability` and
+   `https://www.googleapis.com/auth/calendar.events`.
+2. Enable the **Google Calendar API** in the Cloud project. The Chat API is
+   already on.
+3. In AsyncUp, switch **Leave in Chat and Calendar** on under **Settings →
+   General**.
+
+Keep any scopes already on the entry, such as the Calendar read scope above:
+Google replaces the list you save. Custom statuses need a Business or
+Enterprise edition. What people see is described in
+[Personal schedules](./schedules#leave-in-chat).

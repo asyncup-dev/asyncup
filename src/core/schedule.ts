@@ -248,7 +248,13 @@ export class ScheduleService {
     private now: () => DateTime = () => DateTime.utc(),
     private webhooks: WebhookNotifier | null = null,
     private log: (msg: string) => void = () => {},
+    private leaveShown: () => Promise<boolean> = async () => false,
   ) {}
+
+  /** The line telling people their Chat status and calendar will show days off, when that is on. */
+  private async leaveLine(working: boolean, whose: 'Your' | 'Their'): Promise<string> {
+    return !working && (await this.leaveShown()) ? ` ${whose} Chat status and calendar will show it.` : '';
+  }
 
   private async authority(target: Mention, actor: Actor, standups: Standup[]): Promise<Authority> {
     const self = actor.userName === target.userName;
@@ -343,7 +349,7 @@ export class ScheduleService {
         target.userName,
         working
           ? `📅 ${actor.displayName} marked you *working* on ${describeDates(dates)}${reason ? ` (${reason})` : ''} — you'll be prompted as usual.`
-          : `🏖️ ${actor.displayName} marked you *away* on ${describeDates(dates)}${reason ? ` (${reason})` : ''} — no prompt, and you won't be counted as missing. If that's wrong, reply \`working ${dates[0]}\`.`,
+          : `🏖️ ${actor.displayName} marked you *away* on ${describeDates(dates)}${reason ? ` (${reason})` : ''} — no prompt, and you won't be counted as missing. If that's wrong, reply \`working ${dates[0]}\`.${await this.leaveLine(working, 'Your')}`,
       );
     }
     const affected = standups.map((s) => s.name).join(', ');
@@ -352,7 +358,7 @@ export class ScheduleService {
       status,
       message: working
         ? `✅ ${self ? 'You are' : `${target.displayName} is`} marked *working* on ${describeDates(dates)} for ${affected}.`
-        : `🏖️ ${describeDates(dates)} marked off${reason ? ` (${reason})` : ''} for ${affected} — no prompt, not counted as missing.${governed.length > 0 ? ' Your managers get today’s digest.' : ''} Undo with \`off cancel ${dates[0]}\`.`,
+        : `🏖️ ${describeDates(dates)} marked off${reason ? ` (${reason})` : ''} for ${affected} — no prompt, not counted as missing.${governed.length > 0 ? ' Your managers get today’s digest.' : ''} Undo with \`off cancel ${dates[0]}\`.${await this.leaveLine(working, self ? 'Your' : 'Their')}`,
     };
   }
 
@@ -424,10 +430,10 @@ export class ScheduleService {
     await this.dm(
       person.userName,
       approve
-        ? `✅ ${actor.displayName} approved your ${working ? 'working' : 'time off'} request for ${describeDates(dates)}.${note ? ` “${note}”` : ''}`
+        ? `✅ ${actor.displayName} approved your ${working ? 'working' : 'time off'} request for ${describeDates(dates)}.${note ? ` “${note}”` : ''}${await this.leaveLine(working, 'Your')}`
         : `❌ ${actor.displayName} declined your ${working ? 'working' : 'time off'} request for ${describeDates(dates)}.${note ? ` “${note}”` : ''} Talk to them if you need those days.`,
     );
-    return { ok: true, status: 'active', message: `${approve ? '✅ Approved' : '❌ Declined'} — ${person.displayName} has been told.` };
+    return { ok: true, status: 'active', message: `${approve ? '✅ Approved' : '❌ Declined'} — ${person.displayName} has been told.${approve ? await this.leaveLine(working, 'Their') : ''}` };
   }
 
   /** When a run opens: people whose week or overrides exclude the date start it as away. */

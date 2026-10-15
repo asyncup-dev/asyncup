@@ -34,9 +34,31 @@ export function GeneralSettings() {
         </SettingsRow>
         <SettingsRow label="Calendar out-of-office" hint="Auto-mark people away on OOO days. Needs domain-wide delegation of https://www.googleapis.com/auth/calendar.events.readonly to the client ID under Google Chat.">
           <label className="row t-small">
-            <input type="checkbox" checked={s.workspace.calendarOoo} onChange={(e) => void save({ calendarOoo: e.target.checked })} /> {s.workspace.calendarOoo ? 'On' : 'Off'}
+            <input type="checkbox" aria-label="Calendar out-of-office" checked={s.workspace.calendarOoo} onChange={(e) => void save({ calendarOoo: e.target.checked })} /> {s.workspace.calendarOoo ? 'On' : 'Off'}
           </label>
         </SettingsRow>
+      </SectionCard>
+      <SectionCard title="Leave in Chat and Calendar" hint="Days off and vacation mode show as people’s Chat status and a Calendar out-of-office event.">
+        <SettingsRow label="Show leave in Chat and Calendar" hint="Needs domain-wide delegation of https://www.googleapis.com/auth/chat.users.availability and https://www.googleapis.com/auth/calendar.events to the client ID under Google Chat.">
+          <label className="row t-small">
+            <input type="checkbox" aria-label="Show leave in Chat and Calendar" checked={s.workspace.leaveInChat} onChange={(e) => void save({ leaveInChat: e.target.checked })} /> {s.workspace.leaveInChat ? 'On' : 'Off'}
+          </label>
+        </SettingsRow>
+        <SettingsRow label="Decline invites during leave" hint="What the out-of-office event does with meeting invites that clash.">
+          <select className="input" aria-label="Decline invites during leave" value={s.workspace.leaveDeclineMode} onChange={(e) => void save({ leaveDeclineMode: e.target.value })}>
+            <option value="none">Decline nothing</option>
+            <option value="new">Decline new invites</option>
+            <option value="all">Decline all clashes</option>
+          </select>
+        </SettingsRow>
+        {s.workspace.leaveSyncError ? (
+          <SettingsRow label="Latest problem" hint="Retried an hour later.">
+            <div className="alert">
+              {s.workspace.leaveSyncError.message}{' '}
+              {new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: s.workspace.defaultTimezone }).format(new Date(s.workspace.leaveSyncError.at))}
+            </div>
+          </SettingsRow>
+        ) : null}
       </SectionCard>
     </>
   );

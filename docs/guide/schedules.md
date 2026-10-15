@@ -107,6 +107,35 @@ declined or lapsed request counts as missing. A manager changing a past day
 corrects that day's run, except for people who submitted. Each standup's
 managers get the digest of a change once, whichever team's run closes first.
 
+## Leave in Chat and Calendar {#leave-in-chat}
+
+With **Settings → General → Leave in Chat and Calendar** on, people's leave
+shows where their teammates look. It belongs to the person, not a standup:
+one status and one event, however many standups they're on.
+
+| Leave | Chat custom status | Calendar |
+| --- | --- | --- |
+| Days off (set, or approved) | 🌴 *On leave until Mon 20 Oct* from the first day, expiring after the last | An *On leave* out-of-office event on their primary calendar, 00:00 on the first day to 00:00 after the last, in their timezone |
+| Vacation mode, on every standup | 🌴 *On leave*, until they switch it off | Nothing: there is no end date |
+
+- Days off a few days apart are one period when the days between are days
+  they don't work, such as a weekend.
+- Pending, declined and withdrawn days don't count.
+- The status replaces whatever status they had, which isn't restored.
+- When days change, the status and event follow. When they're cancelled,
+  both go, but a status the person has since changed is left alone.
+- **Decline invites during leave** sets what the event does with clashing
+  invites: nothing (the default), new invites only, or all clashes. Declines
+  say *I'm on leave until Mon 20 Oct.*
+- The replies to `off`, `vacation` and `back`, and a manager's approval, say
+  that Chat and Calendar will show it.
+- When Google refuses, for example a missing scope or an unknown email, the
+  latest failure shows under **Settings → General** and is retried hourly.
+
+It needs two scopes on the service account's domain-wide delegation; see
+[Directory and group rosters](./directory#leave-in-chat). Google allows custom
+statuses on Business and Enterprise editions.
+
 ## Integrations
 
 Webhooks receive two more events: `schedule_change` (person, summary, who,

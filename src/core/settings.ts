@@ -15,6 +15,13 @@ export interface AppSettings {
   serviceAccountJson: string;
   defaultTimezone: string;
   calendarOoo: boolean;
+  /** Days off and vacation mode shown as people's Chat status and a Calendar out-of-office event. */
+  leaveInChat: boolean;
+  /** What that out-of-office event does with clashing invites: none, new, or all. */
+  leaveDeclineMode: string;
+  /** The latest failure writing someone's leave to Chat or Calendar, and when; empty when none. */
+  leaveSyncError: string;
+  leaveSyncErrorAt: string;
   /** Workspace admin impersonated for Directory API lookups. Empty = off. */
   workspaceAdminEmail: string;
   /** OAuth web client for "Sign in with Google". Empty = sign-in off. */
@@ -52,6 +59,10 @@ const SETTING_DEFAULTS: AppSettings = {
   defaultTimezone: 'UTC',
   // Off until someone sets up the delegation it needs.
   calendarOoo: false,
+  leaveInChat: false,
+  leaveDeclineMode: 'none',
+  leaveSyncError: '',
+  leaveSyncErrorAt: '',
   workspaceAdminEmail: '',
   oauthClientId: '',
   oauthClientSecret: '',

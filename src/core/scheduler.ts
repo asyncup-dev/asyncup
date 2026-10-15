@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
+import type { LeavePresence } from './leave-presence.js';
 import type { OooChecker } from './ooo.js';
 import type { RosterSync } from './roster-sync.js';
 import type { ScheduleService } from './schedule.js';
@@ -36,6 +37,8 @@ export interface SchedulerProviders {
   /** Rosters drawn from a Google Group; absent in older wiring. */
   roster?: RosterSync;
   directory?: () => Promise<UserDirectory | null>;
+  /** Leave shown in Chat and Calendar; absent in older wiring. */
+  leave?: LeavePresence;
 }
 
 /**
@@ -72,6 +75,11 @@ export class Scheduler {
       } catch (err) {
         this.log(`standup ${standup.id} (${standup.name}): ${err}`);
       }
+    }
+    try {
+      await this.providers.leave?.sweep();
+    } catch (err) {
+      this.log(`leave in Chat and Calendar: ${err}`);
     }
   }
 

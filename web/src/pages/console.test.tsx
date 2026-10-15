@@ -22,7 +22,7 @@ const PEOPLE = [
 function settingsFixture(): Settings {
   return {
     chat: { audience: '728449131907 https://x/chat/events', serviceAccount: { set: true, email: 'bot@x.iam', clientId: '104928' } },
-    workspace: { defaultTimezone: 'Asia/Kolkata', calendarOoo: true, workspaceAdminEmail: '' },
+    workspace: { defaultTimezone: 'Asia/Kolkata', calendarOoo: true, workspaceAdminEmail: '', leaveInChat: false, leaveDeclineMode: 'none', leaveSyncError: null },
     signIn: { tokenSignIn: true, google: { clientId: '', clientSecret: { set: false }, on: false }, saml: { entityId: 'https://idp', ssoUrl: 'https://idp/sso', cert: { set: true }, adminAttribute: '', adminGroup: '', on: true } },
     tokens: { tick: { set: false }, export: { set: true }, scim: { set: false } },
     setup: { complete: true, chatConfigured: true, signInConfigured: true },
@@ -213,8 +213,24 @@ describe('settings', () => {
     await user.selectOptions(screen.getByLabelText('Default timezone'), 'UTC');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(patches).toContainEqual({ defaultTimezone: 'UTC' }));
-    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByLabelText('Calendar out-of-office'));
     await waitFor(() => expect(patches).toContainEqual({ calendarOoo: false }));
+  });
+
+  it('switches leave in Chat and Calendar on, picks the declining, and shows the latest problem (spec 003, criteria 1, 2, 15)', async () => {
+    const { patches } = server({
+      'GET /api/v1/settings': { body: { ...settingsFixture(), workspace: { ...settingsFixture().workspace, leaveInChat: true, leaveSyncError: { message: 'Farhan Ali’s Chat status couldn’t be updated: Google refused it (403).', at: '2026-10-15T04:32:00Z' } } } },
+    });
+    renderApp('/settings');
+    const user = userEvent.setup();
+    expect(await screen.findByRole('heading', { name: 'Leave in Chat and Calendar' })).toBeInTheDocument();
+    expect(screen.getByText(/auth\/chat\.users\.availability and https:\/\/www\.googleapis\.com\/auth\/calendar\.events/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Decline invites during leave')).toHaveValue('none');
+    expect(screen.getByText('Farhan Ali’s Chat status couldn’t be updated: Google refused it (403). 15 Oct, 10:02')).toBeInTheDocument();
+    await user.click(screen.getByLabelText('Show leave in Chat and Calendar'));
+    await waitFor(() => expect(patches).toContainEqual({ leaveInChat: false }));
+    await user.selectOptions(screen.getByLabelText('Decline invites during leave'), 'new');
+    await waitFor(() => expect(patches).toContainEqual({ leaveDeclineMode: 'new' }));
   });
 
   it('manages the Google Chat connection', async () => {

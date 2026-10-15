@@ -6,6 +6,7 @@ import { FakeAdapter } from './adapters/fake/adapter.js';
 import { GoogleChatAdapter } from './adapters/gchat/adapter.js';
 import { EventRouter } from './adapters/gchat/events.js';
 import { GoogleCalendarOoo } from './integrations/google-calendar.js';
+import { GoogleLeaveWriter } from './integrations/google-leave.js';
 import { GoogleGroupDirectory } from './integrations/google-groups.js';
 import { GoogleDirectory } from './integrations/google-directory.js';
 import { BlockerService } from './core/blocker-service.js';
@@ -19,6 +20,7 @@ import { StandupService } from './core/standup-service.js';
 import { deriveWebhookSecret } from './core/crypto.js';
 import { WebhookNotifier } from './core/webhooks.js';
 import { RosterSync } from './core/roster-sync.js';
+import { LeavePresence } from './core/leave-presence.js';
 import { createServer } from './server.js';
 
 const config = loadConfig();
@@ -46,7 +48,8 @@ const webhooks = new WebhookNotifier(undefined, undefined, undefined, (standupId
 const service = new StandupService(repo, adapter, undefined, webhooks, (msg) => console.log(`[standup] ${msg}`));
 const blockerService = new BlockerService(repo, adapter);
 const pollService = new PollService(repo, adapter);
-const schedule = new ScheduleService(repo, adapter, undefined, webhooks, (msg) => console.log(`[schedule] ${msg}`));
+const leaveShown = async () => (await settings.get()).leaveInChat;
+const schedule = new ScheduleService(repo, adapter, undefined, webhooks, (msg) => console.log(`[schedule] ${msg}`), leaveShown);
 const commands = new CommandHandler(repo, settings, undefined, blockerService, adapter, pollService, schedule, service);
 const router = new EventRouter(
   commands,
@@ -57,6 +60,7 @@ const router = new EventRouter(
   pollService,
   async () => chatEndpointUrl((await settings.get()).chatAudience),
   schedule,
+  leaveShown,
 );
 
 // Integrations are resolved from settings per use, so settings changes
@@ -72,9 +76,20 @@ const roster = new RosterSync(
   service,
   adapter,
 );
+const leave = new LeavePresence(
+  repo,
+  settings,
+  async () => {
+    const s = await settings.get();
+    return s.serviceAccountJson ? new GoogleLeaveWriter(s.serviceAccountJson) : null;
+  },
+  undefined,
+  (msg) => console.log(`[leave] ${msg}`),
+);
 const providers: SchedulerProviders = {
   schedule,
   roster,
+  leave,
   ooo: async () => {
     const s = await settings.get();
     if (!s.calendarOoo || !s.serviceAccountJson) return null;

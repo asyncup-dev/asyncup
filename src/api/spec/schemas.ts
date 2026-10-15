@@ -387,7 +387,14 @@ export const Settings = named(
       audience: z.string(),
       serviceAccount: z.strictObject({ set: z.boolean(), email: z.string().nullable(), clientId: z.string().nullable() }),
     }),
-    workspace: z.strictObject({ defaultTimezone: z.string(), calendarOoo: z.boolean(), workspaceAdminEmail: z.string() }),
+    workspace: z.strictObject({
+      defaultTimezone: z.string(),
+      calendarOoo: z.boolean(),
+      workspaceAdminEmail: z.string(),
+      leaveInChat: z.boolean().describe('Days off and vacation mode shown as people’s Chat status and a Calendar out-of-office event.'),
+      leaveDeclineMode: z.enum(['none', 'new', 'all']).describe('What the out-of-office event does with clashing invites.'),
+      leaveSyncError: z.strictObject({ message: z.string(), at: timestamp }).nullable().describe('The latest failure writing someone’s leave to Chat or Calendar.'),
+    }),
     signIn: z.strictObject({
       tokenSignIn: z.boolean(),
       google: z.strictObject({ clientId: z.string(), clientSecret: secret, on: z.boolean() }),
@@ -526,6 +533,8 @@ export const SettingsPatch = named(
   z
     .strictObject({
       calendarOoo: z.boolean(),
+      leaveInChat: z.boolean(),
+      leaveDeclineMode: z.enum(['none', 'new', 'all']),
       tokenSignIn: z.boolean(),
       setupComplete: z.boolean(),
       mcpEnabled: z.boolean(),
