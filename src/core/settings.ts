@@ -22,6 +22,12 @@ export interface AppSettings {
   /** The latest failure writing someone's leave to Chat or Calendar, and when; empty when none. */
   leaveSyncError: string;
   leaveSyncErrorAt: string;
+  /** Likely typos in Chat answers pointed out once before posting. */
+  spellingEnabled: boolean;
+  /** en-GB or en-US. */
+  spellingDialect: string;
+  /** Words never flagged, one per line. */
+  spellingWords: string;
   /** Workspace admin impersonated for Directory API lookups. Empty = off. */
   workspaceAdminEmail: string;
   /** OAuth web client for "Sign in with Google". Empty = sign-in off. */
@@ -63,6 +69,9 @@ const SETTING_DEFAULTS: AppSettings = {
   leaveDeclineMode: 'none',
   leaveSyncError: '',
   leaveSyncErrorAt: '',
+  spellingEnabled: false,
+  spellingDialect: 'en-GB',
+  spellingWords: '',
   workspaceAdminEmail: '',
   oauthClientId: '',
   oauthClientSecret: '',

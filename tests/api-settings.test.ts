@@ -109,11 +109,18 @@ describe('api: settings', () => {
     workspace = (await (await op('/settings')).json() as any).workspace;
     expect(workspace.leaveSyncError).toEqual({ message: 'Alice’s Chat status couldn’t be updated: Google refused it (403).', at: '2026-06-10T04:30:00.000Z' });
 
+    // Spelling suggestions (spec 004, criteria 1, 2)
+    workspace = (await (await patch({ spellingEnabled: true, spellingDialect: 'en-US', spellingWords: 'wfh\ncron\n' })).json() as any).workspace;
+    expect(workspace.spelling).toEqual({ enabled: true, dialect: 'en-US', words: ['wfh', 'cron'] });
+
     for (const [body, field] of [
       [{ chatAudience: 'my-project-slug' }, 'chatAudience'],
       [{ calendarOoo: 'no' }, 'calendarOoo'],
       [{ leaveInChat: 'yes' }, 'leaveInChat'],
       [{ leaveDeclineMode: 'sometimes' }, 'leaveDeclineMode'],
+      [{ spellingEnabled: 'yes' }, 'spellingEnabled'],
+      [{ spellingDialect: 'en-AU' }, 'spellingDialect'],
+      [{ spellingWords: 'x'.repeat(5001) }, 'spellingWords'],
       [{ tokenSignIn: false }, 'tokenSignIn'],
       [{ nonsense: 'x' }, 'nonsense'],
       [{ constructor: 'x' }, 'constructor'],

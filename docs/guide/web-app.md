@@ -39,9 +39,10 @@ detects a working Chat connection and skips straight to the standup step.
   for all standups or one.
 - **Team** — everyone on a roster with role, standups, timezone and status;
   roster changes with confirmation.
-- **Settings** — General (default timezone, Calendar out-of-office, and leave
+- **Settings** — General (default timezone, Calendar out-of-office, leave
   in Chat and Calendar with how its event declines invites and the latest
-  failure), Google Chat (with live verification), Sign-in & SSO,
+  failure, and spelling suggestions with the English and words to accept),
+  Google Chat (with live verification), Sign-in & SSO,
   MCP server, API & tokens, Roles, Access, Danger zone (disconnect Chat;
   delete all history — both behind a typed confirmation). Each section shows
   only to people with its permission.

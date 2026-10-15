@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { type Express, type Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
@@ -174,7 +174,11 @@ export function createServer(deps: ServerDeps): Express {
   const webDist = deps.webDist ?? join(import.meta.dirname, '..', 'web', 'dist');
   if (existsSync(join(webDist, 'index.html'))) {
     app.use('/app', express.static(webDist, { index: false, fallthrough: true }));
-    app.get(['/app', '/app/{*path}'], (_req, res) => res.sendFile(join(webDist, 'index.html')));
+    // The page language follows the spelling setting, so the browser's spell check uses the same English.
+    const page = readFileSync(join(webDist, 'index.html'), 'utf8');
+    app.get(['/app', '/app/{*path}'], async (_req, res) => {
+      res.type('html').send(page.replace('<html lang="en">', `<html lang="${(await settings.get()).spellingDialect}">`));
+    });
   }
 
   // Public, secret-free summary of the Chat connection — the docs' verify step.

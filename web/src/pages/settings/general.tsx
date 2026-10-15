@@ -8,6 +8,7 @@ export function GeneralSettings() {
   const settings = useSettings();
   const patch = usePatchSettings();
   const [tz, setTz] = useState<string | null>(null);
+  const [words, setWords] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const s = settings.data;
   if (settings.isError) return <div className="alert">Could not load settings: {settings.error.message}</div>;
@@ -59,6 +60,23 @@ export function GeneralSettings() {
             </div>
           </SettingsRow>
         ) : null}
+      </SectionCard>
+      <SectionCard title="Spelling suggestions" hint="Likely typos in Chat answers are pointed out once before posting. Nothing leaves the server.">
+        <SettingsRow label="Suggest spelling fixes" hint="Uses about 350 MB while people are answering, freed after 30 minutes without an answer.">
+          <label className="row t-small">
+            <input type="checkbox" aria-label="Suggest spelling fixes" checked={s.workspace.spelling.enabled} onChange={(e) => void save({ spellingEnabled: e.target.checked })} /> {s.workspace.spelling.enabled ? 'On' : 'Off'}
+          </label>
+        </SettingsRow>
+        <SettingsRow label="Spelling" hint="Which English the checker expects. The web app’s own spell check follows it too.">
+          <select className="input" aria-label="Spelling" value={s.workspace.spelling.dialect} onChange={(e) => void save({ spellingDialect: e.target.value })}>
+            <option value="en-GB">British English</option>
+            <option value="en-US">American English</option>
+          </select>
+        </SettingsRow>
+        <SettingsRow label="Words to accept" hint="One per line. Names on any roster are accepted too.">
+          <textarea className="input" aria-label="Words to accept" rows={4} spellCheck={false} value={words ?? s.workspace.spelling.words.join('\n')} onChange={(e) => setWords(e.target.value)} />
+          <button type="button" className="btn" style={{ height: 28 }} disabled={words === null || patch.isPending} onClick={() => void save({ spellingWords: words ?? '' }).then(() => setWords(null))}>Save</button>
+        </SettingsRow>
       </SectionCard>
     </>
   );

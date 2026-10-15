@@ -194,8 +194,8 @@ Reading needs any of `settings.manage`, `sso.manage`, `tokens.manage` or `roles.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/settings` | Grouped: `chat`, `workspace` (including `leaveInChat`, `leaveDeclineMode` and `leaveSyncError: { message, at }` or `null`), `signIn`, `tokens`, `setup`, `mcp`. Secrets are never echoed — only `{ "set": true }` (the service account also shows its `email`). |
-| `PATCH` | `/settings` | `{ key: value, … }` for any editable field: strings set, `null` clears a secret, an empty string keeps it, booleans for `calendarOoo`, `leaveInChat`, `tokenSignIn`, `setupComplete`, `mcpEnabled`; `leaveDeclineMode` is `none`, `new` or `all`. Same rules as the web app; `400 invalid` names the `field`; `409 lockout` refuses a change that would leave no working sign-in method. |
+| `GET` | `/settings` | Grouped: `chat`, `workspace` (including `leaveInChat`, `leaveDeclineMode`, `leaveSyncError: { message, at }` or `null`, and `spelling: { enabled, dialect, words }`), `signIn`, `tokens`, `setup`, `mcp`. Secrets are never echoed — only `{ "set": true }` (the service account also shows its `email`). |
+| `PATCH` | `/settings` | `{ key: value, … }` for any editable field: strings set, `null` clears a secret, an empty string keeps it, booleans for `calendarOoo`, `leaveInChat`, `spellingEnabled`, `tokenSignIn`, `setupComplete`, `mcpEnabled`; `leaveDeclineMode` is `none`, `new` or `all`; `spellingDialect` is `en-GB` or `en-US`; `spellingWords` is one word per line. Same rules as the web app; `400 invalid` names the `field`; `409 lockout` refuses a change that would leave no working sign-in method. |
 | `POST` | `/settings/tokens/:name` | `tick`, `export` or `scim` → `201 { token }`, shown once |
 | `DELETE` | `/settings/tokens/:name` | `204` |
 | `DELETE` | `/history` | `{ "confirm": "DELETE HISTORY" }` — removes every run, submission, blocker and poll in the workspace; standups, rosters and settings stay. Returns the counts. `400 invalid` without the phrase |

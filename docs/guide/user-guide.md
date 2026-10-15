@@ -15,6 +15,11 @@ in a Google Chat DM.
    After the mood there's an optional **Want to say why?** box, up to 200
    characters. Only people allowed to read mood comments see it, and it is
    never posted in the space.
+   With **spelling suggestions** on, likely typos come back once, with your
+   answers kept: *Possible typos. Fix them, or submit again to send as is:
+   Reveiwed → Reviewed*. Submit again and your answers post exactly as typed.
+   Code in backticks, links, @mentions, IDs like `PROJ-1423`, words with
+   digits or capitals, and names are left alone.
 2. Your answers post as your card under today's thread in the team space.
    Your mood never appears there: it's seen in the web app only.
    "Yesterday" comes pre-filled from your previous "today".

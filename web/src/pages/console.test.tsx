@@ -22,7 +22,7 @@ const PEOPLE = [
 function settingsFixture(): Settings {
   return {
     chat: { audience: '728449131907 https://x/chat/events', serviceAccount: { set: true, email: 'bot@x.iam', clientId: '104928' } },
-    workspace: { defaultTimezone: 'Asia/Kolkata', calendarOoo: true, workspaceAdminEmail: '', leaveInChat: false, leaveDeclineMode: 'none', leaveSyncError: null },
+    workspace: { defaultTimezone: 'Asia/Kolkata', calendarOoo: true, workspaceAdminEmail: '', leaveInChat: false, leaveDeclineMode: 'none', leaveSyncError: null, spelling: { enabled: false, dialect: 'en-GB', words: [] } },
     signIn: { tokenSignIn: true, google: { clientId: '', clientSecret: { set: false }, on: false }, saml: { entityId: 'https://idp', ssoUrl: 'https://idp/sso', cert: { set: true }, adminAttribute: '', adminGroup: '', on: true } },
     tokens: { tick: { set: false }, export: { set: true }, scim: { set: false } },
     setup: { complete: true, chatConfigured: true, signInConfigured: true },
@@ -211,10 +211,27 @@ describe('settings', () => {
     expect(await screen.findByRole('heading', { name: 'General' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'General' })).toHaveAttribute('aria-current', 'page');
     await user.selectOptions(screen.getByLabelText('Default timezone'), 'UTC');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(screen.getByLabelText('Default timezone').parentElement!).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(patches).toContainEqual({ defaultTimezone: 'UTC' }));
     await user.click(screen.getByLabelText('Calendar out-of-office'));
     await waitFor(() => expect(patches).toContainEqual({ calendarOoo: false }));
+  });
+
+  it('switches spelling suggestions on, picks the English and keeps a word list (spec 004, criteria 1, 2)', async () => {
+    const { patches } = server();
+    renderApp('/settings');
+    const user = userEvent.setup();
+    expect(await screen.findByRole('heading', { name: 'Spelling suggestions' })).toBeInTheDocument();
+    expect(screen.getByText(/about 350 MB while people are answering/)).toBeInTheDocument();
+    await user.click(screen.getByLabelText('Suggest spelling fixes'));
+    await waitFor(() => expect(patches).toContainEqual({ spellingEnabled: true }));
+    await user.selectOptions(screen.getByLabelText('Spelling'), 'en-US');
+    await waitFor(() => expect(patches).toContainEqual({ spellingDialect: 'en-US' }));
+    const save = within(screen.getByLabelText('Words to accept').parentElement!).getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    await user.type(screen.getByLabelText('Words to accept'), 'wfh{Enter}cron');
+    await user.click(save);
+    await waitFor(() => expect(patches).toContainEqual({ spellingWords: 'wfh\ncron' }));
   });
 
   it('switches leave in Chat and Calendar on, picks the declining, and shows the latest problem (spec 003, criteria 1, 2, 15)', async () => {

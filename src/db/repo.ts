@@ -1215,6 +1215,12 @@ export class Repo {
     return result.changes > 0;
   }
 
+  /** Everyone's name on a roster, for spelling to accept. */
+  async listDisplayNames(): Promise<string[]> {
+    const rows = await this.db.all('SELECT DISTINCT display_name FROM participants WHERE active = 1');
+    return rows.map((r: any) => r.display_name);
+  }
+
   // --- leave shown in Chat and Calendar ---
 
   /** Active days off from a date on, for working out leave periods. */
