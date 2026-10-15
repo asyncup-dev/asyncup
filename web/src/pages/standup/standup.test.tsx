@@ -15,7 +15,7 @@ const ENG = {
   digestEnabled: true,
   escalation: { afterDays: 2, contact: { userName: 'users/priya', displayName: 'Priya Sharma' } },
   webhook: { configured: false },
-  roster: { group: null, syncedAt: null, error: null },
+  roster: { group: null, syncedAt: null, error: null, leftSpace: [] },
   people: { total: 9, mandatory: 8 },
   today: { date: '2026-09-16', status: 'open', submitted: 7, expected: 9, missing: [{ userName: 'users/asha', displayName: 'Asha Verma' }, { userName: 'users/rohit', displayName: 'Rohit Kumar' }] },
   permissions: { manage: true },

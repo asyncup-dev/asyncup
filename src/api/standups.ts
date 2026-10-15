@@ -240,8 +240,7 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
   api.post('/standups/:id/roster/sync', async (req, res) => {
     const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
     if (!standup) return;
-    if (!ctx.roster) return apiError(res, 503, 'unavailable', 'Group rosters are not available on this server.');
-    if (!standup.rosterGroup) return apiError(res, 409, 'no_roster_group', 'This standup’s people are added by hand; set a roster group first.');
+    if (!ctx.roster) return apiError(res, 503, 'unavailable', 'Roster sync is not available on this server.');
     const result = await ctx.roster.sync(standup);
     if (!result.ok) return apiError(res, 502, 'roster_unavailable', result.message);
     const fresh = (await repo.getStandupById(standup.id))!;

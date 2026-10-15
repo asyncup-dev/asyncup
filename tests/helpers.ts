@@ -64,7 +64,7 @@ export async function makeStack(
   const scheduleRef: { current: ScheduleService | undefined } = { current: undefined };
   const blockers = new BlockerService(repo, adapter, clock.now);
   const groups = new FakeGroups();
-  const roster = new RosterSync(repo, async () => groups, clock.now, () => {}, service);
+  const roster = new RosterSync(repo, async () => groups, clock.now, () => {}, service, adapter);
   const scheduler = new Scheduler(
     repo,
     adapter,

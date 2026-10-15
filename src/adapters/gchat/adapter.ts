@@ -1,5 +1,5 @@
 import { auth as chatAuth, chat, type chat_v1 } from '@googleapis/chat';
-import type { ChatAdapter, PromptState, SpaceInfo, SpaceMember } from '../../core/adapter.js';
+import type { ChatAdapter, PromptState, SpaceInfo, SpaceMember, SpaceMembership } from '../../core/adapter.js';
 import type { SettingsService } from '../../core/settings.js';
 import { chatEndpointUrl } from './addon.js';
 import type { TimeOffRequest } from '../../core/schedule.js';
@@ -171,6 +171,22 @@ export class GoogleChatAdapter implements ChatAdapter {
       pageToken = res.data.nextPageToken ?? undefined;
     } while (pageToken);
     return members;
+  }
+
+  async spaceMembership(spaceName: string): Promise<SpaceMembership> {
+    const client = await this.getClient();
+    const membership: SpaceMembership = { people: [], groups: [] };
+    let pageToken: string | undefined;
+    do {
+      // No type filter: with one, Chat leaves out group memberships.
+      const res = await client.spaces.members.list({ parent: spaceName, pageSize: 1000, showGroups: true, pageToken });
+      for (const m of res.data.memberships ?? []) {
+        if (m.groupMember?.name) membership.groups.push(m.groupMember.name);
+        else if (m.member?.name && m.member.type === 'HUMAN') membership.people.push({ userName: m.member.name, displayName: m.member.displayName || m.member.name });
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    return membership;
   }
 
   private async postInThread(

@@ -70,6 +70,7 @@ const roster = new RosterSync(
   undefined,
   (msg) => console.log(`[roster] ${msg}`),
   service,
+  adapter,
 );
 const providers: SchedulerProviders = {
   schedule,

@@ -1,4 +1,4 @@
-import type { ChatAdapter, SpaceInfo, SpaceMember, PromptState } from '../../core/adapter.js';
+import type { ChatAdapter, SpaceInfo, SpaceMember, SpaceMembership, PromptState } from '../../core/adapter.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import type { TimeOffRequest } from '../../core/schedule.js';
 
@@ -35,6 +35,9 @@ export class FakeAdapter implements ChatAdapter {
   /** Fixtures for the space picker and roster suggestions. */
   spaces: SpaceInfo[] = [];
   members = new Map<string, SpaceMember[]>();
+  /** Google Groups that are members of a space, as `groups/{id}`. */
+  spaceGroups = new Map<string, string[]>();
+  membershipError: Error | null = null;
   private messageCounter = 0;
 
   constructor(private log: ((msg: string) => void) | null = null) {}
@@ -143,6 +146,11 @@ export class FakeAdapter implements ChatAdapter {
 
   async listSpaceMembers(spaceName: string): Promise<SpaceMember[]> {
     return [...(this.members.get(spaceName) ?? [])];
+  }
+
+  async spaceMembership(spaceName: string): Promise<SpaceMembership> {
+    if (this.membershipError) throw this.membershipError;
+    return { people: [...(this.members.get(spaceName) ?? [])], groups: [...(this.spaceGroups.get(spaceName) ?? [])] };
   }
 
   async postPoll(standup: Standup, poll: Poll, _tallies: number[]): Promise<string | null> {

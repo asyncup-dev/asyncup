@@ -329,6 +329,35 @@ describe('createChatClient', () => {
     expect(calls[0]!.params).toMatchObject({ parent: 'spaces/a', filter: 'member.type = "HUMAN"' });
     expect(await gchat.listSpaces()).toEqual([]);
     expect(await gchat.listSpaceMembers('spaces/a')).toEqual([]);
+
+    // Space sync asks for groups too, and keeps only people and groups.
+    calls.length = 0;
+    pages.members = [
+      {
+        data: {
+          memberships: [
+            { member: { name: 'users/1', displayName: 'One', type: 'HUMAN' } },
+            { groupMember: { name: 'groups/g1' } },
+            { member: { name: 'users/app', type: 'BOT' } },
+            { member: { name: 'users/2', type: 'HUMAN' } },
+            {},
+          ],
+          nextPageToken: 'm2',
+        },
+      },
+      { data: {} },
+    ];
+    expect(await gchat.spaceMembership('spaces/a')).toEqual({
+      people: [
+        { userName: 'users/1', displayName: 'One' },
+        { userName: 'users/2', displayName: 'users/2' },
+      ],
+      groups: ['groups/g1'],
+    });
+    expect(calls.map((c) => c.params)).toEqual([
+      { parent: 'spaces/a', pageSize: 1000, showGroups: true, pageToken: undefined },
+      { parent: 'spaces/a', pageSize: 1000, showGroups: true, pageToken: 'm2' },
+    ]);
   });
 
   it('builds a Chat v1 client bound to the given auth', () => {

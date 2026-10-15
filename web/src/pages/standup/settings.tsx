@@ -8,7 +8,7 @@ import { fromMutation, VerifyStatus } from '../../components/verify-status';
 import { useMutation } from '@tanstack/react-query';
 import { CopyRow } from '../../components/copy-row';
 import { api, type Person } from '../../lib/api';
-import { ago } from '../../lib/format';
+import { ago, shortDate } from '../../lib/format';
 import { useAccess } from '../../lib/access';
 import { useArchive, useDeleteStandup, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
 import type { Weekday } from '../../lib/roster';
@@ -175,7 +175,7 @@ export function StandupSettingsPage() {
           {may.people ? (
             <>
               <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Tick who is prompted, who is required to answer, and which days each person works.">
-                <SettingsRow label="Roster" hint={followsGroup ? 'Follows a Google Group: joiners get the default setup, leavers drop off, and people you untick stay off.' : 'People you pick from the space’s members.'}>
+                <SettingsRow label="Roster" hint={followsGroup ? 'Follows a Google Group: joiners get the default setup, leavers drop off, and people you untick stay off.' : 'People you pick from the space’s members. Anyone who leaves the space comes off, and comes back if they rejoin.'}>
                   <select
                     className="input"
                     aria-label="Roster source"
@@ -194,15 +194,32 @@ export function StandupSettingsPage() {
                     </>
                   ) : null}
                 </SettingsRow>
-                {followsGroup ? (
-                  <SettingsRow label="Last sync" hint="Also syncs hourly and in the hour before each run.">
+                {followsGroup || groupDraft === null ? (
+                  <SettingsRow label="Last sync" hint={followsGroup ? 'Also syncs hourly and in the hour before each run.' : 'Checks the space hourly and in the hour before each run.'}>
                     <span className="t-small">{s.roster.syncedAt ? `Synced ${ago(Date.now() - Date.parse(s.roster.syncedAt))}` : 'Not synced yet'}</span>
                     <button type="button" className="btn" style={{ height: 28 }} disabled={sync.isPending} onClick={runSync}>Sync now</button>
                     {s.roster.error ? <div className="alert" style={{ flexBasis: '100%' }}>{s.roster.error}</div> : null}
+                    {!followsGroup && s.roster.leftSpace.length ? (
+                      <div className="left-space" aria-label="Off because they left the space">
+                        <div className="t-label muted">Off because they left the space</div>
+                        {s.roster.leftSpace.map((p) => (
+                          <div key={p.userName} className="t-small">{p.displayName} · left {shortDate(new Date(p.at).toLocaleDateString('en-CA', { timeZone: s.schedule.timezone }))}</div>
+                        ))}
+                      </div>
+                    ) : null}
                     {synced ? (
                       <div className="notice t-small" role="status" style={{ flexBasis: '100%' }}>
-                        {synced.added.length ? `Added ${synced.added.join(', ')}. ` : ''}
-                        {synced.removed.length ? `Removed ${synced.removed.join(', ')}. ` : ''}
+                        {followsGroup ? (
+                          <>
+                            {synced.added.length ? `Added ${synced.added.join(', ')}. ` : ''}
+                            {synced.removed.length ? `Removed ${synced.removed.join(', ')}. ` : ''}
+                          </>
+                        ) : (
+                          <>
+                            {synced.removed.length ? `Took off ${synced.removed.join(', ')} (left the space). ` : ''}
+                            {synced.added.length ? `Put back ${synced.added.join(', ')} (rejoined). ` : ''}
+                          </>
+                        )}
                         {!synced.added.length && !synced.removed.length ? 'Already up to date. ' : ''}
                         {synced.skipped.length ? `Skipped ${synced.skipped.map((x) => `${x.email} (${x.reason})`).join(', ')}.` : ''}
                       </div>

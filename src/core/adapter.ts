@@ -13,6 +13,12 @@ export interface SpaceMember {
   displayName: string;
 }
 
+/** Who is in a space: people who joined it directly, and Google Groups (`groups/{id}`) whose people are in it too. */
+export interface SpaceMembership {
+  people: SpaceMember[];
+  groups: string[];
+}
+
 /**
  * Platform abstraction. The core never touches Google Chat (or Slack/Teams)
  * APIs directly — only this interface. New platforms = new implementation.
@@ -84,4 +90,7 @@ export interface ChatAdapter {
 
   /** Human members of a space — roster suggestions when creating a standup. */
   listSpaceMembers(spaceName: string): Promise<SpaceMember[]>;
+
+  /** Everyone in a space, groups included — what a roster picked from the space is checked against. */
+  spaceMembership(spaceName: string): Promise<SpaceMembership>;
 }

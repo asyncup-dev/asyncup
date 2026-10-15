@@ -7,7 +7,7 @@ const ENG = {
   id: 1, name: 'Engineering', spaceName: 'spaces/A', active: true,
   schedule: { promptTime: '09:30', deadlineTime: '11:30', timezone: 'Asia/Kolkata', days: ['mon', 'tue'], reminderMinutesBefore: 30 },
   questions: ['Q1?', 'Q2?'], mood: { enabled: true, anonymous: false }, digestEnabled: false, timeOffPolicy: 'self',
-  escalation: { afterDays: 2, contact: null }, webhook: { configured: true }, roster: { group: null, syncedAt: null, error: null },
+  escalation: { afterDays: 2, contact: null }, webhook: { configured: true }, roster: { group: null, syncedAt: null, error: null, leftSpace: [] },
   people: { total: 2, mandatory: 1 },
   today: { date: '2026-09-16', status: 'closed', submitted: 2, expected: 2, missing: [] },
   permissions: { manage: true },
@@ -155,7 +155,7 @@ describe('standup settings tab', () => {
   it('follows a Google Group: shows where people came from, syncs on demand and can stop following', async () => {
     const GROUP_ENG = {
       ...ENG,
-      roster: { group: 'devs@example.com', syncedAt: new Date(Date.now() - 5 * 60_000).toISOString(), error: 'AsyncUp can’t read devs@example.com.' },
+      roster: { group: 'devs@example.com', syncedAt: new Date(Date.now() - 5 * 60_000).toISOString(), error: 'AsyncUp can’t read devs@example.com.', leftSpace: [] },
       participants: [{ ...ENG.participants[0], source: 'group' }, { ...ENG.participants[1], source: 'manual' }],
       keptOff: [{ userName: 'users/carol', displayName: 'Carol' }],
     };
@@ -185,6 +185,27 @@ describe('standup settings tab', () => {
     await waitFor(() => expect(patches).toContainEqual({ rosterGroup: 'team@example.com' }));
     await user.selectOptions(screen.getByLabelText('Roster source'), 'space');
     await waitFor(() => expect(patches).toContainEqual({ rosterGroup: null }));
+  });
+
+  it('checks a hand-picked roster against the space: who left, and the result of a sync (spec 002, criteria 13–15)', async () => {
+    const SPACE_ENG = {
+      ...ENG,
+      roster: { group: null, syncedAt: new Date(Date.now() - 12 * 60_000).toISOString(), error: 'The space listed no members, so nobody was taken off.', leftSpace: [{ userName: 'users/carol', displayName: 'Carol', at: '2026-10-14T20:00:00Z' }] },
+    };
+    server({
+      'GET /api/v1/standups/1': { body: SPACE_ENG },
+      'POST /api/v1/standups/1/roster/sync': { body: { added: ['Dan'], removed: ['Carol'], skipped: [], syncedAt: 'x' } },
+    });
+    renderApp('/standups/1/settings');
+    const user = userEvent.setup();
+    expect(await screen.findByText(/Anyone who leaves the space comes off, and comes back if they rejoin\./)).toBeInTheDocument();
+    expect(screen.getByText('Checks the space hourly and in the hour before each run.')).toBeInTheDocument();
+    expect(screen.getByText('Synced 12m ago')).toBeInTheDocument();
+    expect(screen.getByText('The space listed no members, so nobody was taken off.')).toBeInTheDocument();
+    // 20:00 UTC on the 14th is already the 15th in the standup's zone
+    expect(within(screen.getByLabelText('Off because they left the space')).getByText('Carol · left Thu 15 Oct')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Sync now' }));
+    expect(await screen.findByText('Took off Carol (left the space). Put back Dan (rejoined).')).toBeInTheDocument();
   });
 
   it('switches a hand-picked roster to a Google Group', async () => {
