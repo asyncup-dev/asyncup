@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAccess } from '../../lib/access';
-import { MOOD_EMOJI, moodWithComment } from '../../lib/api';
+import { MOOD_EMOJI, MOOD_LABEL, moodWithComment } from '../../lib/api';
 import { clock, longDate, monthOf, names, pct, shortDate } from '../../lib/format';
 import { useRun, useRuns, useStandup } from '../../lib/standups';
 import { useStandupId } from './layout';
@@ -96,9 +96,14 @@ export function HistoryPage() {
               {nameless.length ? (
                 <div className="submission" aria-label="Mood comments">
                   <div className="t-medium">Mood comments · {nameless.length}</div>
-                  <div className="t-caption">Moods on this standup are anonymous, so comments show without names, sorted by mood.</div>
+                  <div className="t-caption">Moods on {standup.data?.name ?? 'this standup'} are anonymous, so comments show without names, sorted by mood.</div>
                   <ul className="mood-comments">
-                    {nameless.map((c, i) => <li key={i} className="t-small">{moodWithComment(c.mood, c.comment)}</li>)}
+                    {nameless.map((c, i) => (
+                      <li key={i}>
+                        <span className="t-medium">{MOOD_EMOJI[c.mood]} {MOOD_LABEL[c.mood]}</span>
+                        <span>“{c.comment}”</span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               ) : null}

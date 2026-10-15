@@ -272,7 +272,8 @@ describe('standup history', () => {
     renderApp('/standups/1/history');
     const list = await screen.findByLabelText('Mood comments');
     expect(within(list).getByText('Mood comments · 2')).toBeInTheDocument();
-    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['😫 Struggling — “Too many meetings”', '😕 Meh — “Short night”']);
+    expect(within(list).getByText(/^Moods on .+ are anonymous, so comments show without names, sorted by mood\.$/)).toBeInTheDocument();
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['😫 Struggling“Too many meetings”', '😕 Meh“Short night”']);
     expect(screen.queryByText('Mood')).not.toBeInTheDocument();
   });
 
