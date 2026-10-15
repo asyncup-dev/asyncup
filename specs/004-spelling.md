@@ -5,7 +5,7 @@
 | Status | Done |
 | Size | Feature (new dependency, settings) |
 | Figma | [Specs › 004 Spelling suggestions](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=159-26) |
-| PR | — |
+| PR | [#104](https://github.com/asyncup-dev/asyncup/pull/104) |
 
 ## Problem
 
