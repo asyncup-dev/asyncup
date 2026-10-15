@@ -5,7 +5,7 @@
 | Status | Done |
 | Size | Cross-cutting (new permission, migration, API change) |
 | Figma | [Specs › 001 Mood comments](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=132-55) |
-| PR | — |
+| PR | [#101](https://github.com/asyncup-dev/asyncup/pull/101) |
 
 ## Problem
 
