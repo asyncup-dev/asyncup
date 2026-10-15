@@ -23,10 +23,15 @@ full lifecycle (commands, scheduler, dialogs) with `curl` against
 ## Architecture in 30 seconds
 
 ```
-src/core       domain types, scheduler, commands, StandupService — platform-agnostic
-src/adapters   ChatAdapter implementations (gchat today; slack/teams welcome!)
-src/db         repository over embedded SQLite (bun:sqlite) or PostgreSQL
-src/server.ts  Express webhook + /tick + /healthz
+src/core          domain types, scheduler, commands, StandupService — platform-agnostic
+src/adapters      ChatAdapter implementations (gchat today; slack/teams welcome!)
+src/api           JSON API; src/api/spec holds the zod schemas the OpenAPI document is built from
+src/mcp           MCP server and tools
+src/db            repository over embedded SQLite (bun:sqlite) or PostgreSQL
+src/integrations  Google Directory, Groups and Calendar
+src/server.ts     Express app: Chat events, API, MCP, /tick, /healthz
+web/src           React web app
+docs, site        documentation and landing page
 ```
 
 Two rules keep the codebase healthy:
@@ -44,6 +49,12 @@ translation layer that maps platform webhooks onto `CommandHandler` and
 `StandupService`, and wire it into `src/index.ts` behind the `ADAPTER` env
 var. Open an issue first so we can agree on scope — happy to guide.
 
+## How we work
+
+Features start as a short spec in [`specs/`](specs/TEMPLATE.md), approved
+before any code; bug fixes start with a failing test. The full process, the
+definition of done and the code rules are in [AGENTS.md](AGENTS.md).
+
 ## Pull requests
 
 **All changes land via pull request** — `main` is protected; nobody (including
@@ -54,7 +65,8 @@ thresholds, Docker, dependency audit) and CodeQL must be green to merge.
 - `bun run typecheck && bun run test:coverage` must pass locally.
 - Add tests for behavior changes (the suite runs in <1s, no excuses 🙂) —
   coverage is enforced at 100% of lines and functions in CI.
-- For user-visible changes, update the docs in `docs/`.
+- For user-visible changes, update the docs in `docs/`, the website in `site/`
+  when it describes the feature, and the Figma design.
 - Dependabot keeps dependencies current; prefer latest stable versions for
   anything you add.
 
