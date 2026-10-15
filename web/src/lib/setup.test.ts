@@ -4,7 +4,7 @@ import { chatAppValues, copyText, nextStep, projectNumberOf, stepDone, timezoneO
 
 const settings = (over: Partial<Settings['chat']> = {}, setup: Partial<Settings['setup']> = {}): Settings => ({
   chat: { audience: '', serviceAccount: { set: false, email: null, clientId: null }, ...over },
-  workspace: { defaultTimezone: 'UTC', calendarOoo: true, workspaceAdminEmail: '', leaveInChat: false, leaveDeclineMode: 'none', leaveSyncError: null },
+  workspace: { defaultTimezone: 'UTC', calendarOoo: true, workspaceAdminEmail: '', leaveInChat: false, leaveDeclineMode: 'none', leaveSyncError: null, spelling: { enabled: false, dialect: 'en-GB', words: [] } },
   signIn: { tokenSignIn: true, google: { clientId: '', clientSecret: { set: false }, on: false }, saml: { entityId: '', ssoUrl: '', cert: { set: false }, adminAttribute: '', adminGroup: '', on: false } },
   tokens: { tick: { set: false }, export: { set: false }, scim: { set: false } },
   setup: { complete: false, chatConfigured: false, signInConfigured: false, ...setup },

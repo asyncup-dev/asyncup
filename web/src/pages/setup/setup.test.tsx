@@ -17,7 +17,7 @@ const TEMPLATES: Template[] = [
 function freshSettings(): Settings {
   return {
     chat: { audience: '', serviceAccount: { set: false, email: null, clientId: null } },
-    workspace: { defaultTimezone: 'Asia/Kolkata', calendarOoo: true, workspaceAdminEmail: '', leaveInChat: false, leaveDeclineMode: 'none', leaveSyncError: null },
+    workspace: { defaultTimezone: 'Asia/Kolkata', calendarOoo: true, workspaceAdminEmail: '', leaveInChat: false, leaveDeclineMode: 'none', leaveSyncError: null, spelling: { enabled: false, dialect: 'en-GB', words: [] } },
     signIn: { tokenSignIn: true, google: { clientId: '', clientSecret: { set: false }, on: false }, saml: { entityId: '', ssoUrl: '', cert: { set: false }, adminAttribute: '', adminGroup: '', on: false } },
     tokens: { tick: { set: false }, export: { set: false }, scim: { set: false } },
     setup: { complete: false, chatConfigured: false, signInConfigured: false },

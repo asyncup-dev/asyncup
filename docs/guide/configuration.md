@@ -36,6 +36,8 @@ its email), never the value.
 | --- | --- | --- |
 | General | Default timezone for new standups | Assigned to new standups; people can set their own |
 | General | Calendar out-of-office | Mark people away on OOO days. Off by default; turn on once the [delegation for the Calendar scope](./directory#calendar-ooo) exists |
+| General | Leave in Chat and Calendar | Days off and vacation mode as a Chat status and an out-of-office event. Off by default; needs [two delegated scopes](./directory#leave-in-chat) |
+| General | Spelling suggestions | Likely typos in Chat answers pointed out once before posting, in British or American English, with a list of words to accept. Off by default. See below |
 | Google Chat | Project number (and the events URL) | The audience incoming events are verified against. For an add-on Chat app both are needed — [the audience rule](./google-chat-setup#the-audience-rule) |
 | Google Chat | Service account | The JSON key used for Chat API calls, group rosters, Directory lookups and Calendar. Empty = [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) for Chat only |
 | Google Chat | Directory through delegation (legacy) | Optional *Workspace admin to act as*: moves Directory lookups to domain-wide delegation. Leave it off with the [admin role](./directory#admin-role); Calendar out-of-office doesn't use it. The *Client ID for domain-wide delegation* shows under Service account |
@@ -45,6 +47,20 @@ its email), never the value.
 | MCP server | Server, default scopes, access tokens | [Claude Code and MCP](./mcp) |
 | API & tokens | Machine tokens | Tick (`POST /tick`), CSV export (`GET /export`) and SCIM (`/scim/v2`) tokens, each shown once |
 | Danger zone | Disconnect Google Chat; Delete all standup history | Both behind a typed confirmation |
+
+### Spelling suggestions {#spelling}
+
+The checker is [Harper](https://writewithharper.com) (Apache-2.0). It runs on
+your server, in its own process: nothing is sent anywhere. That process
+starts at the first answer, uses about 350 MB while it runs, and stops after
+30 minutes without an answer, giving the memory back. It adds about 72 MB to
+the installed packages.
+
+It checks spelling and typos only, never grammar or style. Names on any
+roster are accepted, and admins can add words under **Words to accept**, one
+per line. If the checker doesn't answer within two seconds, the answer is
+saved unchecked: spelling never blocks anyone. The web app's page language
+follows the same setting, so the browser's own spell check uses it too.
 
 Per-standup settings (schedule, questions, mood, people, roster group,
 escalation, webhook, digest, archive and delete) live on each standup's
