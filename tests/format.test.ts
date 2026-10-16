@@ -48,6 +48,12 @@ describe('the shorthand', () => {
     expect(blank).toBe(' Reveiwed    teh   `x_y` 2*3');
     expect(blank.length).toBe(text.length);
     expect(blankMarkers('a\n- *b*')).toBe('a\n-  b ');
+    expect(blankMarkers('😀 *b*')).toBe('😀  b ');
+  });
+
+  it('treats anything but a string as empty text', () => {
+    expect(toCardHtml(42 as unknown as string)).toBe('');
+    expect(blankMarkers({ length: 1e9 } as unknown as string)).toBe('');
   });
 });
 

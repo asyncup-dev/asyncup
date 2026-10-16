@@ -79,6 +79,8 @@ function inline(s: string, offset = 0, marks?: [number, number][]): Inline[] {
 }
 
 export function parseFormatted(text: string): Block[] {
+  // Text from a request body may not be a string at all.
+  text = typeof text === 'string' ? text : '';
   const blocks: Block[] = [];
   for (const line of text.split(/\r?\n/)) {
     const item = LIST_ITEM.exec(line);
@@ -133,15 +135,16 @@ export function toChatText(text: string): string {
 
 /** The text with formatting markers swapped for spaces, so a spell checker's positions still line up. */
 export function blankMarkers(text: string): string {
-  const chars = text.split('');
+  text = typeof text === 'string' ? text : '';
+  const blank = new Set<number>();
   let offset = 0;
   for (const line of text.split('\n')) {
     const item = LIST_ITEM.exec(line);
     const marks: [number, number][] = [];
     if (item) inline(item[2]!, offset + item[1]!.length + 2, marks);
     else inline(line, offset, marks);
-    for (const [at, length] of marks) for (let k = at; k < at + length; k++) chars[k] = ' ';
+    for (const [at, length] of marks) for (let k = at; k < at + length; k++) blank.add(k);
     offset += line.length + 1;
   }
-  return chars.join('');
+  return text.replace(/[\s\S]/g, (ch, k: number) => (blank.has(k) ? ' ' : ch));
 }
