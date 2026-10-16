@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | In progress |
+| Status | Done |
 | Size | Cross-cutting (migration, API, Chat cards, web app) |
 | Figma | [Specs › 005 Late edits](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=162-56) |
 | PR | Link once opened |
@@ -96,7 +96,7 @@ Editing after approval
 | Chat cards and dialogs | Prompt card after the deadline (**Ask to edit**). Ask dialog. Manager's request card, pending and decided. DMs for approved, declined and lapsed. "Day closed" dialog error. Posted answer's "Edited after the deadline · approved by" line |
 | API and OpenAPI | `GET /edit-requests` (pending requests the caller can decide), `POST /edit-requests/:id/approve` and `/decline` taking `DecisionBody`. Permission `standups.configure` on the request's standup. The `submission` webhook gains `editApprovedBy` |
 | MCP | `submit_answers` refuses after the run's day ends, and refuses an edit after the deadline without approval: "Ask a manager to let you edit, from your prompt card in Chat." |
-| Database | Migration 20, both dialects: `edit_requests` (run, person, reason, status `pending`, `approved`, `declined` or `lapsed`, asked at, decided at, decided by, note, and the managers' DM message names) |
+| Database | Migration 20, both dialects: `edit_requests` (run, person, reason, status `pending`, `approved`, `declined` or `lapsed`, asked at, decided at, decided by, note, and the managers' DM message names, one per person and run), and `submissions.edit_approved_by` for the posted card and the webhook |
 | Permissions | None new. Deciding needs `standups.configure` |
 | Docs | `user-guide.md` (late answers and asking to edit), `web-app.md` (Team › Requests), `api.md` (routes), `configuration.md` (webhook field) |
 | Website | `site/index.html`: one line under answering in Chat |
@@ -115,6 +115,10 @@ How it works:
   are stored so a decision can redraw all of them.
 - When a run closes, the prompt cards of people who answered are
   redrawn with the existing `refreshCards`.
+- The prompt card then follows the request: waiting, approved (with
+  **Edit answers**), declined or lapsed.
+- Request rows on Team › Requests wrap their buttons under the text on a
+  phone; time-off rows had squeezed their text there too.
 
 ## Open questions
 
