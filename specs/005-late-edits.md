@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft |
+| Status | In progress |
 | Size | Cross-cutting (migration, API, Chat cards, web app) |
 | Figma | [Specs › 005 Late edits](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=162-56) |
 | PR | Link once opened |

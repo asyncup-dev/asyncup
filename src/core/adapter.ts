@@ -1,5 +1,6 @@
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from './types.js';
 import type { TimeOffRequest } from './schedule.js';
+import type { EditRequestView, EditState } from './edit-requests.js';
 
 /** A space the app has been added to. */
 export interface SpaceInfo {
@@ -24,7 +25,11 @@ export interface SpaceMembership {
  * APIs directly — only this interface. New platforms = new implementation.
  */
 /** Where someone stands on a run, as their prompt cards show it. */
-export type PromptState = { kind: 'open' } | { kind: 'submitted'; at: string; late: boolean } | { kind: 'skipped'; note: string | null } | { kind: 'removed' };
+export type PromptState =
+  | { kind: 'open' }
+  | { kind: 'submitted'; at: string; late: boolean; closed?: boolean; edit?: EditState | null }
+  | { kind: 'skipped'; note: string | null }
+  | { kind: 'removed' };
 
 export interface ChatAdapter {
   /** DM the user a prompt with a way to fill in the standup form; returns the card's message name when known. */
@@ -71,6 +76,15 @@ export interface ChatAdapter {
 
   /** DM a manager a time-off request with Approve / Decline. */
   sendTimeOffRequest(managerUserName: string, request: TimeOffRequest): Promise<void>;
+
+  /** DM a manager a request to edit answers after the deadline; returns the card's message name when known. */
+  sendEditRequest(managerUserName: string, request: EditRequestView): Promise<string | null>;
+
+  /** Redraw the managers' cards for a request once it is decided or lapses. */
+  updateEditRequestCards(messageNames: string[], request: EditRequestView): Promise<void>;
+
+  /** Tell someone their edit was approved, with a way to edit. */
+  sendEditApproved(userName: string, request: EditRequestView): Promise<void>;
 
   /**
    * Whether the platform can DM this user right now (e.g. the Chat app is

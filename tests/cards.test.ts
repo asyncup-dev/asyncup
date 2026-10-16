@@ -111,7 +111,7 @@ describe('cards', () => {
       late: false,
       submittedAt: '2026-06-10T04:30:00Z',
       editedAt: null,
-      messageName: null, moodComment: null,
+      messageName: null, moodComment: null, editApprovedBy: null,
     };
     const clean = JSON.stringify(submissionMessage(base));
     expect(clean).toContain('📝 Alice');

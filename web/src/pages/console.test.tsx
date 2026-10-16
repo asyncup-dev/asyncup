@@ -396,6 +396,7 @@ describe('a granted Viewer', () => {
     expect(screen.queryByRole('button', { name: /Actions for/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Requests/ })).not.toBeInTheDocument();
     expect(calls).not.toContain('GET /api/v1/requests');
+    expect(calls).not.toContain('GET /api/v1/edit-requests');
     cleanup();
 
     renderApp('/reports');

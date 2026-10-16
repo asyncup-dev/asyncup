@@ -1,4 +1,5 @@
 import type { PromptState } from '../../core/adapter.js';
+import { dayLabel, untilLabel, type EditRequestView } from '../../core/edit-requests.js';
 import { describeDates, type TimeOffRequest } from '../../core/schedule.js';
 import { DateTime } from 'luxon';
 import { LIMITS } from '../../core/validation.js';
@@ -30,6 +31,11 @@ export const VOTE_POLL_FN = 'votePoll';
 export const APPROVE_REQUEST_FN = 'approveTimeOff';
 export const DECLINE_REQUEST_FN = 'declineTimeOff';
 export const SUBMIT_DECLINE_FN = 'submitDeclineTimeOff';
+export const OPEN_EDIT_REQUEST_FN = 'openEditRequest';
+export const SUBMIT_EDIT_REQUEST_FN = 'submitEditRequest';
+export const APPROVE_EDIT_FN = 'approveEdit';
+export const DECLINE_EDIT_FN = 'declineEdit';
+export const SUBMIT_EDIT_DECLINE_FN = 'submitDeclineEdit';
 
 function humanDate(isoDate: string): string {
   return DateTime.fromISO(isoDate).toFormat('ccc, dd LLL yyyy');
@@ -78,10 +84,16 @@ function promptBody(standup: Standup, run: Run, state: PromptState, endpoint: st
   const due = `<b>${standup.deadlineTime} ${standup.timezone}</b>`;
   if (state.kind === 'submitted') {
     const at = DateTime.fromISO(state.at).setZone(standup.timezone).toFormat('HH:mm');
-    return [
-      { textParagraph: { text: `✅ Submitted at <b>${at}</b>${state.late ? ' (late)' : ''}. You can edit your answers until ${due}.` } },
-      { buttonList: { buttons: [{ text: 'Edit answers', onClick: { action: clickAction(OPEN_DIALOG_FN, param, endpoint, 'OPEN_DIALOG') } }] } },
-    ];
+    const done = `✅ Submitted at <b>${at}</b>${state.late ? ' (late)' : ''}.`;
+    const button = (text: string, fn: string) => ({ buttonList: { buttons: [{ text, onClick: { action: clickAction(fn, param, endpoint, 'OPEN_DIALOG') } }] } });
+    const line = (text: string) => ({ textParagraph: { text: `${done} ${text}` } });
+    if (!state.closed) return [line(`You can edit your answers until ${due}.`), button('Edit answers', OPEN_DIALOG_FN)];
+    const edit = state.edit;
+    if (!edit) return [line('The deadline has passed. Need to change something? Ask a manager.'), button('Ask to edit', OPEN_EDIT_REQUEST_FN)];
+    if (edit.status === 'approved') return [line(`${html(edit.by!)} approved your request: you can edit your answers until <b>${edit.until}</b>.`), button('Edit answers', OPEN_DIALOG_FN)];
+    if (edit.status === 'pending') return [line('Your request to edit is waiting for a manager.')];
+    if (edit.status === 'declined') return [line(`${html(edit.by!)} declined your request to edit.`)];
+    return [line('Your request to edit lapsed.')];
   }
   if (state.kind === 'removed') {
     return [{ textParagraph: { text: 'You’re no longer on this standup, so there’s nothing to answer today.' } }];
@@ -438,9 +450,10 @@ export function threadParentText(standup: Standup, run: Run): string {
 /** One participant's answers, posted (or updated) as a reply in the day's thread. */
 /** Mood is personal, so it never appears here. */
 export function submissionMessage(submission: Submission) {
+  const approved = submission.editApprovedBy ? `${submission.late ? 'edited' : 'Edited'} after the deadline · approved by ${submission.editApprovedBy}` : null;
   const flags = [
     submission.late ? 'Submitted late' : null,
-    submission.editedAt ? 'edited' : null,
+    approved ?? (submission.editedAt ? 'edited' : null),
   ].filter(Boolean);
 
   return {
@@ -536,7 +549,7 @@ export function timeOffRequestCard(request: TimeOffRequest, endpoint: string | n
 }
 
 /** Dialog asking the manager for a one-line reason before declining. */
-export function declineDialog(requestIds: string, endpoint: string | null = null) {
+export function declineDialog(requestIds: string, endpoint: string | null = null, target = { fn: SUBMIT_DECLINE_FN, key: 'requestIds' }) {
   return {
     actionResponse: {
       type: 'DIALOG',
@@ -549,7 +562,7 @@ export function declineDialog(requestIds: string, endpoint: string | null = null
                   { textInput: { name: 'note', label: 'Why not? (sent to the person)', type: 'MULTIPLE_LINE' } },
                   {
                     buttonList: {
-                      buttons: [{ text: 'Decline request', onClick: { action: clickAction(SUBMIT_DECLINE_FN, [{ key: 'requestIds', value: requestIds }], endpoint) } }],
+                      buttons: [{ text: 'Decline request', onClick: { action: clickAction(target.fn, [{ key: target.key, value: requestIds }], endpoint) } }],
                     },
                   },
                 ],
@@ -559,5 +572,104 @@ export function declineDialog(requestIds: string, endpoint: string | null = null
         },
       },
     },
+  };
+}
+
+/** Asks why before someone's request to edit goes to their managers. */
+export function editRequestDialog(standup: Standup, run: Run, endpoint: string | null = null, again: { error?: string; reason?: string } = {}) {
+  return {
+    actionResponse: {
+      type: 'DIALOG',
+      dialogAction: {
+        dialog: {
+          body: {
+            sections: [
+              {
+                widgets: [
+                  ...(again.error ? [errorLine(again.error)] : []),
+                  { textParagraph: { text: `<b>Ask to edit · ${html(standup.name)} · ${dayLabel(run.date)}</b><br>Your managers decide. If they approve, you can edit until ${untilLabel(standup)}.` } },
+                  {
+                    textInput: {
+                      name: 'reason',
+                      label: 'Why? (optional)',
+                      type: 'SINGLE_LINE',
+                      value: again.reason || undefined,
+                      hintText: `Sent to your managers with the request. Up to ${LIMITS.textMax} characters.`,
+                    },
+                  },
+                  { buttonList: { buttons: [{ text: 'Send request', onClick: { action: clickAction(SUBMIT_EDIT_REQUEST_FN, [{ key: 'runId', value: String(run.id) }], endpoint) } }] } },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+}
+
+/** DM card for a manager: someone asks to edit their answers after the deadline; redrawn once decided or lapsed. */
+export function editRequestCard(request: EditRequestView, endpoint: string | null = null) {
+  const zone = request.standup.timezone;
+  const time = (iso: string | null) => DateTime.fromISO(iso!).setZone(zone).toFormat('HH:mm');
+  const name = request.person.displayName;
+  const reason = request.reason ? `“${html(request.reason)}” ` : '';
+  const params = [{ key: 'editRequestId', value: String(request.id) }];
+  const outcome: Record<EditRequestView['status'], string> = {
+    pending: `${reason}Approve and ${name} can edit their answers until ${request.until}. Decline and ${name} is told, with your note. Unanswered by then, it lapses.`,
+    approved: `${reason}✅ Approved by ${request.decidedBy} at ${time(request.decidedAt)}. ${name} can edit until ${request.until}.`,
+    declined: `${reason}❌ Declined by ${request.decidedBy} at ${time(request.decidedAt)}.${request.note ? ` “${html(request.note)}”` : ''}`,
+    lapsed: `${reason}⌛ Lapsed: not decided by ${request.until}.`,
+  };
+  return {
+    cardsV2: [
+      {
+        cardId: `edit-request-${request.id}`,
+        card: {
+          header: { title: `Edit request · ${request.standup.name}`, subtitle: `${name} · ${dayLabel(request.date)} · answered at ${time(request.answeredAt)}` },
+          sections: [
+            {
+              widgets: [
+                { textParagraph: { text: outcome[request.status] } },
+                ...(request.status === 'pending'
+                  ? [
+                      {
+                        buttonList: {
+                          buttons: [
+                            { text: 'Approve', onClick: { action: clickAction(APPROVE_EDIT_FN, params, endpoint) } },
+                            { text: 'Decline', onClick: { action: clickAction(DECLINE_EDIT_FN, params, endpoint, 'OPEN_DIALOG') } },
+                          ],
+                        },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+/** DM card telling someone their edit was approved, with the way back into the form. */
+export function editApprovedCard(request: EditRequestView, endpoint: string | null = null) {
+  return {
+    cardsV2: [
+      {
+        cardId: `edit-approved-${request.id}`,
+        card: {
+          header: { title: `📋 ${request.standup.name}`, subtitle: humanDate(request.date) },
+          sections: [
+            {
+              widgets: [
+                { textParagraph: { text: `✅ ${html(request.decidedBy!)} approved your request. Edit your answers before <b>${request.until}</b>.` } },
+                { buttonList: { buttons: [{ text: 'Edit answers', onClick: { action: clickAction(OPEN_DIALOG_FN, [{ key: 'runId', value: String(request.runId) }], endpoint, 'OPEN_DIALOG') } }] } },
+              ],
+            },
+          ],
+        },
+      },
+    ],
   };
 }

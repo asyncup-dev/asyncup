@@ -77,6 +77,11 @@ export class Scheduler {
       }
     }
     try {
+      await this.service.edits.lapse();
+    } catch (err) {
+      this.log(`edit requests: ${err}`);
+    }
+    try {
       await this.providers.leave?.sweep();
     } catch (err) {
       this.log(`leave in Chat and Calendar: ${err}`);
@@ -248,6 +253,7 @@ export class Scheduler {
   private async closeRun(standup: Standup, run: Run): Promise<void> {
     await this.repo.closeRun(run.id);
     this.log(`closed run ${run.id} for "${standup.name}" ${run.date}`);
+    await this.service.refreshClosedCards(standup, run);
     try {
       await this.providers.schedule?.onRunClosed(standup, run);
     } catch (err) {

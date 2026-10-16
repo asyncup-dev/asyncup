@@ -3,10 +3,13 @@ import type { ChatAdapter, PromptState, SpaceInfo, SpaceMember, SpaceMembership 
 import type { SettingsService } from '../../core/settings.js';
 import { chatEndpointUrl } from './addon.js';
 import type { TimeOffRequest } from '../../core/schedule.js';
+import type { EditRequestView } from '../../core/edit-requests.js';
 import type { Repo } from '../../db/repo.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import {
   blockerCard,
+  editApprovedCard,
+  editRequestCard,
   timeOffRequestCard,
   pollMessage,
   promptMessage,
@@ -124,6 +127,23 @@ export class GoogleChatAdapter implements ChatAdapter {
   async sendTimeOffRequest(managerUserName: string, request: TimeOffRequest): Promise<void> {
     const dm = await this.ensureDmSpace(managerUserName);
     await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: timeOffRequestCard(request, await this.endpoint()) });
+  }
+
+  async sendEditRequest(managerUserName: string, request: EditRequestView): Promise<string | null> {
+    const dm = await this.ensureDmSpace(managerUserName);
+    const res = await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: editRequestCard(request, await this.endpoint()) });
+    return res.data.name ?? null;
+  }
+
+  async updateEditRequestCards(messageNames: string[], request: EditRequestView): Promise<void> {
+    const client = await this.getClient();
+    const requestBody = editRequestCard(request, await this.endpoint());
+    for (const name of messageNames) await client.spaces.messages.update({ name, updateMask: 'cardsV2', requestBody });
+  }
+
+  async sendEditApproved(userName: string, request: EditRequestView): Promise<void> {
+    const dm = await this.ensureDmSpace(userName);
+    await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: editApprovedCard(request, await this.endpoint()) });
   }
 
   async canDm(userName: string): Promise<boolean> {

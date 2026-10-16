@@ -376,6 +376,24 @@ export const ScheduleChange = named(
 export const TimeOffRequests = named('TimeOffRequests', z.strictObject({ requests: z.array(Override) }));
 export const Decision = named('Decision', z.strictObject({ ok: z.literal(true), message: z.string() }));
 
+export const EditRequest = named(
+  'EditRequest',
+  z.strictObject({
+    id,
+    standupId: id,
+    standupName: z.string(),
+    date: z.string(),
+    userName: z.string(),
+    displayName: z.string(),
+    reason: z.string().nullable(),
+    askedAt: z.string(),
+    answeredAt: z.string(),
+    until: z.string(),
+  }),
+  'Someone asking to change their answers after the deadline. `until` is when an approved edit, or the request, ends: midnight in the standup’s timezone.',
+);
+export const EditRequests = named('EditRequests', z.strictObject({ requests: z.array(EditRequest) }));
+
 // --- settings, verification and MCP
 
 const secret = z.strictObject({ set: z.boolean() });
@@ -638,6 +656,7 @@ export type MyStandups = z.infer<typeof MyStandups>;
 export type MySubmissions = z.infer<typeof MySubmissions>;
 export type Override = z.infer<typeof Override>;
 export type Schedule = z.infer<typeof Schedule>;
+export type EditRequest = z.infer<typeof EditRequest>;
 export type Settings = z.infer<typeof Settings>;
 export type Verification = z.infer<typeof Verification>;
 export type McpToken = z.infer<typeof McpToken>;

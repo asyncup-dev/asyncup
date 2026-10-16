@@ -5,6 +5,7 @@ import type { PromptState } from '../../core/adapter.js';
 import type { CommandHandler, Mention } from '../../core/commands.js';
 import type { PollService } from '../../core/poll-service.js';
 import type { StandupService } from '../../core/standup-service.js';
+import { closedText } from '../../core/edit-requests.js';
 import { describeDates, parseDateSpec, type ScheduleService } from '../../core/schedule.js';
 import type { Repo } from '../../db/repo.js';
 import { cleanSkipNote, LIMITS } from '../../core/validation.js';
@@ -17,7 +18,14 @@ import {
 } from '../../core/types.js';
 import {
   ACK_BLOCKER_FN,
+  APPROVE_EDIT_FN,
   APPROVE_REQUEST_FN,
+  DECLINE_EDIT_FN,
+  editRequestCard,
+  editRequestDialog,
+  OPEN_EDIT_REQUEST_FN,
+  SUBMIT_EDIT_DECLINE_FN,
+  SUBMIT_EDIT_REQUEST_FN,
   DECLINE_REQUEST_FN,
   SUBMIT_DECLINE_FN,
   declineDialog,
@@ -219,19 +227,52 @@ export class EventRouter {
     const runId = Number(getParameter(event, 'runId'));
     const user = eventUser(event);
 
-    if (fn === OPEN_DIALOG_FN) {
+    if (fn === OPEN_DIALOG_FN || fn === OPEN_EDIT_REQUEST_FN) {
       if (!Number.isInteger(runId)) return dialogError('This standup prompt is no longer valid.');
       const run = await this.repo.getRunById(runId);
       if (!run) return dialogError('This standup prompt is no longer valid.');
       const standup = (await this.repo.getStandupById(run.standupId))!;
+      const existing = await this.repo.getSubmission(run.id, user.userName);
+      if (run.status === 'closed') {
+        if (this.service.edits.dayOver(standup, run)) return dialogError(closedText(run));
+        // After the deadline an answer changes only with a manager's approval; until then, offer to ask.
+        if (existing && !(await this.service.edits.canEdit(standup, run, user.userName))) {
+          const refusal = await this.service.edits.askRefusal(standup, run, user.userName);
+          return refusal ? dialogError(refusal) : editRequestDialog(standup, run, await this.endpoint());
+        }
+      }
       const prefill = await this.service.getPrefill(standup, run, user.userName);
       // Editing keeps the mood and its comment as they were.
-      const existing = await this.repo.getSubmission(run.id, user.userName);
       return standupDialog(runId, standupQuestions(standup), standup.moodEnabled, prefill, await this.endpoint(), { mood: existing?.mood ?? undefined, moodComment: existing?.moodComment ?? undefined });
     }
 
     if (fn === SUBMIT_DIALOG_FN) {
       return this.onDialogSubmit(event, runId, user);
+    }
+
+    if (fn === SUBMIT_EDIT_REQUEST_FN) {
+      const run = Number.isInteger(runId) ? await this.repo.getRunById(runId) : null;
+      if (!run) return dialogError('This standup prompt is no longer valid.');
+      const reason = getFormValue(event, 'reason').trim();
+      if (reason.length > LIMITS.textMax) {
+        const standup = (await this.repo.getStandupById(run.standupId))!;
+        return editRequestDialog(standup, run, await this.endpoint(), { error: `Keep it to ${LIMITS.textMax} characters.`, reason });
+      }
+      const result = await this.service.edits.ask(run.id, user, reason || null);
+      return result.ok ? dialogOk(result.message) : dialogError(result.message);
+    }
+
+    if (fn === APPROVE_EDIT_FN || fn === DECLINE_EDIT_FN || fn === SUBMIT_EDIT_DECLINE_FN) {
+      const id = Number(getParameter(event, 'editRequestId')) || 0;
+      if (fn === DECLINE_EDIT_FN) return declineDialog(String(id), await this.endpoint(), { fn: SUBMIT_EDIT_DECLINE_FN, key: 'editRequestId' });
+      const actor = { userName: user.userName, displayName: user.displayName, admin: false };
+      if (fn === APPROVE_EDIT_FN) {
+        const result = await this.service.edits.decide(id, true, actor, null);
+        // The clicked card shows the outcome, whoever decided first.
+        return result.request ? { actionResponse: { type: 'UPDATE_MESSAGE' }, ...editRequestCard(result.request, await this.endpoint()) } : { text: result.message };
+      }
+      const result = await this.service.edits.decide(id, false, actor, getFormValue(event, 'note').trim() || null);
+      return result.ok ? dialogOk(result.message) : dialogError(result.message);
     }
 
     if (fn === OPEN_SKIP_FN) return skipDialog(runId, await this.endpoint());
@@ -376,7 +417,8 @@ export class EventRouter {
       );
     }
     const messages: Record<typeof result.reason, string> = {
-      already_submitted: 'This run is closed — late submissions can no longer be edited.',
+      already_submitted: 'The deadline has passed. Ask a manager to let you edit, from your prompt card.',
+      day_closed: closedText(run),
       run_not_found: 'This standup form is no longer valid.',
       not_a_participant: "You're not on this standup's roster — ask your admin to `add` you.",
     };

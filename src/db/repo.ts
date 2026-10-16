@@ -7,6 +7,8 @@ import type {
   BlockerTag,
   BlockerUpdate,
   CustomRole,
+  EditRequest,
+  EditRequestStatus,
   McpActivity,
   McpToken,
   Mood,
@@ -447,6 +449,25 @@ CREATE TABLE leave_presence (
   error_at TEXT
 );
 CREATE INDEX idx_leave_presence_user ON leave_presence(user_name);
+`,  // 20 — asking to edit answers after the deadline
+  `
+CREATE TABLE edit_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id INTEGER NOT NULL,
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  asked_at TEXT NOT NULL,
+  decided_at TEXT,
+  decided_by TEXT,
+  decided_by_user TEXT,
+  note TEXT,
+  card_messages TEXT,
+  UNIQUE (run_id, user_name)
+);
+CREATE INDEX idx_edit_requests_status ON edit_requests(status);
+ALTER TABLE submissions ADD COLUMN edit_approved_by TEXT;
 `,
 ];
 
@@ -773,6 +794,25 @@ CREATE TABLE leave_presence (
   error_at TEXT
 );
 CREATE INDEX idx_leave_presence_user ON leave_presence(user_name);
+`,  // 20 — edit requests (mirrors the SQLite migration)
+  `
+CREATE TABLE edit_requests (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  run_id INTEGER NOT NULL,
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  asked_at TEXT NOT NULL,
+  decided_at TEXT,
+  decided_by TEXT,
+  decided_by_user TEXT,
+  note TEXT,
+  card_messages TEXT,
+  UNIQUE (run_id, user_name)
+);
+CREATE INDEX idx_edit_requests_status ON edit_requests(status);
+ALTER TABLE submissions ADD COLUMN edit_approved_by TEXT;
 `,
 ];
 
@@ -919,6 +959,24 @@ function toSubmission(row: any): Submission {
     editedAt: row.edited_at ?? null,
     messageName: row.message_name ?? null,
     moodComment: row.mood_comment ?? null,
+    editApprovedBy: row.edit_approved_by ?? null,
+  };
+}
+
+function toEditRequest(row: any): EditRequest {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    userName: row.user_name,
+    displayName: row.display_name,
+    reason: row.reason ?? null,
+    status: row.status,
+    askedAt: row.asked_at,
+    decidedAt: row.decided_at ?? null,
+    decidedBy: row.decided_by ?? null,
+    decidedByUser: row.decided_by_user ?? null,
+    note: row.note ?? null,
+    cardMessages: row.card_messages ? JSON.parse(row.card_messages) : [],
   };
 }
 
@@ -1715,15 +1773,57 @@ export class Repo {
     return (await this.getSubmissionById(id))!;
   }
 
-  async updateSubmission(id: number, answers: Answer[], mood: Mood | null, moodComment: string | null, editedAt: string): Promise<Submission> {
-    await this.db.run('UPDATE submissions SET answers = ?, mood = ?, mood_comment = ?, edited_at = ? WHERE id = ?', [
+  async updateSubmission(id: number, answers: Answer[], mood: Mood | null, moodComment: string | null, editedAt: string, editApprovedBy: string | null = null): Promise<Submission> {
+    await this.db.run('UPDATE submissions SET answers = ?, mood = ?, mood_comment = ?, edited_at = ?, edit_approved_by = ? WHERE id = ?', [
       JSON.stringify(answers),
       mood,
       moodComment,
       editedAt,
+      editApprovedBy,
       id,
     ]);
     return (await this.getSubmissionById(id))!;
+  }
+
+  // --- edit requests ---
+
+  async createEditRequest(input: { runId: number; userName: string; displayName: string; reason: string | null; askedAt: string }): Promise<EditRequest> {
+    const id = await this.db.insert('INSERT INTO edit_requests (run_id, user_name, display_name, reason, asked_at) VALUES (?, ?, ?, ?, ?)', [
+      input.runId,
+      input.userName,
+      input.displayName,
+      input.reason,
+      input.askedAt,
+    ]);
+    return (await this.getEditRequest(id))!;
+  }
+
+  async getEditRequest(id: number): Promise<EditRequest | null> {
+    const row = await this.db.get('SELECT * FROM edit_requests WHERE id = ?', [id]);
+    return row ? toEditRequest(row) : null;
+  }
+
+  async getEditRequestFor(runId: number, userName: string): Promise<EditRequest | null> {
+    const row = await this.db.get('SELECT * FROM edit_requests WHERE run_id = ? AND user_name = ?', [runId, userName]);
+    return row ? toEditRequest(row) : null;
+  }
+
+  async listPendingEditRequests(): Promise<EditRequest[]> {
+    const rows = await this.db.all(`SELECT * FROM edit_requests WHERE status = 'pending' ORDER BY asked_at DESC, id DESC`);
+    return rows.map(toEditRequest);
+  }
+
+  /** Records a decision or a lapse; false when the request was no longer pending. */
+  async decideEditRequest(id: number, status: Exclude<EditRequestStatus, 'pending'>, at: string, by: { userName: string; displayName: string } | null, note: string | null): Promise<boolean> {
+    const result = await this.db.run(
+      `UPDATE edit_requests SET status = ?, decided_at = ?, decided_by = ?, decided_by_user = ?, note = ? WHERE id = ? AND status = 'pending'`,
+      [status, at, by?.displayName ?? null, by?.userName ?? null, note, id],
+    );
+    return result.changes > 0;
+  }
+
+  async setEditRequestCards(id: number, messageNames: string[]): Promise<void> {
+    await this.db.run('UPDATE edit_requests SET card_messages = ? WHERE id = ?', [JSON.stringify(messageNames), id]);
   }
 
   async setSubmissionMessageName(id: number, messageName: string): Promise<void> {
@@ -2198,6 +2298,7 @@ export class Repo {
       const b = await this.db.run(`DELETE FROM blockers WHERE standup_id IN (${standups})`, [tenantId]);
       await this.db.run(`DELETE FROM poll_votes WHERE poll_id IN (${polls})`, [tenantId]);
       const p = await this.db.run(`DELETE FROM polls WHERE standup_id IN (${standups})`, [tenantId]);
+      await this.db.run(`DELETE FROM edit_requests WHERE run_id IN (${runs})`, [tenantId]);
       const sub = await this.db.run(`DELETE FROM submissions WHERE run_id IN (${runs})`, [tenantId]);
       await this.db.run(`DELETE FROM run_participants WHERE run_id IN (${runs})`, [tenantId]);
       const r = await this.db.run(`DELETE FROM runs WHERE standup_id IN (${standups})`, [tenantId]);
@@ -2220,6 +2321,7 @@ export class Repo {
       const b = await this.db.run('DELETE FROM blockers WHERE standup_id = ?', [standupId]);
       await this.db.run(`DELETE FROM poll_votes WHERE poll_id IN (${polls})`, [standupId]);
       const p = await this.db.run('DELETE FROM polls WHERE standup_id = ?', [standupId]);
+      await this.db.run(`DELETE FROM edit_requests WHERE run_id IN (${runs})`, [standupId]);
       const sub = await this.db.run(`DELETE FROM submissions WHERE run_id IN (${runs})`, [standupId]);
       await this.db.run(`DELETE FROM run_participants WHERE run_id IN (${runs})`, [standupId]);
       const r = await this.db.run('DELETE FROM runs WHERE standup_id = ?', [standupId]);

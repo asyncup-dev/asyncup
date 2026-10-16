@@ -1,15 +1,17 @@
 import type { ChatAdapter, SpaceInfo, SpaceMember, SpaceMembership, PromptState } from '../../core/adapter.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import type { TimeOffRequest } from '../../core/schedule.js';
+import type { EditRequestView } from '../../core/edit-requests.js';
 
 interface SentDm {
-  kind: 'prompt' | 'reminder' | 'text' | 'blockerCard' | 'timeOffRequest';
+  kind: 'prompt' | 'reminder' | 'text' | 'blockerCard' | 'timeOffRequest' | 'editRequest' | 'editApproved';
   userName: string;
   standupId?: number;
   runId?: number;
   blockerId?: number;
   text?: string;
   request?: TimeOffRequest;
+  editRequest?: EditRequestView;
   /** A blocker card sent to the person who raised it. */
   owner?: boolean;
 }
@@ -134,6 +136,28 @@ export class FakeAdapter implements ChatAdapter {
   async sendTimeOffRequest(managerUserName: string, request: TimeOffRequest): Promise<void> {
     this.log?.(`time-off request to ${managerUserName}: ${request.person.displayName} ${request.dates.join(',')}`);
     this.dms.push({ kind: 'timeOffRequest', userName: managerUserName, standupId: request.standup.id, request });
+  }
+
+  /** Edit request card rewrites, newest last. */
+  editCardUpdates: { messageNames: string[]; request: EditRequestView }[] = [];
+  /** Makes edit request cards fail to send or redraw. */
+  failEditCards = false;
+
+  async sendEditRequest(managerUserName: string, request: EditRequestView): Promise<string | null> {
+    if (this.failEditCards) throw new Error('Chat refused the card');
+    this.dms.push({ kind: 'editRequest', userName: managerUserName, editRequest: request });
+    this.log?.(`edit request to ${managerUserName}: ${request.person.displayName} ${request.date}`);
+    return `messages/fake-${++this.messageCounter}`;
+  }
+
+  async updateEditRequestCards(messageNames: string[], request: EditRequestView): Promise<void> {
+    if (this.failEditCards) throw new Error('Chat refused the card');
+    this.editCardUpdates.push({ messageNames, request });
+  }
+
+  async sendEditApproved(userName: string, request: EditRequestView): Promise<void> {
+    if (this.failEditCards) throw new Error('Chat refused the card');
+    this.dms.push({ kind: 'editApproved', userName, editRequest: request });
   }
 
   async canDm(userName: string): Promise<boolean> {
