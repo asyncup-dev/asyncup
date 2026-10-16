@@ -69,7 +69,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('standup settings tab', () => {
   it('saves the schedule, questions and mood', async () => {
-    const { patches, calls } = server();
+    const { patches } = server();
     renderApp('/standups/1/settings');
     const user = userEvent.setup();
     expect(await screen.findByLabelText('Prompt time')).toHaveValue('09:30');

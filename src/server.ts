@@ -73,7 +73,8 @@ const CHAT_EVENT_TYPES = new Set(['MESSAGE', 'ADDED_TO_SPACE', 'REMOVED_FROM_SPA
 
 /** Collapse control chars (incl. newlines) and cap length before logging untrusted text — prevents log forging. */
 function logSafe(value: unknown): string {
-  return String(value).replace(/\p{Cc}/gu, ' ').slice(0, 200);
+  // CodeQL only recognises an explicit line-break replace as cleaning.
+  return String(value).replace(/[\r\n]/g, ' ').replace(/\p{Cc}/gu, ' ').slice(0, 200);
 }
 
 export function createServer(deps: ServerDeps): Express {
