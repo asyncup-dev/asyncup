@@ -137,7 +137,7 @@ describe('Scheduler', () => {
 
   it('prompts each participant at prompt time in their own timezone', async () => {
     const { repo, adapter, scheduler, clock } = await makeStack();
-    const standup = await seedStandup(repo, { deadlineTime: '18:00' });
+    await seedStandup(repo, { deadlineTime: '18:00' });
     await repo.setTimezoneForUser('users/bob', 'Europe/London');
 
     clock.set('2026-06-10T09:30');
