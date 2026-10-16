@@ -1,3 +1,4 @@
+import { toChatText } from './format.js';
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { LeavePresence } from './leave-presence.js';
@@ -327,7 +328,7 @@ export class Scheduler {
 
     const lines = stale.map((b) => {
       const age = Math.floor(today.diff(DateTime.fromISO(b.openedDate), 'days').days);
-      return `⚠️ ${b.displayName}: ${b.text} (open ${age}d)`;
+      return `⚠️ ${b.displayName}: ${toChatText(b.text)} (open ${age}d)`;
     });
     await this.adapter.sendDm(
       standup.escalateUserName!,

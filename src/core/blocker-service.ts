@@ -1,3 +1,4 @@
+import { toChatText } from './format.js';
 import { DateTime } from 'luxon';
 import type { ChatAdapter } from './adapter.js';
 import type { Mention } from './commands.js';
@@ -58,7 +59,7 @@ export class BlockerService {
 
     await this.adapter.postText(
       standup.spaceName,
-      `🤝 ${taggedBy.displayName} tagged ${tagged.join(', ')} on blocker #${blocker.id}: "${blocker.text}" (${blocker.displayName})`,
+      `🤝 ${taggedBy.displayName} tagged ${tagged.join(', ')} on blocker #${blocker.id}: "${toChatText(blocker.text)}" (${blocker.displayName})`,
       blockerThreadKey(blocker),
     );
     return `✅ Tagged ${tagged.join(', ')} on blocker #${blocker.id} — they got a DM. It now needs an explicit \`blocker ${blocker.id} resolve\`.`;
@@ -72,7 +73,7 @@ export class BlockerService {
     if (!mine) return 'not_tagged';
     if (mine.acknowledgedAt) return 'already_acked';
     await this.repo.ackBlockerTag(blockerId, user.userName, this.now().toISO()!);
-    await this.notifyOwner(blocker, `✋ ${user.displayName} acknowledged your blocker: "${blocker.text}"`);
+    await this.notifyOwner(blocker, `✋ ${user.displayName} acknowledged your blocker: "${toChatText(blocker.text)}"`);
     return 'acked';
   }
 
@@ -93,7 +94,7 @@ export class BlockerService {
     await this.broadcast(
       standup,
       blocker,
-      `📝 Update on blocker #${blocker.id} ("${blocker.text}") from ${user.displayName}:\n${text}`,
+      `📝 Update on blocker #${blocker.id} ("${toChatText(blocker.text)}") from ${user.displayName}:\n${text}`,
       user.userName,
     );
     return 'ok';
@@ -117,7 +118,7 @@ export class BlockerService {
     await this.broadcast(
       standup,
       blocker,
-      `✅ Blocker #${blocker.id} resolved by ${user.displayName}: "${blocker.text}" (open since ${blocker.openedDate})`,
+      `✅ Blocker #${blocker.id} resolved by ${user.displayName}: "${toChatText(blocker.text)}" (open since ${blocker.openedDate})`,
       user.userName,
     );
     return 'resolved';

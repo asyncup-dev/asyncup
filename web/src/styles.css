@@ -48,6 +48,9 @@ a:hover {
 .t-caption { font-size: 12px; line-height: 16px; color: var(--text-muted); }
 .t-label { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-secondary); }
 .t-mono { font-family: var(--font-mono); font-size: 13px; line-height: 18px; }
+.fmt code { font-family: var(--font-mono); font-size: 0.92em; padding: 0 4px; border-radius: var(--radius-sm); background: var(--bg-inset); }
+.fmt-list { display: block; }
+.fmt-item { display: list-item; list-style: disc; margin-left: 18px; }
 .muted { color: var(--text-muted); }
 .secondary { color: var(--text-secondary); }
 

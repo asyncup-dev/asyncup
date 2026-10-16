@@ -6,6 +6,7 @@ import { api, type WeekPoint } from '../lib/api';
 import { shortDate } from '../lib/format';
 import { useBlockers } from '../lib/people';
 import { useStandups } from '../lib/standups';
+import { Formatted } from '../lib/formatted';
 
 const WEEKS = [4, 8, 12] as const;
 
@@ -112,7 +113,7 @@ export function ReportsPage() {
               <span style={{ width: 130 }} className="t-medium name">{b.owner.displayName}</span>
               <span style={{ width: 120 }} className="t-small secondary">{b.standup.name}</span>
               <span style={{ width: 90 }} className="t-small secondary">{shortDate(b.openedDate)}</span>
-              <span className="name t-small">{b.text}</span>
+              <span className="name t-small"><Formatted text={b.text} /></span>
               <span className={`badge ${b.status === 'resolved' ? 'badge-success' : ''}`}>{b.status}</span>
             </div>
           ))}

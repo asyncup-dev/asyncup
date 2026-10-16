@@ -20,6 +20,10 @@ in a Google Chat DM.
    Reveiwed → Reviewed*. Submit again and your answers post exactly as typed.
    Code in backticks, links, @mentions, IDs like `PROJ-1423`, words with
    digits or capitals, and names are left alone.
+   Answers take Chat's shorthand: `*bold*`, `_italic_`, `~strike~`,
+   `__underline__`, `` `code` ``, and `- ` at the start of a line for a
+   list. Each field's hint lists them. Markers only count right against
+   the text, so `snake_case` and `2*3*4` stay as typed.
 2. Your answers post as your card under today's thread in the team space.
    Your mood never appears there: it's seen in the web app only.
    "Yesterday" comes pre-filled from your previous "today".

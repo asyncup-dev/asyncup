@@ -5,6 +5,8 @@ COPY package.json bun.lock ./
 COPY web/package.json ./web/
 RUN bun install --frozen-lockfile
 COPY web ./web
+# The web app shares the answer-formatting parser with the server.
+COPY src/core/format.ts ./src/core/format.ts
 RUN bun run web:build
 
 # Stage 2: the runtime image — server source plus the built web bundle.

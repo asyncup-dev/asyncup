@@ -119,6 +119,11 @@ Anyone can DM the bot directly:
   naming what's missing and your answers kept; nothing posts until all are
   filled. (Google Chat can't grey out Submit for apps yet.) Answer the blockers
   question with "none" when there are none. The skip reason works the same way.
+- **Formatting:** `*bold*`, `_italic_`, `~strike~`, `__underline__`,
+  `` `code` `` and `- ` lists show as formatting on the posted card, in
+  blocker cards and in the web app. Exports, webhooks, the API and MCP keep
+  the text exactly as typed. Plain-text messages such as nudges and the
+  digest show Chat's own syntax, without underline.
 - **Pre-fill:** the "yesterday" answer is pre-filled from your previous
   "today" answer.
 - **Late submissions** after the deadline still post, flagged *late*, until
