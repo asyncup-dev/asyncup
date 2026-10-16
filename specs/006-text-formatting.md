@@ -5,7 +5,7 @@
 | Status | Done |
 | Size | Feature (cards, web app, no schema change) |
 | Figma | [Specs › 006 Text formatting](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=166-79) |
-| PR | Link once opened |
+| PR | [#107](https://github.com/asyncup-dev/asyncup/pull/107) |
 
 ## Problem
 
