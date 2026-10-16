@@ -25,9 +25,15 @@ in a Google Chat DM.
    "Yesterday" comes pre-filled from your previous "today".
 3. Plans changed? Your DM card now shows *Submitted at …* with **Edit
    answers** until the deadline. Editing updates the posted card in place,
-   marked *edited*. After the deadline a first submission still posts, marked
-   *late*.
-4. Not today? Press **🏖️ Skip today** and say why in one line. The reason goes
+   marked *edited*. After the deadline a first answer still posts, marked
+   *late*, until midnight in the standup's timezone.
+4. Need to change an answer after the deadline? Press **Ask to edit** on your
+   card, and say why if you like. Your standup's managers get a card with
+   **Approve** and **Decline**. If one of them approves, you can edit until
+   midnight, and your posted card reads *Edited after the deadline · approved
+   by …*. You can ask once a day, and a request nobody decides lapses at
+   midnight. The wrap-up already posted stays as it was.
+5. Not today? Press **🏖️ Skip today** and say why in one line. The reason goes
    in today's thread, and you're listed as away, never as missing. Changed your
    mind? **↩️ Undo skip** (or DM `unskip`) before the deadline removes that
    reply and brings the form back.

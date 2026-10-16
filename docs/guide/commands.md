@@ -121,8 +121,11 @@ Anyone can DM the bot directly:
   question with "none" when there are none. The skip reason works the same way.
 - **Pre-fill:** the "yesterday" answer is pre-filled from your previous
   "today" answer.
-- **Late submissions** after the deadline still post, flagged *late*; the
-  wrap-up isn't recalculated and late entries can no longer be edited.
+- **Late submissions** after the deadline still post, flagged *late*, until
+  midnight in the standup's timezone; the wrap-up isn't recalculated.
+- **Editing after the deadline** needs a manager's approval: **Ask to edit** on
+  the prompt card sends the standup's managers a card. Once approved, answers
+  can change until midnight, and the posted card names who approved it.
 - **Untagged blockers** auto-resolve when the same person submits a
   blocker-free standup on a later day; tagged ones need an explicit
   `blocker <id> resolve`. With `escalate @user` configured, the contact gets
@@ -145,7 +148,9 @@ Anyone can DM the bot directly:
 
 The DM card that asks for today's standup keeps up with you: once you
 submit it shows when (with **Edit answers** until the deadline), and once
-you skip it shows your reason with **↩️ Undo skip**. Reminders and nudges
+you skip it shows your reason with **↩️ Undo skip**. At the deadline it offers
+**Ask to edit**, then shows whether your request is waiting, approved (with
+**Edit answers** until midnight), declined or lapsed. Reminders and nudges
 update the same way.
 
 On a standup whose roster follows a Google Group, `add` keeps working: people

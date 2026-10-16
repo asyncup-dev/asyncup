@@ -3,7 +3,7 @@ import { ConfirmDialog } from '../components/confirm-dialog';
 import { ScheduleDrawer } from '../components/schedule-drawer';
 import { useAccess } from '../lib/access';
 import { roleOf, useParticipantPatch, useParticipantRemove, usePeople, type PersonRow } from '../lib/people';
-import { dateSpan, groupRequests, useDecide, useRequests } from '../lib/schedule';
+import { dateSpan, groupRequests, useDecide, useDecideEdit, useEditRequests, useRequests } from '../lib/schedule';
 
 type Filter = 'everyone' | 'managers' | 'away' | 'requests';
 const FILTER_LABEL: Record<Filter, string> = { everyone: 'Everyone', managers: 'Managers', away: 'Away', requests: 'Requests' };
@@ -20,9 +20,14 @@ export function TeamPage() {
   const [declining, setDeclining] = useState<{ key: string; note: string } | null>(null);
   const access = useAccess();
   const decides = access.canSomewhere('schedules.manage');
+  const decidesEdits = access.canSomewhere('standups.configure');
   const requests = useRequests(decides);
+  const edits = useEditRequests(decidesEdits);
   const decide = useDecide();
+  const decideEdit = useDecideEdit();
   const groups = groupRequests(requests.data ?? []);
+  const requestCount = groups.length + (edits.data?.length ?? 0);
+  const requestsLoaded = (!decides || !!requests.data) && (!decidesEdits || !!edits.data);
   const matches = (p: PersonRow, f: Filter) => f === 'everyone' || (f === 'managers' ? roleOf(p) === 'Manager' : f === 'away' ? p.onVacation : false);
   const rows = (people.data ?? []).filter((p) => matches(p, filter));
   const standupCount = new Set((people.data ?? []).flatMap((p) => p.standups.map((s) => s.id))).size;
@@ -45,9 +50,9 @@ export function TeamPage() {
         </div>
       </div>
       <div className="chip-tabs" role="tablist" aria-label="Filter">
-        {(['everyone', 'managers', 'away', ...(decides ? (['requests'] as const) : [])] as const).map((f) => (
+        {(['everyone', 'managers', 'away', ...(decides || decidesEdits ? (['requests'] as const) : [])] as const).map((f) => (
           <button key={f} type="button" role="tab" className="chip-tab" aria-pressed={filter === f} aria-selected={filter === f} onClick={() => setFilter(f)}>
-            {FILTER_LABEL[f]} · {f === 'requests' ? groups.length : (people.data ?? []).filter((p) => matches(p, f)).length}
+            {FILTER_LABEL[f]} · {f === 'requests' ? requestCount : (people.data ?? []).filter((p) => matches(p, f)).length}
           </button>
         ))}
       </div>
@@ -55,24 +60,35 @@ export function TeamPage() {
       {filter === 'requests' ? (
         <div className="card" style={{ padding: 0 }}>
           {requests.isError ? <div className="alert" style={{ margin: 16 }}>Could not load requests: {requests.error.message}</div> : null}
-          {requests.data && groups.length === 0 ? <div className="t-small muted" style={{ padding: 16 }}>No time-off requests waiting. Requests appear here when a standup’s time-off policy needs a manager’s approval.</div> : null}
+          {edits.isError ? <div className="alert" style={{ margin: 16 }}>Could not load edit requests: {edits.error.message}</div> : null}
+          {requestsLoaded && requestCount === 0 ? <div className="t-small muted" style={{ padding: 16 }}>No requests waiting. Time-off requests appear here when a standup’s time-off policy needs a manager’s approval, and requests to edit answers when someone asks after the deadline.</div> : null}
+          {(edits.data ?? []).map((r) => (
+            <RequestRow
+              key={`edit-${r.id}`}
+              name={r.displayName}
+              line={`Edit answers · ${r.standupName} · ${dateSpan([r.date])}`}
+              caption={`${r.reason ? `“${r.reason}” · ` : ''}answered at ${clock(r.answeredAt, r.until)} · lapses at ${r.until} if unanswered`}
+              declining={declining?.key === `edit-${r.id}` ? declining.note : null}
+              busy={decideEdit.isPending}
+              onToggleDecline={() => setDeclining(declining?.key === `edit-${r.id}` ? null : { key: `edit-${r.id}`, note: '' })}
+              onNote={(note) => setDeclining({ key: `edit-${r.id}`, note })}
+              onDecline={(note) => void act(async () => { await decideEdit.mutateAsync({ id: r.id, approve: false, note }); setDeclining(null); })}
+              onApprove={() => void act(() => decideEdit.mutateAsync({ id: r.id, approve: true }))}
+            />
+          ))}
           {groups.map((g) => (
-            <div key={g.key} className="request">
-              <span className="avatar avatar-sm" aria-hidden="true">{g.person[0]}</span>
-              <span className="grow" style={{ flex: 1, minWidth: 0 }}>
-                <div className="t-strong">{g.person}</div>
-                <div>{dateSpan(g.dates)} · {g.dates.length} day{g.dates.length === 1 ? '' : 's'} {g.working ? 'working' : 'off'}</div>
-                <div className="t-caption">{g.reason ? `“${g.reason}” · ` : ''}requested via {g.channel} · lapses at the run’s deadline if unanswered</div>
-                {declining?.key === g.key ? (
-                  <div className="row" style={{ marginTop: 8 }}>
-                    <input className="input" aria-label="Reason for declining" placeholder="Why not? (sent to the person)" value={declining.note} onChange={(e) => setDeclining({ key: g.key, note: e.target.value })} />
-                    <button type="button" className="btn btn-danger" style={{ height: 32 }} disabled={decide.isPending} onClick={() => void act(async () => { await decide.mutateAsync({ ids: g.ids, approve: false, note: declining.note.trim() || undefined }); setDeclining(null); })}>Send decline</button>
-                  </div>
-                ) : null}
-              </span>
-              <button type="button" className="btn btn-ghost" disabled={decide.isPending} onClick={() => setDeclining(declining?.key === g.key ? null : { key: g.key, note: '' })}>Decline…</button>
-              <button type="button" className="btn btn-primary" disabled={decide.isPending} onClick={() => void act(() => decide.mutateAsync({ ids: g.ids, approve: true }))}>Approve</button>
-            </div>
+            <RequestRow
+              key={g.key}
+              name={g.person}
+              line={`${dateSpan(g.dates)} · ${g.dates.length} day${g.dates.length === 1 ? '' : 's'} ${g.working ? 'working' : 'off'}`}
+              caption={`${g.reason ? `“${g.reason}” · ` : ''}requested via ${g.channel} · lapses at the run’s deadline if unanswered`}
+              declining={declining?.key === g.key ? declining.note : null}
+              busy={decide.isPending}
+              onToggleDecline={() => setDeclining(declining?.key === g.key ? null : { key: g.key, note: '' })}
+              onNote={(note) => setDeclining({ key: g.key, note })}
+              onDecline={(note) => void act(async () => { await decide.mutateAsync({ ids: g.ids, approve: false, note }); setDeclining(null); })}
+              onApprove={() => void act(() => decide.mutateAsync({ ids: g.ids, approve: true }))}
+            />
           ))}
         </div>
       ) : (
@@ -152,5 +168,43 @@ export function TeamPage() {
         />
       ) : null}
     </>
+  );
+}
+
+/** "09:12" in the standup's zone, which `until` ("23:59 Europe/London") names. */
+function clock(iso: string, until: string): string {
+  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: until.split(' ')[1] }).format(new Date(iso));
+}
+
+/** One request waiting for a decision; Decline… opens a note sent to the person. */
+function RequestRow(props: {
+  name: string;
+  line: string;
+  caption: string;
+  declining: string | null;
+  busy: boolean;
+  onToggleDecline: () => void;
+  onNote: (note: string) => void;
+  onDecline: (note: string | undefined) => void;
+  onApprove: () => void;
+}) {
+  return (
+    <div className="request">
+      <span className="avatar avatar-sm" aria-hidden="true">{props.name[0]}</span>
+      {/* A basis lets the buttons wrap under the text on a phone instead of squeezing it. */}
+      <span className="grow" style={{ flex: '1 1 240px', minWidth: 0 }}>
+        <div className="t-strong">{props.name}</div>
+        <div>{props.line}</div>
+        <div className="t-caption">{props.caption}</div>
+        {props.declining !== null ? (
+          <div className="row" style={{ marginTop: 8 }}>
+            <input className="input" aria-label="Reason for declining" placeholder="Why not? (sent to the person)" value={props.declining} onChange={(e) => props.onNote(e.target.value)} />
+            <button type="button" className="btn btn-danger" style={{ height: 32 }} disabled={props.busy} onClick={() => props.onDecline(props.declining!.trim() || undefined)}>Send decline</button>
+          </div>
+        ) : null}
+      </span>
+      <button type="button" className="btn btn-ghost" disabled={props.busy} onClick={props.onToggleDecline}>Decline…</button>
+      <button type="button" className="btn btn-primary" disabled={props.busy} onClick={props.onApprove}>Approve</button>
+    </div>
   );
 }

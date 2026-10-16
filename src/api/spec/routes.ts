@@ -189,6 +189,21 @@ export const ROUTES: RouteSpec[] = [
     errors: [409, 503],
   },
 
+  // asking to edit answers after the deadline
+  { method: 'get', path: '/edit-requests', summary: 'Requests to edit answers after the deadline, waiting for a decision', tag: 'Runs', access: 'manager', permission: 'standups.configure', responses: { 200: S.EditRequests }, errors: [503] },
+  ...(['approve', 'decline'] as const).map((decision) => ({
+    method: 'post' as const,
+    path: `/edit-requests/:id/${decision}`,
+    summary: decision === 'approve' ? 'Let someone edit their answers until midnight' : 'Decline a request to edit answers',
+    tag: 'Runs',
+    access: 'manager' as const,
+    permission: 'standups.configure' as const,
+    params: { id: { schema: z.string(), description: 'Edit request id' } },
+    body: S.DecisionBody,
+    responses: { 200: S.Decision },
+    errors: [404, 409, 503],
+  })),
+
   // settings
   { method: 'get', path: '/settings', summary: 'Workspace settings', tag: 'Settings', access: 'admin', permission: 'settings.manage', responses: { 200: S.Settings } },
   { method: 'patch', path: '/settings', summary: 'Change workspace settings', tag: 'Settings', access: 'admin', permission: 'settings.manage', body: S.SettingsPatch, responses: { 200: S.Settings }, errors: [400, 409] },

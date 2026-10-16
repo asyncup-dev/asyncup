@@ -12,6 +12,9 @@ const REQUESTS = [
   { id: 7, userName: 'users/priya', displayName: 'Priya Sharma', date: '2026-09-22', working: false, reason: 'sick', status: 'pending', label: 'Day off', setBy: 'Priya Sharma', channel: 'chat', decidedBy: null, decisionNote: null, createdAt: '2026-09-18T10:00:00Z' },
   { id: 8, userName: 'users/priya', displayName: 'Priya Sharma', date: '2026-09-23', working: false, reason: 'sick', status: 'pending', label: 'Day off', setBy: 'Priya Sharma', channel: 'chat', decidedBy: null, decisionNote: null, createdAt: '2026-09-18T10:00:00Z' },
 ];
+const EDITS = [
+  { id: 4, standupId: 1, standupName: 'Engineering', date: '2026-09-18', userName: 'users/1', displayName: 'Asha Verma', reason: 'Wrong ticket number', askedAt: '2026-09-18T10:42:00Z', answeredAt: '2026-09-18T03:42:00Z', until: '23:59 Asia/Kolkata' },
+];
 const PRIYA_SCHEDULE = {
   userName: 'users/priya', displayName: 'Priya Sharma', workingDays: 'mon,tue,wed,thu', workingDaysLabel: 'Mon–Thu',
   policies: [{ standupId: 1, name: 'Engineering', timeOffPolicy: 'approval' }],
@@ -33,6 +36,9 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}, m
       'GET /api/v1/standups/1': { body: ENG },
       'GET /api/v1/people': { body: { people: PEOPLE } },
       'GET /api/v1/requests': { body: { requests: REQUESTS } },
+      'GET /api/v1/edit-requests': { body: { requests: EDITS } },
+      'POST /api/v1/edit-requests/4/approve': { body: record({ ok: true, message: '✅ Approved. Asha Verma can edit until 23:59 Asia/Kolkata.' }) },
+      'POST /api/v1/edit-requests/4/decline': { body: record({ ok: true, message: '❌ Declined. Asha Verma has been told.' }) },
       'GET /api/v1/people/users%2Fpriya/schedule': { body: PRIYA_SCHEDULE },
       'PATCH /api/v1/people/users%2Fpriya/schedule': { body: record({ ...PRIYA_SCHEDULE, workingDays: 'mon,tue,wed', workingDaysLabel: 'Mon–Wed' }) },
       'POST /api/v1/people/users%2Fpriya/overrides': { body: record({ ok: true, status: 'active', message: '🏖️ Sat 19 Sep marked off.' }) },
@@ -119,7 +125,7 @@ describe('team schedules', () => {
   });
 
   it('lists pending requests and approves or declines them with a note', async () => {
-    const { bodies, calls } = server();
+    const { bodies, calls } = server({ 'GET /api/v1/edit-requests': { body: { requests: [] } } });
     renderApp('/team');
     const user = userEvent.setup();
     await user.click(await screen.findByRole('tab', { name: 'Requests · 1' }));
@@ -133,20 +139,57 @@ describe('team schedules', () => {
     await waitFor(() => expect(calls).toContain('POST /api/v1/requests/7,8/approve'));
   });
 
+  it('lists requests to edit answers beside time off, and decides them', async () => {
+    const { bodies, calls } = server();
+    renderApp('/team');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: 'Requests · 2' }));
+    const row = screen.getByText('Edit answers · Engineering · Fri 18 Sep').closest('.request') as HTMLElement;
+    expect(within(row).getByText('“Wrong ticket number” · answered at 09:12 · lapses at 23:59 Asia/Kolkata if unanswered')).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Decline…' }));
+    await user.click(within(row).getByRole('button', { name: 'Decline…' }));
+    expect(within(row).queryByLabelText('Reason for declining')).not.toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Decline…' }));
+    await user.click(within(row).getByRole('button', { name: 'Send decline' }));
+    await waitFor(() => expect(calls).toContain('POST /api/v1/edit-requests/4/decline'));
+    expect(bodies.at(-1)).toEqual({});
+    await user.click(within(row).getByRole('button', { name: 'Decline…' }));
+    await user.type(within(row).getByLabelText('Reason for declining'), 'Too late');
+    await user.click(within(row).getByRole('button', { name: 'Send decline' }));
+    await waitFor(() => expect(bodies).toContainEqual({ note: 'Too late' }));
+    await user.click(within(row).getByRole('button', { name: 'Approve' }));
+    await waitFor(() => expect(calls).toContain('POST /api/v1/edit-requests/4/approve'));
+  });
+
+  it('shows edit requests to someone who configures a standup but does not manage schedules', async () => {
+    const configurer = { ...ADMIN, permissions: { workspace: ['standups.view', 'standups.configure', 'people.view'], standups: {} } };
+    const { calls } = server({ 'GET /api/v1/edit-requests': { body: { requests: [{ ...EDITS[0], reason: null }] } } }, configurer);
+    renderApp('/team');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: 'Requests · 1' }));
+    expect(screen.getByText('answered at 09:12 · lapses at 23:59 Asia/Kolkata if unanswered')).toBeInTheDocument();
+    expect(calls).not.toContain('GET /api/v1/requests');
+  });
+
   it('explains an empty queue', async () => {
-    server({ 'GET /api/v1/requests': { body: { requests: [] } } });
+    server({ 'GET /api/v1/requests': { body: { requests: [] } }, 'GET /api/v1/edit-requests': { body: { requests: [] } } });
     renderApp('/team');
     const user = userEvent.setup();
     await user.click(await screen.findByRole('tab', { name: 'Requests · 0' }));
-    expect(screen.getByText(/No time-off requests waiting/)).toBeInTheDocument();
+    expect(screen.getByText(/No requests waiting/)).toBeInTheDocument();
   });
 
   it('reports a failed requests load', async () => {
-    server({ 'GET /api/v1/requests': { status: 500, body: { error: { code: 'boom', message: 'Database away.' } } } });
+    server({
+      'GET /api/v1/requests': { status: 500, body: { error: { code: 'boom', message: 'Database away.' } } },
+      'GET /api/v1/edit-requests': { status: 500, body: { error: { code: 'boom', message: 'Database away.' } } },
+    });
     renderApp('/team');
     const user = userEvent.setup();
     await user.click(await screen.findByRole('tab', { name: 'Requests · 0' }));
     expect(await screen.findByText(/Could not load requests/)).toBeInTheDocument();
+    expect(await screen.findByText(/Could not load edit requests/)).toBeInTheDocument();
+    expect(screen.queryByText(/No requests waiting/)).not.toBeInTheDocument();
   });
 });
 

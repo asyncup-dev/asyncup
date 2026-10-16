@@ -7,8 +7,8 @@ import { POSTGRES_MIGRATIONS, Repo, SQLITE_MIGRATIONS } from '../src/db/repo.js'
 
 describe('migration 10 — AI removal', () => {
   it('keeps both dialect arrays aligned', () => {
-    expect(SQLITE_MIGRATIONS).toHaveLength(19);
-    expect(POSTGRES_MIGRATIONS).toHaveLength(19);
+    expect(SQLITE_MIGRATIONS).toHaveLength(20);
+    expect(POSTGRES_MIGRATIONS).toHaveLength(20);
     for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
       expect(migrations[9]).toContain('DROP COLUMN ai_enabled');
       expect(migrations[9]).toContain("'llmApiKey'");
@@ -46,7 +46,7 @@ describe('migration 10 — AI removal', () => {
     const columns = (check.query('PRAGMA table_info(standups)').all() as { name: string }[]).map((c) => c.name);
     expect(columns).not.toContain('ai_enabled');
     expect(columns).toContain('digest_enabled');
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(19);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(20);
     check.close();
   }, 30_000);
 });
@@ -90,7 +90,7 @@ describe('migration 11 — MCP tokens and activity', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(19);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(20);
     check.close();
   });
 });
@@ -131,7 +131,7 @@ describe('migration 12 — personal schedules', () => {
     await repo.close();
 
     const check = new Database(dbPath, { readonly: true });
-    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(19);
+    expect((check.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(20);
     check.close();
   });
 });
@@ -253,6 +253,38 @@ describe('migration 19 — leave in Chat and Calendar', () => {
     await repo.updateLeaveRow(row.id, { statusText: 'On leave', gone: true });
     await repo.updateLeaveRow(row.id, {});
     expect(await repo.listLeaveRows('users/a')).toEqual([{ ...row, statusText: 'On leave', gone: true }]);
+    await repo.close();
+  });
+});
+
+describe('migration 20 — asking to edit after the deadline', () => {
+  it('adds edit_requests and the approver on submissions in both dialects', () => {
+    for (const migrations of [SQLITE_MIGRATIONS, POSTGRES_MIGRATIONS]) {
+      expect(migrations[19]).toContain('CREATE TABLE edit_requests');
+      expect(migrations[19]).toContain('UNIQUE (run_id, user_name)');
+      expect(migrations[19]).toContain('ALTER TABLE submissions ADD COLUMN edit_approved_by TEXT');
+    }
+  });
+
+  it('upgrades a v19 database, keeping submissions with no approver', async () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), 'asyncup-mig-')), 'v19.db');
+    const raw = new Database(dbPath);
+    for (const migration of SQLITE_MIGRATIONS.slice(0, 19)) raw.exec(migration);
+    raw.exec('PRAGMA user_version = 19;');
+    raw.close();
+
+    const repo = await Repo.sqlite(dbPath);
+    const standup = await repo.createStandup({ tenantId: 'default', spaceName: 'spaces/x', name: 'X', timezone: 'UTC' });
+    const run = await repo.createRun(standup.id, '2026-06-10', 'k');
+    const sub = await repo.createSubmission({ runId: run.id, userName: 'users/a', displayName: 'Asha', answers: [], mood: null, moodComment: null, late: false, submittedAt: '2026-06-10T09:00:00Z' });
+    expect(sub.editApprovedBy).toBeNull();
+    const request = await repo.createEditRequest({ runId: run.id, userName: 'users/a', displayName: 'Asha', reason: null, askedAt: '2026-06-10T12:00:00Z' });
+    expect(request).toMatchObject({ status: 'pending', cardMessages: [], decidedBy: null });
+    expect(await repo.decideEditRequest(request.id, 'approved', '2026-06-10T12:05:00Z', { userName: 'users/m', displayName: 'Mo' }, null)).toBe(true);
+    expect(await repo.decideEditRequest(request.id, 'declined', '2026-06-10T12:06:00Z', { userName: 'users/m', displayName: 'Mo' }, null)).toBe(false);
+    expect(await repo.listPendingEditRequests()).toEqual([]);
+    await repo.deleteStandup(standup.id);
+    expect(await repo.getEditRequest(request.id)).toBeNull();
     await repo.close();
   });
 });

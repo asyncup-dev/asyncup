@@ -165,7 +165,7 @@ describe('cards (reminder, blocker, poll, thread and summary variants)', () => {
       late: false,
       submittedAt: '2026-06-10T04:30:00Z',
       editedAt: null,
-      messageName: null, moodComment: null,
+      messageName: null, moodComment: null, editApprovedBy: null,
     };
     const header: any = submissionMessage(submission).cardsV2[0]!.card.header;
     expect(header.title).toBe('📝 Alice');

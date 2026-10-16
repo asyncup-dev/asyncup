@@ -13,6 +13,7 @@ import type { RosterSync } from '../core/roster-sync.js';
 import type { ScheduleService } from '../core/schedule.js';
 import type { Repo } from '../db/repo.js';
 import { registerBlockerRoutes } from './blockers.js';
+import { registerEditRequestRoutes } from './edit-requests.js';
 import { registerMcpRoutes } from './mcp.js';
 import { registerMemberRoutes } from './member.js';
 import { registerScheduleRoutes } from './schedule.js';
@@ -125,6 +126,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
   registerPeopleRoutes(api, ctx);
   registerMemberRoutes(api, ctx);
   registerScheduleRoutes(api, ctx);
+  registerEditRequestRoutes(api, ctx);
   registerSettingsRoutes(api, ctx);
   registerSpaceRoutes(api, ctx);
   registerMcpRoutes(api, ctx);

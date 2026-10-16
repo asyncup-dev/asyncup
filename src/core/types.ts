@@ -226,6 +226,27 @@ export interface Submission extends SubmissionInput {
   /** Chat message resource name of the posted card (for edits). */
   messageName: string | null;
   moodComment: string | null;
+  /** Who let this answer change after the deadline, if anyone did. */
+  editApprovedBy: string | null;
+}
+
+export type EditRequestStatus = 'pending' | 'approved' | 'declined' | 'lapsed';
+
+/** Someone asking to change their answers after the deadline. */
+export interface EditRequest {
+  id: number;
+  runId: number;
+  userName: string;
+  displayName: string;
+  reason: string | null;
+  status: EditRequestStatus;
+  askedAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  decidedByUser: string | null;
+  note: string | null;
+  /** The managers' request cards, so a decision can redraw them all. */
+  cardMessages: string[];
 }
 
 export interface Blocker {

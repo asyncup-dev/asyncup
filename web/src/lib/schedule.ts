@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type TimeOffPolicy } from './api';
 
-import type { Override as OverrideView, Schedule as ScheduleView } from '../../../src/api/spec/schemas.ts';
+import type { EditRequest as EditRequestView, Override as OverrideView, Schedule as ScheduleView } from '../../../src/api/spec/schemas.ts';
 
-export type { OverrideView, ScheduleView };
+export type { EditRequestView, OverrideView, ScheduleView };
 
 /** Either the caller's own schedule or someone else's, by Chat user name. */
 export type ScheduleTarget = 'me' | { userName: string };
@@ -93,6 +93,20 @@ export function useDecide() {
     mutationFn: ({ ids, approve, note }: { ids: number[]; approve: boolean; note?: string }) =>
       api<{ ok: true; message: string }>(`/requests/${ids.join(',')}/${approve ? 'approve' : 'decline'}`, { method: 'POST', body: note ? { note } : {} }),
     onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ['requests'] }), client.invalidateQueries({ queryKey: ['people'] }), client.invalidateQueries({ queryKey: ['today'] })]),
+  });
+}
+
+/** Requests to edit answers after the deadline, newest first. */
+export function useEditRequests(enabled: boolean) {
+  return useQuery({ queryKey: ['edit-requests'], queryFn: () => api<{ requests: EditRequestView[] }>('/edit-requests'), select: (d) => d.requests, enabled });
+}
+
+export function useDecideEdit() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, approve, note }: { id: number; approve: boolean; note?: string }) =>
+      api<{ ok: true; message: string }>(`/edit-requests/${id}/${approve ? 'approve' : 'decline'}`, { method: 'POST', body: note ? { note } : {} }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['edit-requests'] }),
   });
 }
 

@@ -327,7 +327,7 @@ describe('mcp: tools', () => {
     expect((await call(alice, 'submit_answers', { ...three, answers: ['Edited', 'Billing', 'none'] })).json.result).toBe('submitted');
     clock.set('2026-06-10T11:31');
     await scheduler.tick();
-    expect((await call(alice, 'submit_answers', three)).error).toContain('closed');
+    expect((await call(alice, 'submit_answers', three)).error).toBe('The deadline has passed. Ask a manager to let you edit, from your prompt card in Chat.');
     // Someone removed from the roster after the run opened is not a participant of that run.
     await repo.upsertParticipant({ standupId: s.id, userName: 'users/erin', displayName: 'Erin' });
     const erin = await connect((await mint(cookieFor('erin'), { name: 'e', scopes: ['submit'] })).secret);

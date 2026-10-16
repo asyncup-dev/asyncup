@@ -11,6 +11,8 @@ export type WebhookEvent =
       mood: string | null;
       late: boolean;
       edited: boolean;
+      /** Who let the answer change after the deadline, if anyone did. */
+      editApprovedBy: string | null;
     }
   | {
       event: 'wrap_up';
@@ -61,6 +63,7 @@ export class WebhookNotifier {
       mood: submission.mood,
       late: submission.late,
       edited,
+      editApprovedBy: submission.editApprovedBy,
     });
   }
 

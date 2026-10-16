@@ -152,6 +152,13 @@ Today's run needs `standups.view`; the run list and insights need `reports.view`
 | `GET /standups/:id/runs/:date` | One run with full submissions and answers |
 | `GET /standups/:id/insights?weeks=8` | Weekly participation, mood and blocker series |
 
+Requests to edit answers after the deadline are decided by anyone holding `standups.configure` on the standup:
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/edit-requests` | Pending requests the caller can decide, newest first: `standupId`, `standupName`, `date`, `userName`, `displayName`, `reason`, `askedAt`, `answeredAt` and `until` (midnight in the standup's timezone, as `23:59 Europe/London`) |
+| `POST` | `/edit-requests/:id/approve` · `/edit-requests/:id/decline` | `{ note? }` on decline goes to the person; `404` for an unknown request, `403` without `standups.configure` on its standup, `409 refused` once decided or lapsed, or for the caller's own request |
+
 Moods are withheld per person when the standup keeps them anonymous; only the team average is returned. A run includes `moodComments` only for callers holding `moods.comments` on the standup: each with `person`, `mood` and `comment`, or with `person: null`, sorted by mood then text, when moods are anonymous.
 
 ### Blockers

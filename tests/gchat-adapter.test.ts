@@ -45,7 +45,7 @@ const submission: Submission = {
   late: false,
   submittedAt: '2026-06-10T04:30:00Z',
   editedAt: null,
-  messageName: 'spaces/team/messages/sub-1', moodComment: null,
+  messageName: 'spaces/team/messages/sub-1', moodComment: null, editApprovedBy: null,
 };
 
 const summary: RunSummary = {
@@ -232,6 +232,28 @@ describe('GoogleChatAdapter', () => {
     const card = creates[1]!.params.requestBody.cardsV2[0];
     expect(card.cardId).toBe('blocker-3');
     expect(card.card.header.subtitle).toBe('Alice tagged you');
+  });
+
+  it('DMs edit request cards, redraws them by name, and sends the approval card', async () => {
+    const { gchat, calls, state } = await makeAdapter();
+    const view = { id: 4, runId: 9, standup, date: '2026-06-10', person: { userName: 'users/alice', displayName: 'Alice' }, reason: null, status: 'pending', askedAt: '2026-06-10T07:00:00.000Z', answeredAt: '2026-06-10T04:30:00.000Z', decidedAt: null, decidedBy: null, decidedByUser: null, note: null, until: '23:59 Asia/Kolkata' } as const;
+    expect(await gchat.sendEditRequest('users/mgr', view)).toBe('spaces/x/messages/1');
+    state.createdName = () => undefined;
+    expect(await gchat.sendEditRequest('users/lead', view)).toBeNull();
+    await gchat.updateEditRequestCards(['spaces/x/messages/1', 'spaces/x/messages/2'], { ...view, status: 'lapsed' });
+    await gchat.sendEditApproved('users/alice', { ...view, status: 'approved', decidedBy: 'Lead' });
+    const creates = calls.filter((c) => c.method === 'create');
+    expect(creates.map((c) => [c.params.parent, c.params.requestBody.cardsV2[0].cardId])).toEqual([
+      ['spaces/dm-mgr', 'edit-request-4'],
+      ['spaces/dm-lead', 'edit-request-4'],
+      ['spaces/dm-alice', 'edit-approved-4'],
+    ]);
+    const updates = calls.filter((c) => c.method === 'update');
+    expect(updates.map((c) => [c.params.name, c.params.updateMask])).toEqual([
+      ['spaces/x/messages/1', 'cardsV2'],
+      ['spaces/x/messages/2', 'cardsV2'],
+    ]);
+    expect(JSON.stringify(updates[0]!.params.requestBody)).toContain('⌛ Lapsed');
   });
 
   it('posts a poll to the space and returns the message name, or null when absent', async () => {

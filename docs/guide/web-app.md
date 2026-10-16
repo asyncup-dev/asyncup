@@ -86,6 +86,12 @@ Personal weeks, days off and time-off approvals also live under **Team → Edit
 schedule**, **My page → My schedule** and **Team → Requests** — see
 [Personal schedules](./schedules).
 
+**Team → Requests** also lists requests to edit answers after the deadline,
+for anyone who can configure the standup: who asked, which standup and day,
+their reason, and when the request lapses (midnight in the standup's
+timezone). **Approve** lets them edit until then; **Decline…** takes an
+optional note sent to them. The first decision wins, in Chat or here.
+
 ## Naming, archiving and deleting
 
 - Standup names are unique across the workspace, archived standups included,

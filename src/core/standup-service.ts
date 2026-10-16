@@ -2,6 +2,7 @@ import { DateTime } from 'luxon';
 import type { ChatAdapter, PromptState } from './adapter.js';
 import type { WebhookNotifier } from './webhooks.js';
 import type { Repo } from '../db/repo.js';
+import { EditRequests } from './edit-requests.js';
 import { runProgress } from './progress.js';
 import { roundMood } from './insights.js';
 import {
@@ -18,7 +19,7 @@ import {
 
 export type SubmitResult =
   | { ok: true; late: boolean; edited: boolean }
-  | { ok: false; reason: 'already_submitted' | 'run_not_found' | 'not_a_participant' };
+  | { ok: false; reason: 'already_submitted' | 'day_closed' | 'run_not_found' | 'not_a_participant' };
 
 export type SkipResult = 'skipped' | 'already_submitted' | 'not_found';
 export type UnskipResult = 'unskipped' | 'not_skipped' | 'closed' | 'not_found';
@@ -30,12 +31,18 @@ export class StandupService {
     private now: () => DateTime = () => DateTime.utc(),
     private webhooks: WebhookNotifier | null = null,
     private log: (msg: string) => void = () => {},
-  ) {}
+  ) {
+    this.edits = new EditRequests(repo, adapter, this, now, (msg) => this.log(msg));
+  }
+
+  /** Asking to edit answers after the deadline. */
+  readonly edits: EditRequests;
 
   /**
    * Records a dialog submission and posts it under the day's thread.
    * Re-submitting while the run is open edits the existing card in place;
-   * submissions after the deadline still post, flagged as late.
+   * after the deadline that needs a manager's approval. A first answer after
+   * the deadline still posts, flagged as late. Both stop at midnight.
    */
   async submit(
     runId: number,
@@ -53,15 +60,22 @@ export class StandupService {
 
     const standup = (await this.repo.getStandupById(run.standupId))!;
     const existing = await this.repo.getSubmission(run.id, userName);
+    if (run.status === 'closed' && this.edits.dayOver(standup, run)) return { ok: false, reason: 'day_closed' };
 
     if (existing) {
-      if (run.status === 'closed') return { ok: false, reason: 'already_submitted' };
+      let approvedBy = existing.editApprovedBy;
+      if (run.status === 'closed') {
+        const request = await this.repo.getEditRequestFor(run.id, userName);
+        if (request?.status !== 'approved') return { ok: false, reason: 'already_submitted' };
+        approvedBy = request.decidedBy;
+      }
       const updated = await this.repo.updateSubmission(
         existing.id,
         input.answers,
         input.mood,
         input.moodComment ?? null,
         this.now().toISO()!,
+        approvedBy,
       );
       await this.repo.deleteBlockersOpenedBy(run.id, userName);
       await this.trackBlockers(standup, run, userName, displayName, input, { resolveOthers: false });
@@ -92,13 +106,14 @@ export class StandupService {
   }
 
   /** Rewrites the prompt, reminder and nudge cards a person was sent, to show they submitted, skipped or are still due. */
-  private async refreshCards(standup: Standup, run: Run, userName: string): Promise<void> {
+  async refreshCards(standup: Standup, run: Run, userName: string): Promise<void> {
     const names = await this.repo.listCardMessages(run.id, userName);
     if (names.length === 0) return;
     const submission = await this.repo.getSubmission(run.id, userName);
     const rp = (await this.repo.listRunParticipants(run.id)).find((p) => p.userName === userName);
+    const closed = (await this.repo.getRunById(run.id))?.status === 'closed';
     const state: PromptState = submission
-      ? { kind: 'submitted', at: submission.submittedAt, late: submission.late }
+      ? { kind: 'submitted', at: submission.submittedAt, late: submission.late, ...(closed ? { closed, edit: await this.edits.stateFor(standup, run, userName) } : {}) }
       : rp?.skippedAt
         ? { kind: 'skipped', note: rp.skipNote }
         : { kind: 'open' };
@@ -107,6 +122,11 @@ export class StandupService {
     } catch (err) {
       this.log(`updating ${userName}'s cards for run ${run.id} failed: ${err}`);
     }
+  }
+
+  /** At the deadline, everyone who answered sees how to ask for an edit. */
+  async refreshClosedCards(standup: Standup, run: Run): Promise<void> {
+    for (const submission of await this.repo.listSubmissions(run.id)) await this.refreshCards(standup, run, submission.userName);
   }
 
   private async trackBlockers(

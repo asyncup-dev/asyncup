@@ -533,8 +533,9 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   return server;
 }
 
-const SUBMIT_REASONS: Record<'run_not_found' | 'not_a_participant' | 'already_submitted', string> = {
+const SUBMIT_REASONS: Record<'run_not_found' | 'not_a_participant' | 'already_submitted' | 'day_closed', string> = {
   run_not_found: 'Today’s run has not opened yet.',
   not_a_participant: 'You are not on this standup’s roster today.',
-  already_submitted: 'Today’s run is closed; your answers can no longer change.',
+  already_submitted: 'The deadline has passed. Ask a manager to let you edit, from your prompt card in Chat.',
+  day_closed: 'This standup has closed for the day.',
 };
