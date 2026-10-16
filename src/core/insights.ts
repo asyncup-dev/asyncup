@@ -1,3 +1,4 @@
+import { toChatText } from './format.js';
 import { DateTime } from 'luxon';
 import type { Repo } from '../db/repo.js';
 import { MOOD_SCORE, standupDays, WEEKDAYS, type Standup, type WeeklyDigest } from './types.js';
@@ -131,7 +132,7 @@ export function digestText(digest: WeeklyDigest): string {
   if (digest.openBlockers.length > 0) {
     lines.push('*Still open:*');
     for (const b of digest.openBlockers.slice(0, 10)) {
-      lines.push(`  ⚠️ ${b.displayName}: ${b.text} (${b.ageDays}d)`);
+      lines.push(`  ⚠️ ${b.displayName}: ${toChatText(b.text)} (${b.ageDays}d)`);
     }
   }
   return lines.join('\n');

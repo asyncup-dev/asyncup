@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft |
+| Status | In progress |
 | Size | Feature (cards, web app, no schema change) |
 | Figma | [Specs › 006 Text formatting](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=166-79) |
 | PR | Link once opened |
@@ -88,9 +88,8 @@ How it works:
 - One parser in `src/core/format.ts` turns text into a small tree:
   text, bold, italic, strike, underline, code and list items. Two
   renderers use it: card HTML (escaping everything first) and Chat
-  text (dropping `__` markers). The web app has its own small renderer
-  that builds React elements from the same rules, tested against the
-  same cases.
+  text (dropping `__` markers). The web app imports the same parser and
+  builds React elements from its tree (`web/src/lib/formatted.tsx`).
 - Card HTML uses the tags Google documents for cards: `<b>`, `<i>`,
   `<s>`, `<u>`, `<code>`, `<ul><li>` and `<br>` (checked 16 Oct 2026,
   developers.google.com/workspace/chat/format-messages, last updated

@@ -6,6 +6,7 @@ import { useMe } from '../../lib/auth';
 import { ago, clock, closesIn, daysLabel, names, pct, shortDate, zoneAbbr } from '../../lib/format';
 import { useBlockerAction, useOpenBlockers, useRuns, useStandup, useToday } from '../../lib/standups';
 import { useStandupId } from './layout';
+import { Formatted } from '../../lib/formatted';
 
 function Ring({ value, total }: { value: number; total: number }) {
   const r = 44;
@@ -140,7 +141,7 @@ export function OverviewPage() {
                   <span className="name t-medium">{b.owner.displayName}</span>
                   <span className={`badge ${b.escalatedAt ? 'badge-danger' : b.status === 'acknowledged' ? 'badge-info' : 'badge-warning'}`}>{b.escalatedAt ? 'Escalated' : b.status === 'acknowledged' ? 'Acknowledged' : `Since ${shortDate(b.openedDate)}`}</span>
                 </div>
-                <div className="t-small">{b.text}</div>
+                <div className="t-small"><Formatted text={b.text} /></div>
                 {canAct ? (
                   <div className="row">
                     {b.status === 'open' && b.tags.some((x) => x.userName === me.data?.user?.userName) ? (

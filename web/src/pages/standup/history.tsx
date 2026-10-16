@@ -4,6 +4,7 @@ import { MOOD_EMOJI, MOOD_LABEL, moodWithComment } from '../../lib/api';
 import { clock, longDate, monthOf, names, pct, shortDate } from '../../lib/format';
 import { useRun, useRuns, useStandup } from '../../lib/standups';
 import { useStandupId } from './layout';
+import { Formatted } from '../../lib/formatted';
 
 const PAGE = 5;
 
@@ -81,7 +82,7 @@ export function HistoryPage() {
                     {sub.answers.map((a, i) => (
                       <div key={i} style={{ display: 'contents' }}>
                         <dt title={a.question}>{questionLabel(a.question, i)}</dt>
-                        <dd>{a.answer || <span className="muted">—</span>}</dd>
+                        <dd>{a.answer ? <Formatted text={a.answer} /> : <span className="muted">—</span>}</dd>
                       </div>
                     ))}
                     {named.get(sub.userName) ? (

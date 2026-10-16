@@ -1,4 +1,5 @@
 import type { Repo } from '../db/repo.js';
+import { blankMarkers } from './format.js';
 import type { SettingsService } from './settings.js';
 
 export type SpellingDialect = 'en-GB' | 'en-US';
@@ -61,6 +62,8 @@ export class Spelling {
   async typos(texts: string[]): Promise<Typo[]> {
     const s = await this.settings.get();
     if (!s.spellingEnabled || !this.engine || texts.every((t) => !t.trim())) return [];
+    // Markers become spaces, so __teh__ is checked as teh and positions still line up.
+    texts = texts.map(blankMarkers);
     let lints: RawLint[];
     try {
       lints = await this.engine.lint(texts, s.spellingDialect as SpellingDialect);

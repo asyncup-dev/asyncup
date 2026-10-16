@@ -1,5 +1,6 @@
 import type { PromptState } from '../../core/adapter.js';
 import { dayLabel, untilLabel, type EditRequestView } from '../../core/edit-requests.js';
+import { toCardHtml } from '../../core/format.js';
 import { describeDates, type TimeOffRequest } from '../../core/schedule.js';
 import { DateTime } from 'luxon';
 import { LIMITS } from '../../core/validation.js';
@@ -154,6 +155,8 @@ export function reminderMessage(standup: Standup, run: Run, endpoint: string | n
   };
 }
 
+const FORMAT_HINT = 'Formatting: *bold* _italic_ ~strike~ __underline__ `code`, and - for a list.';
+
 /**
  * Modal dialog built from the standup's question list.
  * Inputs are named q0..qN; prefill values align with the questions array.
@@ -175,7 +178,7 @@ export function standupDialog(
         label: `${question} (required)`,
         type: 'MULTIPLE_LINE',
         value: prefill[i] || undefined,
-        hintText: isBlockerQuestion(question) ? 'Write "none" if you have no blockers' : undefined,
+        hintText: isBlockerQuestion(question) ? `Write "none" if you have no blockers. ${FORMAT_HINT}` : FORMAT_HINT,
       },
     })),
   ];
@@ -274,7 +277,7 @@ export function tagBlockerDialog(blocker: Blocker, endpoint: string | null = nul
               {
                 header: `Blocker #${blocker.id}`,
                 widgets: [
-                  { textParagraph: { text: blocker.text } },
+                  { textParagraph: { text: toCardHtml(blocker.text) } },
                   {
                     selectionInput: {
                       name: 'people',
@@ -319,7 +322,7 @@ export function blockerCard(standup: Standup, blocker: Blocker, note: string, en
                 {
                   decoratedText: {
                     topLabel: `Reported by ${blocker.displayName} on ${blocker.openedDate}`,
-                    text: blocker.text,
+                    text: toCardHtml(blocker.text),
                     wrapText: true,
                   },
                 },
@@ -474,8 +477,8 @@ export function submissionMessage(submission: Submission) {
                     isBlockerQuestion(a.question) && !isRealBlocker(a.answer)
                       ? '✅ None'
                       : isBlockerQuestion(a.question)
-                        ? `⚠️ ${a.answer}`
-                        : a.answer,
+                        ? `⚠️ ${toCardHtml(a.answer)}`
+                        : toCardHtml(a.answer),
                   wrapText: true,
                 },
               })),

@@ -4,6 +4,7 @@ import { useMe } from '../lib/auth';
 import { shortDate } from '../lib/format';
 import { ageOf, useBlockerUpdate, useBlockers } from '../lib/people';
 import { useBlockerAction, useStandups } from '../lib/standups';
+import { Formatted } from '../lib/formatted';
 
 const STATUSES = ['open', 'acknowledged', 'resolved'] as const;
 
@@ -84,7 +85,7 @@ export function BlockersPage() {
             {rows.map((b) => (
               <tr key={b.id}>
                 <td data-label="Blocker">
-                  <div className="t-medium">{b.text}</div>
+                  <div className="t-medium"><Formatted text={b.text} /></div>
                   {b.updates.length ? <div className="t-caption">Last update: {b.updates[b.updates.length - 1]!.text}</div> : null}
                   {noteFor === b.id ? (
                     <div className="row" style={{ marginTop: 8 }}>

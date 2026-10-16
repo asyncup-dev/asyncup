@@ -7,6 +7,7 @@ import { closesIn, daysLabel, longDate, shortDate, zoneAbbr } from '../lib/forma
 import { timezoneOptions } from '../lib/setup';
 import { ScheduleDrawer } from '../components/schedule-drawer';
 import { DAY_LABEL, DAYS, dateSpan, isoToday, STATUS_TONE, useAddOverride, useSchedule, weekToDays } from '../lib/schedule';
+import { Formatted } from '../lib/formatted';
 
 export interface MyStandup {
   id: number;
@@ -190,7 +191,7 @@ export function MePage() {
                     {sub.answers.map((a, i) => (
                       <div key={i} style={{ display: 'contents' }}>
                         <dt title={a.question}>{['Yesterday', 'Today', 'Blockers'][i] ?? a.question}</dt>
-                        <dd>{a.answer || <span className="muted">—</span>}</dd>
+                        <dd>{a.answer ? <Formatted text={a.answer} /> : <span className="muted">—</span>}</dd>
                       </div>
                     ))}
                     {sub.mood && sub.moodComment ? (
