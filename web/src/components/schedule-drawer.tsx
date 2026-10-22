@@ -1,29 +1,67 @@
-import { useEffect, useState } from 'react';
-import { DAY_LABEL, DAYS, dateSpan, isoToday, POLICY_LABEL, STATUS_TONE, useAddOverride, useCancelOverride, useSaveWeek, useSchedule, weekToDays, type ScheduleTarget } from '../lib/schedule';
+import { useState } from 'react';
+import { daysLabel } from '../lib/format';
+import { DAY_LABEL, DAYS, dateSpan, isoToday, POLICY_LABEL, STATUS_TONE, useAddOverride, useCancelOverride, useSaveWeek, useSchedule, weekToDays, type ScheduleTarget, type ScheduleView } from '../lib/schedule';
 
 type WeekMode = 'follow' | 'custom' | 'adhoc';
+type StandupDays = ScheduleView['standups'][number];
+
+const modeOf = (workingDays: string | null): WeekMode => (workingDays === null ? 'follow' : workingDays === 'adhoc' ? 'adhoc' : 'custom');
+
+/** One standup's days for the person: follow it, custom days, or ad hoc. */
+function StandupDaysBlock({ standup, busy, onSave }: { standup: StandupDays; busy: boolean; onSave: (workingDays: string) => Promise<void> }) {
+  const [mode, setMode] = useState<WeekMode>(modeOf(standup.workingDays));
+  const [days, setDays] = useState<string[]>(weekToDays(standup.workingDays));
+  const value = mode === 'follow' ? 'reset' : mode === 'adhoc' ? 'adhoc' : days.join(',');
+  const dirty = value !== (standup.workingDays === null ? 'reset' : standup.workingDays);
+  const runs = daysLabel(standup.days);
+  const revert = () => {
+    setMode(modeOf(standup.workingDays));
+    setDays(weekToDays(standup.workingDays));
+  };
+  return (
+    <section className="card" aria-label={`Days on ${standup.name}`} style={{ padding: 12, background: 'var(--bg-surface-2)', boxShadow: 'none', display: 'grid', gap: 10 }}>
+      <div className="row">
+        <span className="t-medium" style={{ flex: 1 }}>{standup.name}</span>
+        <span className="t-caption">{POLICY_LABEL[standup.timeOffPolicy].split(' — ')[0]}</span>
+      </div>
+      <select className="input" aria-label={`Days on ${standup.name}`} style={{ width: 'auto', justifySelf: 'start' }} value={mode} onChange={(e) => setMode(e.target.value as WeekMode)}>
+        <option value="follow">Follow the standup</option>
+        <option value="custom">Custom days</option>
+        <option value="adhoc">Ad hoc</option>
+      </select>
+      {mode === 'custom' ? (
+        <div className="days">
+          {DAYS.map((d) => (
+            <button key={d} type="button" className="day" aria-pressed={days.includes(d)} onClick={() => setDays(days.includes(d) ? days.filter((x) => x !== d) : DAYS.filter((x) => x === d || days.includes(x)))}>{DAY_LABEL[d]}</button>
+          ))}
+        </div>
+      ) : null}
+      <div className="t-caption">
+        {mode === 'follow' ? `Expected on every day ${standup.name} runs: ${runs}.` : mode === 'adhoc' ? 'No fixed days — prompted only on dates marked working below.' : `${standup.name} runs ${runs}. Any other day ticked opens a run for this person.`}
+      </div>
+      {dirty ? (
+        <div className="row">
+          <button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={busy || (mode === 'custom' && days.length === 0)} onClick={() => void onSave(value)}>Save days</button>
+          <button type="button" className="btn btn-ghost" style={{ height: 28 }} onClick={revert}>Revert</button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 /**
- * The Edit schedule drawer: a person's week (follow / custom / ad hoc) and
- * their dated overrides, for themselves or, from the Team page, for a manager.
+ * The Edit schedule drawer: a person's days on each standup and their dated
+ * overrides, for themselves or, from the Team page, for a manager.
  */
 export function ScheduleDrawer({ target, title, onClose }: { target: ScheduleTarget; title: string; onClose: () => void }) {
   const schedule = useSchedule(target);
   const saveWeek = useSaveWeek(target);
   const add = useAddOverride(target);
   const cancel = useCancelOverride(target);
-  const [mode, setMode] = useState<WeekMode | null>(null);
-  const [days, setDays] = useState<string[]>([]);
   const [form, setForm] = useState({ from: '', to: '', working: false, reason: '' });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const s = schedule.data;
-  useEffect(() => {
-    if (s && mode === null) {
-      setMode(s.workingDays === null ? 'follow' : s.workingDays === 'adhoc' ? 'adhoc' : 'custom');
-      setDays(weekToDays(s.workingDays));
-    }
-  }, [s, mode]);
   const run = async (fn: () => Promise<{ message?: string } | unknown>) => {
     try {
       setError(null);
@@ -34,11 +72,8 @@ export function ScheduleDrawer({ target, title, onClose }: { target: ScheduleTar
       setError(err instanceof Error ? err.message : 'That did not work.');
     }
   };
-  const weekValue = mode === 'follow' ? 'reset' : mode === 'adhoc' ? 'adhoc' : days.join(',');
-  const dirty = !!s && mode !== null && weekValue !== (s.workingDays === null ? 'reset' : s.workingDays);
   const busy = saveWeek.isPending || add.isPending || cancel.isPending;
   const upcoming = (s?.overrides ?? []).filter((o) => o.status !== 'withdrawn');
-  const policy = s?.policies.map((p) => p.timeOffPolicy).reduce<'self' | 'approval' | 'managers'>((acc, p) => (p === 'managers' || acc === 'managers' ? 'managers' : p === 'approval' || acc === 'approval' ? 'approval' : 'self'), 'self') ?? 'self';
   return (
     <div className="scrim right" role="presentation" onClick={onClose}>
       <div className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" onClick={(e) => e.stopPropagation()}>
@@ -53,43 +88,14 @@ export function ScheduleDrawer({ target, title, onClose }: { target: ScheduleTar
           {schedule.isError ? <div className="alert">Could not load the schedule: {schedule.error.message}</div> : null}
           {error ? <div className="alert" role="alert">{error}</div> : null}
           {notice ? <div className="toast" role="status">{notice}</div> : null}
-          {s && mode !== null ? (
+          {s ? (
             <>
-              <section>
-                <div className="t-label" style={{ marginBottom: 10 }}>Working days</div>
-                <div className="choice-list">
-                  <label className="choice-row">
-                    <input type="radio" name="week" checked={mode === 'follow'} onChange={() => setMode('follow')} />
-                    <span>
-                      <div className="t-medium">Follow the standup</div>
-                      <div className="t-caption">Expected on every day the standup runs.</div>
-                    </span>
-                  </label>
-                  <label className="choice-row">
-                    <input type="radio" name="week" checked={mode === 'custom'} onChange={() => setMode('custom')} />
-                    <span className="t-medium">Custom week</span>
-                  </label>
-                  {mode === 'custom' ? (
-                    <div className="days" style={{ paddingLeft: 26 }}>
-                      {DAYS.map((d) => (
-                        <button key={d} type="button" className="day" aria-pressed={days.includes(d)} onClick={() => setDays(days.includes(d) ? days.filter((x) => x !== d) : DAYS.filter((x) => x === d || days.includes(x)))}>{DAY_LABEL[d]}</button>
-                      ))}
-                    </div>
-                  ) : null}
-                  <label className="choice-row">
-                    <input type="radio" name="week" checked={mode === 'adhoc'} onChange={() => setMode('adhoc')} />
-                    <span>
-                      <div className="t-medium">Ad hoc</div>
-                      <div className="t-caption">No fixed days — prompted only on dates marked working below.</div>
-                    </span>
-                  </label>
-                </div>
-                {dirty ? (
-                  <div className="row" style={{ marginTop: 10 }}>
-                    <button type="button" className="btn btn-primary" style={{ height: 28 }} disabled={busy || (mode === 'custom' && days.length === 0)} onClick={() => void run(() => saveWeek.mutateAsync(weekValue))}>Save week</button>
-                    <button type="button" className="btn btn-ghost" style={{ height: 28 }} onClick={() => { setMode(null); }}>Revert</button>
-                  </div>
-                ) : null}
+              <section style={{ display: 'grid', gap: 12 }}>
+                <div className="t-label">Working days</div>
+                {s.standups.length === 0 ? <div className="t-small muted">Not on any standup you manage.</div> : null}
+                {s.standups.map((st) => (
+                  <StandupDaysBlock key={`${st.standupId}:${st.workingDays}`} standup={st} busy={busy} onSave={(workingDays) => run(async () => { await saveWeek.mutateAsync({ standupId: st.standupId, workingDays }); return { message: `Days on ${st.name} saved.` }; })} />
+                ))}
               </section>
               <section>
                 <div className="row" style={{ marginBottom: 10 }}>
@@ -132,11 +138,7 @@ export function ScheduleDrawer({ target, title, onClose }: { target: ScheduleTar
                   <input className="input" aria-label="Reason" placeholder="Reason (optional)" style={{ flex: 1, minWidth: 120 }} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
                   <button type="submit" className="btn" style={{ height: 32 }} disabled={busy || !form.from}>Add</button>
                 </form>
-                <div className="t-caption" style={{ marginTop: 6 }}>{target === 'me' ? 'Past days can only be changed by a manager.' : 'Past dates change that run’s participation and are recorded with your name.'}</div>
-              </section>
-              <section className="card" style={{ padding: 12, background: 'var(--bg-surface-2)', boxShadow: 'none' }}>
-                <div className="t-strong">Time-off policy: {POLICY_LABEL[policy].split(' — ')[0]}</div>
-                <div className="t-small secondary">{POLICY_LABEL[policy]}. Set per standup under Settings › Schedule.</div>
+                <div className="t-caption" style={{ marginTop: 6 }}>{target === 'me' ? 'Past days can only be changed by a manager.' : 'Past dates change that run’s participation and are recorded with your name.'} Days off and working days apply to every standup {target === 'me' ? 'you are' : 'they are'} on.</div>
               </section>
             </>
           ) : null}

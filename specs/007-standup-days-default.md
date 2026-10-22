@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft |
+| Status | Done |
 | Size | Cross-cutting (scheduler, API, Chat, web app, no migration) |
 | Figma | [Specs › 007 Standup days are a default](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=178-73) |
 | PR | Link once opened |
@@ -56,7 +56,8 @@ Running
 8. Runs on extra days behave like any other run: wrap-up, late answers,
    edit requests, blockers and webhooks.
 9. The weekly digest still posts after the standup's last default day.
-   Answers from an extra day count in the week they fall in.
+   Answers from an extra day after it count in that week's Insights, not
+   in the digest already posted.
 
 People table (standup settings and the create form)
 
@@ -154,7 +155,7 @@ None. Decided with the maintainer on 22 Oct 2026:
 - Every way of setting days changes one standup: the People table, `days`
   in Chat, My schedule, Team › Edit schedule, the API and MCP.
 
-Proposed in this spec, for approval:
+Proposed in this spec and approved with it:
 
 - Ticking exactly the standup's days puts a person back on the default
   (criterion 12).

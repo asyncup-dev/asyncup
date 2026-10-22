@@ -97,8 +97,8 @@ hand; `syncedAt` and `error` describe the last sync.
 The same object plus:
 
 - `participants`: `userName`, `displayName`, `mandatory`, `timezone`,
-  `onVacation`, `workingDays` (their own week, or `null` to follow the
-  standup), `otherStandups` (how many other standups they're on) and `source`
+  `onVacation`, `workingDays` (their own days on this standup, or `null` to
+  follow its days), `otherStandups` (how many other standups they're on) and `source`
   (`manual` or `group`);
 - `admins`;
 - `keptOff`: group members taken off by hand, whom syncs keep off;
@@ -169,14 +169,14 @@ Moods are withheld per person when the standup keeps them anonymous; only the te
 
 ### Team
 
-`GET /people` — needs `people.view`. Everyone on a roster of a standup where the caller has it, with `email` (when known), `timezone`, `onVacation`, `workingDays` / `workingDaysLabel` and their `standups` (`mandatory`, `admin`).
+`GET /people` — needs `people.view`. Everyone on a roster of a standup where the caller has it, with `email` (when known), `timezone`, `onVacation`, `workingDays` / `workingDaysLabel` (*Varies by standup* when their days differ) and their `standups` (`mandatory`, `admin`).
 
 Schedules of others need `schedules.manage` on a standup the person is on:
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/people/:userName/schedule` | Same shape as `/me/schedule` |
-| `PATCH` | `/people/:userName/schedule` | `{ workingDays }` — the person is DM'd |
+| `GET` | `/people/:userName/schedule` | Same shape as `/me/schedule`; `standups` lists only the standups the caller manages |
+| `PATCH` | `/people/:userName/schedule` | `{ workingDays, standupId }` — needs `schedules.manage` on that standup; the person is DM'd |
 | `POST` | `/people/:userName/overrides` | Same body as `/me/overrides`; managers may set past dates and are never subject to the policy — the person is DM'd |
 | `DELETE` | `/people/:userName/overrides/:date` | Withdraw |
 | `GET` | `/requests` | Pending time-off requests: all of them with `schedules.manage` across the workspace, otherwise those of people on standups where the caller has it |
@@ -189,8 +189,8 @@ Schedules of others need `schedules.manage` on a standup the person is on:
 | `GET` | `/me/standups` | `linked: false` until the account has a Chat identity; otherwise `timezone` (own override or `null`), `chat.dmUrl` (deep link to the bot's DM once one exists) and each standup with `today` = `submitted`, `waiting`, `closed` or `null` plus `progress` (`{ submitted, expected }` while a run exists) |
 | `GET` | `/me/submissions?limit=10` | My recent answers, with my own `moodComment` |
 | `PATCH` | `/me` | `{ timezone?: string \| null, onVacation?: boolean }`; `409 not_linked` without a Chat identity |
-| `GET` | `/me/schedule` | My personal week (`workingDays`, `workingDaysLabel`), the `policies` of my standups and upcoming `overrides` (each with `status`, `setBy`, `channel`, `decidedBy`) |
-| `PATCH` | `/me/schedule` | `{ workingDays: "mon-thu" \| "adhoc" \| "reset" }` — the same words the DM `days` command takes; `400 invalid` otherwise |
+| `GET` | `/me/schedule` | My days on each standup (`standups`: `standupId`, `name`, the standup's `days`, my `workingDays` and `workingDaysLabel`, `timeOffPolicy`), the `policies` of my standups and upcoming `overrides` (each with `status`, `setBy`, `channel`, `decidedBy`). The top-level `workingDays` and `workingDaysLabel` are deprecated |
+| `PATCH` | `/me/schedule` | `{ workingDays: "mon-thu" \| "adhoc" \| "reset", standupId }` — the same words the DM `days` command takes, for one standup; `400 invalid` otherwise. Without `standupId` every standup changes; that form is deprecated |
 | `POST` | `/me/overrides` | `{ date }`, `{ dates: [] }` or `{ from, to }` (ISO, ≤ 31 days), `working?: boolean`, `reason?` — a day off or an extra working day; `403 refused` when the standup's time-off policy says so, with the reason |
 | `DELETE` | `/me/overrides/:date` | Withdraw an entry |
 | `POST` | `/me/skip` | `{ standupId, reason }` — skip today's run with a one-line reason (up to 150 characters), posted in the day's thread; `400 invalid` on `reason` when it is missing or too long, `409 no_open_run` before it opens or after it closes, `409 already_submitted` once answered |

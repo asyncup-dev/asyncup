@@ -9,21 +9,18 @@ function storedDays(workingDays: string | null): Weekday[] | null {
   return WEEK.filter((d) => workingDays.split(',').includes(d));
 }
 
-/** Which of the standup's days the person works, as the grid ticks them. */
+/** Which days the person works on this standup: their own, else the standup's. */
 export function tickedDays(workingDays: string | null, standupDays: readonly Weekday[]): Weekday[] {
-  const own = storedDays(workingDays);
-  return own === null ? [...standupDays] : standupDays.filter((d) => own.includes(d));
+  return storedDays(workingDays) ?? [...standupDays];
 }
 
 /**
- * The week to save after ticking `picked` among the standup's days, in the
- * form the schedule API takes. Days outside this standup are kept, since a
- * week belongs to the person; ticking every standup day with nothing else
- * set goes back to following the standup.
+ * The days to save after ticking `picked`, in the form the schedule API
+ * takes. Ticking exactly the standup's days puts the person back on them,
+ * so later changes to the standup reach them; ticking none is ad hoc.
  */
-export function weekAfter(workingDays: string | null, standupDays: readonly Weekday[], picked: readonly Weekday[]): string {
-  const outside = (storedDays(workingDays) ?? []).filter((d) => !standupDays.includes(d));
-  if (outside.length === 0 && standupDays.every((d) => picked.includes(d))) return 'reset';
-  const all = WEEK.filter((d) => outside.includes(d) || (standupDays.includes(d) && picked.includes(d)));
-  return all.length ? all.join(',') : 'adhoc';
+export function weekAfter(standupDays: readonly Weekday[], picked: readonly Weekday[]): string {
+  const days = WEEK.filter((d) => picked.includes(d));
+  if (days.length === standupDays.length && standupDays.every((d) => days.includes(d))) return 'reset';
+  return days.length ? days.join(',') : 'adhoc';
 }

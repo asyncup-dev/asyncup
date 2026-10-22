@@ -102,7 +102,7 @@ export function CreateStandupPage() {
       });
       for (const p of f.rosterGroup !== null ? [] : f.people.filter((m) => m.week !== null)) {
         try {
-          await api(`/people/${encodeURIComponent(p.userName)}/schedule`, { method: 'PATCH', body: { workingDays: p.week } });
+          await api(`/people/${encodeURIComponent(p.userName)}/schedule`, { method: 'PATCH', body: { workingDays: p.week, standupId: created.id } });
         } catch (err) {
           throw new Error(`The standup was created, but ${p.displayName}’s days did not save (${err instanceof Error ? err.message : String(err)}). Set them under the standup’s People.`);
         }
@@ -124,10 +124,10 @@ export function CreateStandupPage() {
   }
   const set = (patch: Partial<CreateForm>) => setForm({ ...form, ...patch });
   const rows: MatrixRow[] = [
-    ...form.people.map((p) => ({ ...p, onStandup: true, workingDays: p.week, otherStandups: 0 })),
+    ...form.people.map((p) => ({ ...p, onStandup: true, workingDays: p.week })),
     ...(members.data?.members ?? [])
       .filter((m) => !form.people.some((p) => p.userName === m.userName))
-      .map((m) => ({ ...m, onStandup: false, mandatory: true, workingDays: null, otherStandups: 0 })),
+      .map((m) => ({ ...m, onStandup: false, mandatory: true, workingDays: null })),
   ];
   const change = (row: MatrixRow, c: MatrixChange) => {
     const update = (patch: Partial<Member>) => set({ people: form.people.map((m) => (m.userName === row.userName ? { ...m, ...patch } : m)) });

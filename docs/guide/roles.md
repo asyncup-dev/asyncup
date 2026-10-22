@@ -41,7 +41,7 @@ Built-in roles can't be changed. Copy one to start a custom role.
 | `standups.configure` | Change the schedule, questions, mood, escalation and webhook; run now, nudge, close polls | ✓ | ✓ | | |
 | `standups.archive` | Archive a standup and bring it back | ✓ | ✓ | | |
 | `people.manage` | Add and remove people, mark them required, make managers, grant roles on the standup | ✓ | ✓ | | |
-| `schedules.manage` | Change people's weeks and days off, decide time-off requests | ✓ | ✓ | | |
+| `schedules.manage` | Change people's days and days off on the standup, decide time-off requests | ✓ | ✓ | | |
 | `blockers.manage` | Resolve anyone's blocker | ✓ | ✓ | | |
 | `standups.create` | Create standups | ✓ | | | |
 | `standups.delete` | Delete an archived standup with its history | ✓ | | | |

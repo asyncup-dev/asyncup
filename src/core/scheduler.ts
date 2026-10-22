@@ -4,7 +4,7 @@ import type { ChatAdapter } from './adapter.js';
 import type { LeavePresence } from './leave-presence.js';
 import type { OooChecker } from './ooo.js';
 import type { RosterSync } from './roster-sync.js';
-import type { ScheduleService } from './schedule.js';
+import { dayStatus, type ScheduleService } from './schedule.js';
 import { directoryKey, type UserDirectory } from './directory.js';
 import type { Repo } from '../db/repo.js';
 import type { StandupService } from './standup-service.js';
@@ -110,7 +110,7 @@ export class Scheduler {
     };
     await syncRoster(60);
 
-    if (!standupDays(standup).includes(WEEKDAY_BY_LUXON[localNow.weekday]!)) return;
+    const standupDay = standupDays(standup).includes(WEEKDAY_BY_LUXON[localNow.weekday]!);
 
     const promptAt = timeOn(today, standup.promptTime, zone);
     const deadlineAt = timeOn(today, standup.deadlineTime, zone);
@@ -122,7 +122,14 @@ export class Scheduler {
       if (now >= deadlineAt) return;
       if (now >= promptAt.minus({ hours: 1 })) await syncRoster(10);
       const people = await this.repo.listParticipants(standup.id);
-      const active = people.filter((p) => !p.onVacation);
+      let active = people.filter((p) => !p.onVacation);
+      // On a day outside the standup's own, the run is only for those who work it.
+      let only: Set<string> | undefined;
+      if (!standupDay) {
+        const overrides = await this.repo.listActiveOverridesOn(today);
+        active = people.filter((p) => dayStatus(p, today, overrides.get(p.userName), standupDays(standup)).expected);
+        only = new Set(active.map((p) => p.userName));
+      }
       if (active.length === 0) return;
       // The run opens once promptTime arrives in the earliest zone on the
       // roster, so participants east of the standup zone aren't held back.
@@ -130,7 +137,7 @@ export class Scheduler {
         now >= promptAt ||
         active.some((p) => p.timezone && now >= timeOn(today, standup.promptTime, p.timezone));
       if (!due) return;
-      run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
+      run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`, only);
       this.log(`opened run ${run.id} for "${standup.name}" ${today}`);
       await this.providers.schedule?.applyToNewRun(standup, run);
       await this.applyCalendarOoo(standup, run);
@@ -196,7 +203,7 @@ export class Scheduler {
       if (roster.filter((p) => !p.onVacation).length === 0) return 'no_participants';
       run = await this.repo.createRun(standup.id, today, `standup-${standup.id}-${today}`);
       this.log(`opened run ${run.id} for "${standup.name}" ${today} (run now)`);
-      await this.providers.schedule?.applyToNewRun(standup, run);
+      await this.providers.schedule?.applyToNewRun(standup, run, true);
       await this.applyCalendarOoo(standup, run);
       try {
         await this.adapter.postThreadParent(standup, run);

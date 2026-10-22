@@ -57,16 +57,20 @@ describe('describeWorkingDays', () => {
 
 describe('dayStatus', () => {
   const override = (working: boolean, status = 'active') => ({ working, status }) as any;
+  const MON_FRI = ['mon', 'tue', 'wed', 'thu', 'fri'];
   it('lets a dated override win, then vacation, then the personal week', () => {
     expect(weekdayOf('2026-06-10')).toBe('wed');
-    expect(dayStatus({ onVacation: true, workingDays: null }, '2026-06-10', override(true))).toEqual({ expected: true });
-    expect(dayStatus({ onVacation: false, workingDays: null }, '2026-06-10', override(false))).toEqual({ expected: false, reason: 'day_off' });
-    expect(dayStatus({ onVacation: false, workingDays: null }, '2026-06-10', override(false, 'pending'))).toEqual({ expected: true });
-    expect(dayStatus({ onVacation: true, workingDays: null }, '2026-06-10', null)).toEqual({ expected: false, reason: 'vacation' });
-    expect(dayStatus({ onVacation: false, workingDays: null }, '2026-06-10', undefined)).toEqual({ expected: true });
-    expect(dayStatus({ onVacation: false, workingDays: ADHOC }, '2026-06-10', null)).toEqual({ expected: false, reason: 'off_day' });
-    expect(dayStatus({ onVacation: false, workingDays: 'mon,tue,wed' }, '2026-06-10', null)).toEqual({ expected: true });
-    expect(dayStatus({ onVacation: false, workingDays: 'mon,tue' }, '2026-06-10', null)).toEqual({ expected: false, reason: 'off_day' });
+    expect(dayStatus({ onVacation: true, workingDays: null }, '2026-06-10', override(true), MON_FRI)).toEqual({ expected: true });
+    expect(dayStatus({ onVacation: false, workingDays: null }, '2026-06-10', override(false), MON_FRI)).toEqual({ expected: false, reason: 'day_off' });
+    expect(dayStatus({ onVacation: false, workingDays: null }, '2026-06-10', override(false, 'pending'), MON_FRI)).toEqual({ expected: true });
+    expect(dayStatus({ onVacation: true, workingDays: null }, '2026-06-10', null, MON_FRI)).toEqual({ expected: false, reason: 'vacation' });
+    expect(dayStatus({ onVacation: false, workingDays: null }, '2026-06-10', undefined, MON_FRI)).toEqual({ expected: true });
+    expect(dayStatus({ onVacation: false, workingDays: ADHOC }, '2026-06-10', null, MON_FRI)).toEqual({ expected: false, reason: 'off_day' });
+    expect(dayStatus({ onVacation: false, workingDays: 'mon,tue,wed' }, '2026-06-10', null, MON_FRI)).toEqual({ expected: true });
+    expect(dayStatus({ onVacation: false, workingDays: 'mon,tue' }, '2026-06-10', null, MON_FRI)).toEqual({ expected: false, reason: 'off_day' });
+    // Without days of their own, a person follows the standup's.
+    expect(dayStatus({ onVacation: false, workingDays: null }, '2026-06-13', null, MON_FRI)).toEqual({ expected: false, reason: 'off_day' });
+    expect(dayStatus({ onVacation: false, workingDays: 'sat' }, '2026-06-13', null, MON_FRI)).toEqual({ expected: true });
     expect(AWAY_LABEL.off_day).toBe('Not a working day');
   });
 });
@@ -132,9 +136,9 @@ describe('ScheduleService', () => {
     await scheduler.tick(); // opens today's run (Wed) with everyone expected
     const run = (await repo.getRun(standup.id, '2026-06-10'))!;
     const r = await schedule.setWorkingDays(alice, 'mon-tue', selfActor(alice), 'chat');
-    expect(r).toEqual({ ok: true, status: 'active', message: expect.stringContaining('Your week is now *Mon, Tue* across 1 standup') });
+    expect(r).toEqual({ ok: true, status: 'active', message: '✅ Your days on *Daily Standup* are now *Mon, Tue*.' });
     expect(await repo.getUserWorkingDays('users/alice')).toBe('mon,tue');
-    expect((await repo.listUndigestedChanges(standup.id, ['users/alice'], '')).map((c) => c.summary)).toEqual(["Alice's week is now Mon, Tue"]);
+    expect((await repo.listUndigestedChanges(standup.id, ['users/alice'], '')).map((c) => c.summary)).toEqual(["Alice's days on Daily Standup are now Mon, Tue"]);
     const rp = (await repo.listRunParticipants(run.id)).find((p) => p.userName === 'users/alice')!;
     expect(rp).toMatchObject({ onVacation: true, awayReason: 'off_day' });
     expect(adapter.dms).toHaveLength(3); // prompts only — no DM to yourself
@@ -159,8 +163,8 @@ describe('ScheduleService', () => {
   it('a manager sets someone else’s week and the person is told', async () => {
     const { schedule, adapter } = await stack();
     const r = await schedule.setWorkingDays(bob, 'tue-sat', managerActor, 'console');
-    expect(r.message).toContain("Bob's week is now *Tue–Sat*");
-    expect(adapter.dms.at(-1)).toMatchObject({ kind: 'text', userName: 'users/bob', text: expect.stringContaining('Admin set your week to *Tue–Sat*') });
+    expect(r.message).toBe("✅ Bob's days on *Daily Standup* are now *Tue–Sat*.");
+    expect(adapter.dms.at(-1)).toEqual({ kind: 'text', userName: 'users/bob', text: '📅 Admin set your days on *Daily Standup* to *Tue–Sat*. Reply `days reset` to follow the standup again.' });
   });
 
   it('self-service days off apply immediately, reach today’s open run and can be cancelled', async () => {
@@ -327,7 +331,7 @@ describe('ScheduleService across standups', () => {
     const r = await schedule.setOverride({ target: alice, dates: ['2026-06-12'], working: false, reason: '', actor: selfActor(alice), channel: 'chat' });
     expect(r.ok && r.status).toBe('pending');
     expect(await schedule.setOverride({ target: alice, dates: ['2026-06-09'], working: false, reason: '', actor: selfActor(alice), channel: 'chat' })).toEqual({ ok: false, message: 'Past days can only be changed by a manager.' });
-    expect(await schedule.setWorkingDays(alice, 'mon-thu', selfActor(alice), 'chat')).toMatchObject({ ok: false, message: expect.stringContaining('Only your managers can change your week') });
+    expect(await schedule.setWorkingDays(alice, 'mon-thu', selfActor(alice), 'chat', (await repo.listStandupsForUser(alice.userName)).find((s) => s.name === 'Daily Standup')!.id)).toEqual({ ok: false, message: 'Only your managers can change your days on *Daily Standup* — ask them, or DM them the days you need.' });
     // she cannot approve her own request, even though she manages a standup she is on
     const ids = (await repo.listPendingOverrides(['users/alice'])).map((o) => o.id);
     expect(await schedule.decide(ids, true, selfActor(alice), null)).toEqual({ ok: false, message: 'Your own requests go to your managers.' });

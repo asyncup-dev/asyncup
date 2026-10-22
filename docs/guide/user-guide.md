@@ -67,7 +67,7 @@ blocker is tagged or has updates, only an explicit resolve closes it.
 | `timezone` / `timezone reset` | Show / clear your personal timezone |
 | `off tomorrow comp off` / `off 22 sep to 24 sep sick` / `working sat` | A day (or range) off, or an extra working day — see [Personal schedules](./schedules) |
 | `off list` / `off cancel <date>` | What's coming up / withdraw an entry |
-| `days mon-thu` / `days adhoc` / `days reset` | Your own week, or back to the standup's |
+| `days mon-thu` / `days adhoc` / `days reset` | Your days on your standup, or back to its days. On several standups, the bot asks which, for example `days #12 mon-thu` |
 
 ## Your own page — `/app/me`
 
@@ -77,7 +77,7 @@ SSO**. You get:
 - today's standups with an **Answer in Chat** link and **Skip today** (it asks
   for the one-line reason too);
 - your recent answers;
-- your timezone, vacation mode and **My schedule** (your week and days off).
+- your timezone, vacation mode and **My schedule** (your days on each standup, and days off).
 
 If your account isn't linked to Chat yet, it links the first time you use the
 bot, or straight away when your admins have set up the

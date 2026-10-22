@@ -17,7 +17,11 @@ const EDITS = [
 ];
 const PRIYA_SCHEDULE = {
   userName: 'users/priya', displayName: 'Priya Sharma', workingDays: 'mon,tue,wed,thu', workingDaysLabel: 'Mon–Thu',
-  policies: [{ standupId: 1, name: 'Engineering', timeOffPolicy: 'approval' }],
+  standups: [
+    { standupId: 1, name: 'Engineering', days: ['mon', 'tue', 'wed', 'thu', 'fri'], workingDays: 'mon,tue,wed,thu', workingDaysLabel: 'Mon–Thu', timeOffPolicy: 'approval' },
+    { standupId: 2, name: 'Support', days: ['mon', 'tue', 'wed', 'thu', 'fri'], workingDays: null, workingDaysLabel: 'Follows the standup', timeOffPolicy: 'self' },
+  ],
+  policies: [{ standupId: 1, name: 'Engineering', timeOffPolicy: 'approval' }, { standupId: 2, name: 'Support', timeOffPolicy: 'self' }],
   overrides: [
     { id: 3, userName: 'users/priya', displayName: 'Priya Sharma', date: '2026-09-19', working: false, reason: 'comp off', status: 'active', label: 'Day off', setBy: 'Priya Sharma', channel: 'chat', decidedBy: null, decisionNote: null, createdAt: 'x' },
     { id: 4, userName: 'users/priya', displayName: 'Priya Sharma', date: '2026-09-27', working: true, reason: '', status: 'active', label: 'Working', setBy: 'Asha Verma', channel: 'console', decidedBy: null, decisionNote: null, createdAt: 'x' },
@@ -63,25 +67,33 @@ describe('team schedules', () => {
     await user.click(screen.getByRole('button', { name: 'Actions for Priya Sharma' }));
     await user.click(screen.getByRole('menuitem', { name: 'Edit schedule…' }));
     const drawer = await screen.findByRole('dialog', { name: 'Edit schedule' });
-    expect(await within(drawer).findByText('Priya Sharma · Engineering')).toBeInTheDocument();
-    expect(within(drawer).getByRole('radio', { name: 'Custom week' })).toBeChecked();
-    expect(within(drawer).getByRole('button', { name: 'Thu' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(drawer).getByRole('button', { name: 'Fri' })).toHaveAttribute('aria-pressed', 'false');
+    expect(await within(drawer).findByText('Priya Sharma · Engineering, Support')).toBeInTheDocument();
+    // one block of days per standup, each with its own policy (criteria 15, 16)
+    const eng = within(within(drawer).getByRole('region', { name: 'Days on Engineering' }));
+    const support = within(within(drawer).getByRole('region', { name: 'Days on Support' }));
+    expect(eng.getByRole('combobox', { name: 'Days on Engineering' })).toHaveValue('custom');
+    expect(eng.getByText('Needs a manager’s approval')).toBeInTheDocument();
+    expect(eng.getByRole('button', { name: 'Thu' })).toHaveAttribute('aria-pressed', 'true');
+    expect(eng.getByRole('button', { name: 'Fri' })).toHaveAttribute('aria-pressed', 'false');
+    expect(support.getByRole('combobox', { name: 'Days on Support' })).toHaveValue('follow');
+    expect(support.getByText('Expected on every day Support runs: Mon–Fri.')).toBeInTheDocument();
     // overrides list: withdrawn entries are hidden, others show their status
     expect(within(drawer).getByText('Sat 19 Sep')).toBeInTheDocument();
     expect(within(drawer).getByText('Sun 27 Sep')).toBeInTheDocument();
     expect(within(drawer).queryByText('Wed 30 Sep')).not.toBeInTheDocument();
-    expect(within(drawer).getByText(/Time-off policy: Needs a manager/)).toBeInTheDocument();
+    expect(within(drawer).getByText(/apply to every standup they are on/)).toBeInTheDocument();
 
-    // untoggle Thursday and save the week
-    await user.click(within(drawer).getByRole('button', { name: 'Thu' }));
-    await user.click(within(drawer).getByRole('button', { name: 'Save week' }));
-    await waitFor(() => expect(bodies).toContainEqual({ workingDays: 'mon,tue,wed' }));
+    // untoggle Thursday and save Engineering's days only
+    await user.click(eng.getByRole('button', { name: 'Thu' }));
+    await user.click(eng.getByRole('button', { name: 'Save days' }));
+    await waitFor(() => expect(bodies).toContainEqual({ workingDays: 'mon,tue,wed', standupId: 1 }));
+    expect(await within(drawer).findByRole('status')).toHaveTextContent('Days on Engineering saved.');
 
-    // switch to ad hoc then revert without saving
-    await user.click(within(drawer).getByRole('radio', { name: /Ad hoc/ }));
-    await user.click(within(drawer).getByRole('button', { name: 'Revert' }));
-    expect(within(drawer).getByRole('radio', { name: 'Custom week' })).toBeChecked();
+    // Support: ad hoc, then revert without saving
+    await user.selectOptions(support.getByRole('combobox', { name: 'Days on Support' }), 'adhoc');
+    expect(support.getByText(/prompted only on dates marked working/)).toBeInTheDocument();
+    await user.click(support.getByRole('button', { name: 'Revert' }));
+    expect(support.getByRole('combobox', { name: 'Days on Support' })).toHaveValue('follow');
 
     // add a range, mark away today, cancel one
     await user.type(within(drawer).getByLabelText('From date'), '2026-10-05');
@@ -108,8 +120,8 @@ describe('team schedules', () => {
     await user.click(await screen.findByRole('button', { name: 'Actions for Priya Sharma' }));
     await user.click(screen.getByRole('menuitem', { name: 'Edit schedule…' }));
     const drawer = await screen.findByRole('dialog', { name: 'Edit schedule' });
-    await user.click(await within(drawer).findByRole('radio', { name: /Follow the standup/ }));
-    await user.click(within(drawer).getByRole('button', { name: 'Save week' }));
+    await user.selectOptions(await within(drawer).findByRole('combobox', { name: 'Days on Engineering' }), 'follow');
+    await user.click(within(drawer).getByRole('button', { name: 'Save days' }));
     expect(await within(drawer).findByRole('alert')).toHaveTextContent('Only your managers');
     await user.click(within(drawer).getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -221,8 +233,10 @@ describe('my schedule', () => {
     const { calls } = mine();
     renderApp('/me');
     const user = userEvent.setup();
-    expect(await screen.findByText('Working days · Mon–Thu')).toBeInTheDocument();
-    const week = screen.getByLabelText('My working days');
+    expect(await screen.findByText('Engineering · Custom')).toBeInTheDocument();
+    expect(screen.getByText('Support · Standup days (Mon–Fri)')).toBeInTheDocument();
+    expect(screen.getByText(/“days #1 mon-thu”/)).toBeInTheDocument();
+    const week = screen.getByLabelText('My days on Engineering');
     expect(within(week).getByText('Mon')).toHaveAttribute('aria-pressed', 'true');
     expect(within(week).getByText('Sat')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('awaiting a manager')).toBeInTheDocument();

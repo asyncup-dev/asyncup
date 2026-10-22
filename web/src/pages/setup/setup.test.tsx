@@ -307,7 +307,7 @@ describe('setup: sign-in, template, create and live', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sat' }));
     await user.click(screen.getByRole('button', { name: 'Mon' }));
-    expect(screen.getByLabelText('Rohit works Mon')).toBeDisabled();
+    expect(screen.getByLabelText('Rohit works Mon')).not.toBeChecked();
     // Rohit works the standup's days except Saturday
     await user.click(screen.getByLabelText('Rohit works Sat'));
     await user.click(screen.getByLabelText('Rohit works Tue'));
@@ -326,7 +326,7 @@ describe('setup: sign-in, template, create and live', () => {
     expect(body.days).toEqual(['tue', 'wed', 'thu', 'fri', 'sat']);
     expect(body.questions).toEqual(['What will you do today?', 'Anything to celebrate?', 'Any blockers?']);
     expect(body.participants).toEqual([{ userName: 'users/rohit', displayName: 'Rohit', mandatory: true }]);
-    expect(state.weeks).toEqual([{ workingDays: 'tue,wed,thu,fri' }]);
+    expect(state.weeks).toEqual([{ workingDays: 'tue,wed,thu,fri', standupId: 7 }]);
     expect(state.patches.at(-1)).toEqual({ setupComplete: true });
 
     expect(screen.getByText('1 of 3 submitted')).toBeInTheDocument();

@@ -249,6 +249,7 @@ export async function peopleView(repo: Repo, p: Principal) {
       standups: [],
     };
     entry.onVacation = entry.onVacation || row.onVacation;
+    if (row.workingDays !== entry.workingDays) entry.workingDaysLabel = 'Varies by standup';
     entry.standups.push({
       id: row.standupId,
       name: row.standupName,

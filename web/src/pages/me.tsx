@@ -217,13 +217,18 @@ export function MePage() {
                 {schedule.isError ? <div className="alert">Could not load your schedule: {schedule.error.message}</div> : null}
                 {schedule.data ? (
                   <>
-                    <div>
-                      <div className="t-medium">Working days · {schedule.data.workingDaysLabel === 'Follows the standup' ? 'Standup days' : schedule.data.workingDaysLabel}</div>
-                      {schedule.data.workingDays && schedule.data.workingDays !== 'adhoc' ? (
-                        <div className="days" style={{ marginTop: 6 }} aria-label="My working days">
-                          {DAYS.map((day) => <span key={day} className="day" aria-pressed={weekToDays(schedule.data!.workingDays).includes(day)} style={{ height: 24, padding: '0 9px', display: 'inline-flex', alignItems: 'center' }}>{DAY_LABEL[day]}</span>)}
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <div className="t-medium">Working days</div>
+                      {schedule.data.standups.map((st) => (
+                        <div key={st.standupId}>
+                          <div className="t-medium">{st.name} · {st.workingDays === null ? `Standup days (${daysLabel(st.days)})` : st.workingDays === 'adhoc' ? 'Ad hoc' : 'Custom'}</div>
+                          {st.workingDays && st.workingDays !== 'adhoc' ? (
+                            <div className="days" style={{ marginTop: 6 }} aria-label={`My days on ${st.name}`}>
+                              {DAYS.map((day) => <span key={day} className="day" aria-pressed={weekToDays(st.workingDays).includes(day)} style={{ height: 24, padding: '0 9px', display: 'inline-flex', alignItems: 'center' }}>{DAY_LABEL[day]}</span>)}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
+                      ))}
                     </div>
                     <div className="row">
                       <span className="t-medium grow">Days off</span>
@@ -240,7 +245,7 @@ export function MePage() {
                         <span className={`badge ${o.status === 'active' ? (o.working ? 'badge-success' : 'badge-warning') : STATUS_TONE[o.status]}`}>{o.status === 'active' ? o.label : o.status}</span>
                       </div>
                     ))}
-                    <div className="t-caption">Also from Chat: DM me “off tomorrow”, “off 22 sep to 24 sep sick”, “working sat” or “days mon-thu”.</div>
+                    <div className="t-caption">Also from Chat: DM me “off tomorrow”, “off 22 sep to 24 sep sick”, “working sat” or “days {schedule.data.standups.length > 1 ? `#${schedule.data.standups[0]!.standupId} ` : ''}mon-thu”.</div>
                   </>
                 ) : null}
               </div>
