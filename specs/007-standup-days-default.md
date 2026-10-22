@@ -5,7 +5,7 @@
 | Status | Done |
 | Size | Cross-cutting (scheduler, API, Chat, web app, no migration) |
 | Figma | [Specs › 007 Standup days are a default](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=178-73) |
-| PR | Link once opened |
+| PR | [#110](https://github.com/asyncup-dev/asyncup/pull/110) |
 
 ## Problem
 
