@@ -251,7 +251,7 @@ export class CommandHandler {
     const elsewhere = await this.notHere(standup, target);
     if (elsewhere) return elsewhere;
     const value = this.withoutMentions(rest, ctx.mentions);
-    const result = await this.schedule.setWorkingDays(target, value, this.actorFor(ctx), 'chat');
+    const result = await this.schedule.setWorkingDays(target, value, this.actorFor(ctx), 'chat', standup.id);
     return result.message;
   }
 

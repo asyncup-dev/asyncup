@@ -4,7 +4,7 @@ import type { DateTime } from 'luxon';
 import { z } from 'zod';
 import { nudgeToday, skipToday, updateMe, type Refusal } from '../api/actions.js';
 import type { Principal } from '../api/principal.js';
-import { actorFor, displayNameOf, managesPerson, overrideView, scheduleView } from '../api/schedule.js';
+import { actorFor, displayNameOf, managedBy, managesPerson, overrideView, scheduleView } from '../api/schedule.js';
 import { allowed, findVisibleStandup, meView, summarise, visibleStandups } from '../api/shared.js';
 import { canSomewhere, PERMISSIONS, standupsWith, type Permission } from '../core/permissions.js';
 import * as S from '../api/spec/schemas.js';
@@ -391,10 +391,10 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
   const targetFor = async (userName?: string) => {
     if (!userName || userName === p.user?.userName) {
       const who = me();
-      return { ...who, actor: actorFor(p) };
+      return { ...who, actor: actorFor(p), visible: undefined };
     }
     if (!(await managesPerson(repo, p, userName))) throw new ToolRefused('Only admins and this person’s managers can do that.');
-    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p) };
+    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p), visible: managedBy(p) };
   };
   const expand = (dates: string[] | undefined, from: string | undefined, to: string | undefined): string[] => {
     const out = new Set(dates ?? []);
@@ -412,14 +412,14 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'read',
     {
       title: 'Get a schedule',
-      description: 'A person’s working week, the time-off policy of their standups and their upcoming days off. Omit userName for the owner.',
+      description: 'A person’s days on each standup, the time-off policy of their standups and their upcoming days off. Omit userName for the owner.',
       inputSchema: z.object({ userName: z.string().optional() }),
       outputSchema: S.Schedule,
     },
     async ({ userName }) => {
       const svc = schedule();
       const t = await targetFor(userName);
-      return scheduleView(repo, svc, t.userName, t.displayName);
+      return scheduleView(repo, svc, t.userName, t.displayName, t.visible);
     },
   );
 
@@ -458,18 +458,18 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
     'set_working_days',
     'schedule',
     {
-      title: 'Set a working week',
-      description: 'Set a personal week: "mon-thu", "mon,wed,fri", "adhoc" (only dated working days count) or "reset" to follow the standup. Omit userName for the owner.',
-      inputSchema: z.object({ userName: z.string().optional(), workingDays: z.string().trim().min(1) }),
+      title: 'Set working days',
+      description: 'Set a person’s days on one standup: "mon-thu", "mon,wed,fri", "adhoc" (only dated working days count) or "reset" to follow the standup’s days. Omit userName for the owner. Without standupId every standup changes; that form is deprecated.',
+      inputSchema: z.object({ userName: z.string().optional(), standupId: ID.optional(), workingDays: z.string().trim().min(1) }),
       outputSchema: WeekSet,
       write: { destructive: true, idempotent: true },
     },
-    async ({ userName, workingDays }) => {
+    async ({ userName, standupId, workingDays }) => {
       const svc = schedule();
       const t = await targetFor(userName);
-      const r = await svc.setWorkingDays(t, workingDays, t.actor, 'api');
+      const r = await svc.setWorkingDays(t, workingDays, t.actor, 'api', standupId ?? 'all');
       if (!r.ok) throw new ToolRefused(r.message);
-      return { message: r.message, schedule: await scheduleView(repo, svc, t.userName, t.displayName) };
+      return { message: r.message, schedule: await scheduleView(repo, svc, t.userName, t.displayName, t.visible) };
     },
   );
 

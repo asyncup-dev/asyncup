@@ -203,3 +203,49 @@ describe('schedule API — managers and admins', () => {
     expect(await res.json()).toMatchObject({ error: { field: 'timeOffPolicy', message: 'Time-off policy must be self, approval or managers.' } });
   });
 });
+
+describe('schedule API — days per standup', () => {
+  const MON_FRI = ['mon', 'tue', 'wed', 'thu', 'fri'];
+  async function withSupport() {
+    const s = await startServer();
+    const support = await s.repo.createStandup({ tenantId: TENANT, spaceName: 'spaces/support', name: 'Support', timezone: 'Asia/Kolkata' });
+    await s.repo.upsertParticipant({ standupId: support.id, userName: 'users/alice', displayName: 'Alice' });
+    return { ...s, support };
+  }
+
+  it('sets days on one standup with standupId, and every standup without it (criteria 21, 22)', async () => {
+    const { as, cookieFor, json, standup, support } = await withSupport();
+    const alice = cookieFor('alice', 'Alice');
+    const patch = (body: unknown) => as(alice, '/me/schedule', { method: 'PATCH', body: json(body) });
+    let view: any = await (await patch({ workingDays: 'mon-wed,sat,sun', standupId: standup.id })).json();
+    expect(view.standups).toEqual([
+      { standupId: standup.id, name: 'Daily Standup', days: MON_FRI, workingDays: 'mon,tue,wed,sat,sun', workingDaysLabel: 'Mon–Wed, Sat, Sun', timeOffPolicy: 'self' },
+      { standupId: support.id, name: 'Support', days: MON_FRI, workingDays: null, workingDaysLabel: 'Follows the standup', timeOffPolicy: 'self' },
+    ]);
+    expect((await patch({ workingDays: 'mon', standupId: 0 })).status).toBe(400);
+    expect(await (await patch({ workingDays: 'mon', standupId: 999 })).json()).toMatchObject({ error: { code: 'invalid', message: 'You’re not on that standup.' } });
+    view = await (await patch({ workingDays: 'mon-thu' })).json();
+    expect(view.standups.map((s: any) => s.workingDays)).toEqual(['mon,tue,wed,thu', 'mon,tue,wed,thu']);
+  });
+
+  it('shows and changes only the standups a manager manages (criteria 16, 21)', async () => {
+    const { as, op, cookieFor, json, repo, standup, support } = await withSupport();
+    await repo.addAdmin(standup.id, 'users/mgr', 'Manager');
+    const mgr = cookieFor('mgr', 'Manager');
+    const path = '/people/users%2Falice/schedule';
+    expect(((await (await as(mgr, path)).json()) as any).standups.map((s: any) => s.name)).toEqual(['Daily Standup']);
+    expect(((await (await op(path)).json()) as any).standups.map((s: any) => s.name)).toEqual(['Daily Standup', 'Support']);
+    let res = await as(mgr, path, { method: 'PATCH', body: json({ workingDays: 'sat', standupId: standup.id }) });
+    expect(((await res.json()) as any).standups[0].workingDays).toBe('sat');
+    res = await as(mgr, path, { method: 'PATCH', body: json({ workingDays: 'sat', standupId: support.id }) });
+    expect(await res.json()).toMatchObject({ error: { code: 'invalid', message: "Only the managers of *Support* can change Alice's days there." } });
+  });
+
+  it('says when a person’s days vary by standup on the Team list (criterion 24)', async () => {
+    const { op, repo, standup } = await withSupport();
+    await repo.setWorkingDays(standup.id, 'users/alice', 'sat');
+    const people: any = await (await op('/people')).json();
+    expect(people.people.find((p: any) => p.userName === 'users/alice').workingDaysLabel).toBe('Varies by standup');
+    expect(people.people.find((p: any) => p.userName === 'users/bob').workingDaysLabel).toBe('Follows the standup');
+  });
+});

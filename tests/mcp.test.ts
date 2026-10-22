@@ -394,6 +394,12 @@ describe('schedule tools', () => {
     // own week and days off
     expect((await call(alice, 'set_working_days', { workingDays: 'mon-thu' })).json).toMatchObject({ schedule: { workingDays: 'mon,tue,wed,thu', workingDaysLabel: 'Mon–Thu' } });
     expect((await call(alice, 'set_working_days', { workingDays: 'nope' })).error).toContain("isn't a day");
+    // one standup by id (criterion 23)
+    const days: any = (await call(alice, 'set_working_days', { workingDays: 'sat', standupId: s.id })).json;
+    expect(days.message).toBe('✅ Your days on *Daily Standup* are now *Sat*.');
+    expect(days.schedule.standups.find((x: any) => x.standupId === s.id)).toMatchObject({ workingDays: 'sat', workingDaysLabel: 'Sat' });
+    expect((await call(alice, 'get_schedule')).json.standups.map((x: any) => x.workingDays)).toContain('sat');
+    await call(alice, 'set_working_days', { workingDays: 'mon-thu' });
     expect((await call(alice, 'set_days_off', { from: '2026-06-22', to: '2026-06-23', reason: 'comp off' })).json).toMatchObject({ status: 'active' });
     expect((await call(alice, 'set_days_off', { dates: ['2026-06-13'], working: true })).json.status).toBe('active');
     expect((await call(alice, 'get_schedule')).json.overrides.map((o: any) => [o.date, o.label])).toEqual([['2026-06-13', 'Working'], ['2026-06-22', 'Day off'], ['2026-06-23', 'Day off']]);

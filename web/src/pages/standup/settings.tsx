@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { GrantForm, GrantTable } from '../../components/grants';
-import { PeopleMatrix, type MatrixChange, type MatrixRow } from '../../components/people-matrix';
+import { PeopleMatrix, type MatrixChange, type MatrixRow, type RowStatus } from '../../components/people-matrix';
 import { SectionCard, SettingsRow } from '../../components/settings-row';
 import { fromMutation, VerifyStatus } from '../../components/verify-status';
 import { useMutation } from '@tanstack/react-query';
@@ -56,6 +56,7 @@ export function StandupSettingsPage() {
   const sync = useRosterSync(id);
   const [groupDraft, setGroupDraft] = useState<string | null>(null);
   const [synced, setSynced] = useState<RosterSynced | null>(null);
+  const [rowStatus, setRowStatus] = useState<RowStatus | null>(null);
   const followsGroup = !!standup.data?.roster.group;
   const members = useStandupMembers(id, !!standup.data && !followsGroup && may.people);
   useEffect(() => {
@@ -100,7 +101,7 @@ export function StandupSettingsPage() {
         ...(p.onVacation ? ['Away'] : []),
       ],
     })),
-    ...offRows.map((m) => ({ ...m, onStandup: false, mandatory: true, workingDays: null, otherStandups: 0 })),
+    ...offRows.map((m) => ({ ...m, onStandup: false, mandatory: true, workingDays: null })),
   ];
   const runSync = () =>
     void roster(async () => {
@@ -108,13 +109,23 @@ export function StandupSettingsPage() {
       setSynced(await sync.mutateAsync());
     });
   const draft = groupDraft ?? s.roster.group ?? '';
+  // Each change in the grid saves at once and says so beside the row.
+  const inRow = async (row: MatrixRow, fn: () => Promise<unknown>) => {
+    setRowStatus(null);
+    try {
+      await fn();
+      setRowStatus({ userName: row.userName, error: null });
+    } catch (err) {
+      setRowStatus({ userName: row.userName, error: err instanceof Error ? err.message : 'That did not save.' });
+    }
+  };
   const change = (row: MatrixRow, c: MatrixChange) => {
     const person = { userName: row.userName, displayName: row.displayName };
     if ('onStandup' in c) {
-      if (c.onStandup) void roster(() => pAdd.mutateAsync({ standupId: id, person, mandatory: true }));
+      if (c.onStandup) void inRow(row, () => pAdd.mutateAsync({ standupId: id, person, mandatory: true }));
       else setConfirm(person);
-    } else if ('mandatory' in c) void roster(() => pPatch.mutateAsync({ standupId: id, userName: row.userName, patch: { mandatory: c.mandatory } }));
-    else void roster(() => setWeek.mutateAsync({ userName: row.userName, workingDays: c.week }));
+    } else if ('mandatory' in c) void inRow(row, () => pPatch.mutateAsync({ standupId: id, userName: row.userName, patch: { mandatory: c.mandatory } }));
+    else void inRow(row, () => setWeek.mutateAsync({ userName: row.userName, workingDays: c.week }));
   };
   return (
     <>
@@ -227,7 +238,7 @@ export function StandupSettingsPage() {
                   </SettingsRow>
                 ) : null}
                 {members.isError ? <div className="settings-row"><span className="alert">Could not list the space’s members: {members.error.message}. Showing the current roster only.</span></div> : null}
-                <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} weeks={may.weeks} onChange={change} />
+                <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} weeks={may.weeks} status={rowStatus} onChange={change} />
               </SectionCard>
               <SectionCard title="Roles on this standup" hint="Give someone a role here only, by email: say Viewer for a stakeholder who reads answers. Its managers and roster are under People.">
                 {roles.isError || grants.isError ? <div className="settings-row"><span className="alert">Could not load roles: {(roles.error ?? grants.error)?.message}</span></div> : null}

@@ -4,7 +4,7 @@ import type { ScheduleOverride } from '../core/types.js';
 import type { Repo } from '../db/repo.js';
 import type { Principal } from './principal.js';
 import { canSomewhere, standupsWith } from '../core/permissions.js';
-import { allowed, apiError, principalOf, type ApiContext } from './shared.js';
+import { allowed, apiError, principalOf, standupDays, type ApiContext } from './shared.js';
 
 /** Whether the caller manages schedules on a standup this person is on, or across the workspace. */
 export async function managesPerson(repo: Repo, p: Principal, userName: string): Promise<boolean> {
@@ -24,19 +24,44 @@ export async function displayNameOf(repo: Repo, userName: string): Promise<strin
   return roster.length ? ((await repo.listParticipants(roster[0]!.id)).find((x) => x.userName === userName)?.displayName ?? userName) : userName;
 }
 
-/** The schedule view the console and the MCP tools share. */
-export async function scheduleView(repo: Repo, schedule: ScheduleService, userName: string, displayName: string) {
+/**
+ * The schedule view the console and the MCP tools share. `visible` limits the
+ * per-standup days to the standups a manager looking at someone manages.
+ */
+export async function scheduleView(repo: Repo, schedule: ScheduleService, userName: string, displayName: string, visible: (standupId: number) => boolean = () => true) {
   const workingDays = await repo.getUserWorkingDays(userName);
   const standups = await repo.listStandupsForUser(userName);
   const zone = standups[0]?.timezone ?? 'UTC';
+  const days = new Map<number, string | null>();
+  for (const s of standups) days.set(s.id, (await repo.listParticipants(s.id)).find((p) => p.userName === userName)?.workingDays ?? null);
   return {
     userName,
     displayName,
     workingDays,
     workingDaysLabel: describeWorkingDays(workingDays),
+    standups: standups.filter((s) => visible(s.id)).map((s) => ({
+      standupId: s.id,
+      name: s.name,
+      days: standupDays(s),
+      workingDays: days.get(s.id) ?? null,
+      workingDaysLabel: describeWorkingDays(days.get(s.id) ?? null),
+      timeOffPolicy: s.timeOffPolicy,
+    })),
     policies: standups.map((s) => ({ standupId: s.id, name: s.name, timeOffPolicy: s.timeOffPolicy })),
     overrides: (await schedule.listUpcoming(userName, zone)).map(overrideView),
   };
+}
+
+/** Which standup a days change is for: `standupId` from the body, else every standup (deprecated). */
+export function daysScope(body: any): number | 'all' | null {
+  const id = body?.standupId;
+  if (id === undefined || id === null) return 'all';
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/** Standups the caller manages schedules on, for someone else's view. */
+export function managedBy(p: Principal): (standupId: number) => boolean {
+  return (id) => allowed(p, 'schedules.manage', id);
 }
 
 /**
@@ -61,7 +86,21 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
   };
 
   const managerOf = (p: Principal, userName: string) => managesPerson(repo, p, userName);
-  const view = (userName: string, displayName: string) => scheduleView(repo, ctx.schedule!, userName, displayName);
+  const view = (userName: string, displayName: string, visible?: (standupId: number) => boolean) => scheduleView(repo, ctx.schedule!, userName, displayName, visible);
+
+  const setDays = async (req: Request<any>, res: Response, who: { userName: string; displayName: string }, actor: Actor, visible?: (standupId: number) => boolean) => {
+    const scope = daysScope(req.body);
+    if (scope === null) {
+      apiError(res, 400, 'invalid', 'standupId must be a positive whole number.', 'standupId');
+      return;
+    }
+    const result = await ctx.schedule!.setWorkingDays(who, String(req.body?.workingDays ?? 'reset'), actor, 'console', scope);
+    if (!result.ok) {
+      apiError(res, 400, 'invalid', result.message, 'workingDays');
+      return;
+    }
+    res.json(await view(who.userName, who.displayName, visible));
+  };
 
   const datesFrom = (body: any, res: Response): string[] | null => {
     const raw: unknown[] = Array.isArray(body.dates) ? body.dates : body.date ? [body.date] : [];
@@ -113,17 +152,10 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
   });
 
   api.patch('/me/schedule', async (req, res) => {
-    const svc = schedule(res);
-    if (!svc) return;
+    if (!schedule(res)) return;
     const me = self(req, res);
     if (!me) return;
-    const p = principalOf(req);
-    const result = await svc.setWorkingDays(me, String(req.body?.workingDays ?? 'reset'), actorFor(p), 'console');
-    if (!result.ok) {
-      apiError(res, 400, 'invalid', result.message, 'workingDays');
-      return;
-    }
-    res.json(await view(me.userName, me.displayName));
+    await setDays(req, res, me, actorFor(principalOf(req)));
   });
 
   api.post('/me/overrides', async (req, res) => {
@@ -156,27 +188,21 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       apiError(res, 403, 'forbidden', 'Only admins and this person’s managers can do that.');
       return null;
     }
-    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p) };
+    return { userName, displayName: await displayNameOf(repo, userName), actor: actorFor(p), visible: managedBy(p) };
   };
 
   api.get('/people/:userName/schedule', async (req, res) => {
     if (!schedule(res)) return;
     const t = await target(req, res);
     if (!t) return;
-    res.json(await view(t.userName, t.displayName));
+    res.json(await view(t.userName, t.displayName, t.visible));
   });
 
   api.patch('/people/:userName/schedule', async (req, res) => {
-    const svc = schedule(res);
-    if (!svc) return;
+    if (!schedule(res)) return;
     const t = await target(req, res);
     if (!t) return;
-    const result = await svc.setWorkingDays(t, String(req.body?.workingDays ?? 'reset'), t.actor, 'console');
-    if (!result.ok) {
-      apiError(res, 400, 'invalid', result.message, 'workingDays');
-      return;
-    }
-    res.json(await view(t.userName, t.displayName));
+    await setDays(req, res, { userName: t.userName, displayName: t.displayName }, t.actor, t.visible);
   });
 
   api.post('/people/:userName/overrides', async (req, res) => {

@@ -157,12 +157,12 @@ export const ROUTES: RouteSpec[] = [
   { method: 'patch', path: '/me', summary: 'My timezone and vacation', tag: 'Me', access: 'person', body: S.MyPatch, responses: { 200: S.MySettings }, errors: [400, 409] },
 
   // schedules
-  { method: 'get', path: '/me/schedule', summary: 'My week, policies and upcoming days', tag: 'Schedules', access: 'person', responses: { 200: S.Schedule }, errors: [409, 503] },
-  { method: 'patch', path: '/me/schedule', summary: 'Set my week', tag: 'Schedules', access: 'person', body: S.WorkingDaysBody, responses: { 200: S.Schedule }, errors: [400, 409, 503] },
+  { method: 'get', path: '/me/schedule', summary: 'My days on each standup, policies and upcoming days', tag: 'Schedules', access: 'person', responses: { 200: S.Schedule }, errors: [409, 503] },
+  { method: 'patch', path: '/me/schedule', summary: 'Set my days on a standup', tag: 'Schedules', access: 'person', body: S.WorkingDaysBody, responses: { 200: S.Schedule }, errors: [400, 409, 503] },
   { method: 'post', path: '/me/overrides', summary: 'Mark my days off or extra working days', tag: 'Schedules', access: 'person', body: S.OverrideBody, responses: { 200: S.ScheduleChange }, errors: [400, 409, 503] },
   { method: 'delete', path: '/me/overrides/:date', summary: 'Withdraw a day or a pending request', tag: 'Schedules', access: 'person', params: dateParam, responses: { 200: S.ScheduleChange }, errors: [400, 409, 503] },
-  { method: 'get', path: '/people/:userName/schedule', summary: 'Someone’s week and upcoming days', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: userNameParam, responses: { 200: S.Schedule }, errors: [503] },
-  { method: 'patch', path: '/people/:userName/schedule', summary: 'Set someone’s week', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: userNameParam, body: S.WorkingDaysBody, responses: { 200: S.Schedule }, errors: [400, 503] },
+  { method: 'get', path: '/people/:userName/schedule', summary: 'Someone’s days and upcoming days', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: userNameParam, responses: { 200: S.Schedule }, errors: [503] },
+  { method: 'patch', path: '/people/:userName/schedule', summary: 'Set someone’s days on a standup', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: userNameParam, body: S.WorkingDaysBody, responses: { 200: S.Schedule }, errors: [400, 503] },
   { method: 'post', path: '/people/:userName/overrides', summary: 'Mark someone’s days off or extra working days', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: userNameParam, body: S.OverrideBody, responses: { 200: S.ScheduleChange }, errors: [400, 503] },
   { method: 'delete', path: '/people/:userName/overrides/:date', summary: 'Withdraw someone’s day', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', params: { ...userNameParam, ...dateParam }, responses: { 200: S.ScheduleChange }, errors: [400, 503] },
   { method: 'get', path: '/requests', summary: 'Time-off requests waiting for a decision', tag: 'Schedules', access: 'manager', permission: 'schedules.manage', responses: { 200: S.TimeOffRequests }, errors: [503] },

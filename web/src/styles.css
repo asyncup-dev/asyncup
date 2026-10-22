@@ -245,6 +245,11 @@ a:hover {
 .people-matrix .center { text-align: center; }
 .people-matrix tr.muted td { color: var(--text-muted); }
 .people-matrix input[type='checkbox']:disabled { opacity: 0.35; }
+.people-matrix .day-default { display: block; font-size: 11px; line-height: 14px; font-weight: 400; color: var(--accent-text); }
+.people-matrix .success { color: var(--success-fg); font-weight: 500; }
+.people-matrix .danger { color: var(--danger-fg); }
+.link-btn { padding: 0; border: 0; background: none; font: inherit; font-weight: 500; color: var(--text-link); cursor: pointer; }
+.link-btn:disabled { color: var(--text-muted); cursor: default; }
 
 /* Sign-in */
 .signin { min-height: 100%; display: grid; place-items: center; padding: var(--space-6); }

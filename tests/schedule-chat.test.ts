@@ -37,7 +37,7 @@ describe('schedule DM commands', () => {
     reply = await router.handle(dm(alice, 'off cancel'));
     expect(reply.text).toContain('Say when');
     reply = await router.handle(dm(alice, 'days mon-thu'));
-    expect(reply.text).toContain('Your week is now *Mon–Thu*');
+    expect(reply.text).toBe('✅ Your days on *Daily Standup* are now *Mon–Thu*.');
     expect(await repo.getUserWorkingDays('users/alice')).toBe('mon,tue,wed,thu');
     reply = await router.handle(dm(alice, 'off'));
     expect(reply.text).toContain('Say when');
@@ -79,7 +79,7 @@ describe('schedule space commands', () => {
     reply = await router.handle(spaceMsg('working @Alice sat', [{ name: 'users/alice', displayName: 'Alice' }]));
     expect(reply.text).toContain('Alice is marked *working* on Sat 13 Jun');
     reply = await router.handle(spaceMsg('days @Alice tue-fri', [{ name: 'users/alice', displayName: 'Alice' }]));
-    expect(reply.text).toContain("Alice's week is now *Tue–Fri*");
+    expect(reply.text).toBe("✅ Alice's days on *Daily Standup* are now *Tue–Fri*.");
     reply = await router.handle(spaceMsg('off @Alice cancel tomorrow', [{ name: 'users/alice', displayName: 'Alice' }]));
     expect(reply.text).toContain("back to Alice's usual week");
     reply = await router.handle(spaceMsg('off tomorrow'));

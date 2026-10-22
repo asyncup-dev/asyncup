@@ -67,7 +67,7 @@ rosters](./directory)). Per person:
 | --- | --- |
 | On standup | Prompted for this standup |
 | Required | Listed as missing when they don't answer. The others still get the prompt but never count as missing |
-| Mon–Sun | The days they work. Unticked days mean no prompt, and never missing. The standup's own off days are greyed out |
+| Mon–Sun | The days they work on this standup. The standup's days are marked *default*; any other day can be ticked, and the standup then runs that day for them. Each row says *Default* or *Custom* (with *Reset to default*), and each tick saves at once and shows *Saved*. Unticked days mean no prompt, and never missing |
 
 **Roster** switches between *Picked from the space* and *Everyone in a Google
 Group*. Either way, **Last sync** shows when the roster was last checked, with
@@ -82,7 +82,7 @@ Group*. Either way, **Last sync** shows when the roster was last checked, with
 
 The create form uses the same grid, with everyone in the space ticked to start.
 
-Personal weeks, days off and time-off approvals also live under **Team → Edit
+People's days on each standup, days off and time-off approvals also live under **Team → Edit
 schedule**, **My page → My schedule** and **Team → Requests** — see
 [Personal schedules](./schedules).
 

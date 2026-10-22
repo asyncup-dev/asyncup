@@ -95,7 +95,7 @@ Zapier/n8n, or your own service:
 | --- | --- | --- |
 | `submission` | Every submission and edit | `standup`, `date`, `user`, `answers`, `mood`, `late`, `edited`, `editApprovedBy` (who approved an edit after the deadline, otherwise `null`). Mood comments are never sent |
 | `wrap_up` | The run closes | `standup`, `date`, `summary` (the posted wrap-up's numbers, plus `teamMood` on anonymous standups) |
-| `schedule_change` | Someone's week or days off change | person, summary, who, channel — see [Personal schedules](./schedules#integrations) |
+| `schedule_change` | Someone's days on the standup, or their days off, change | person, summary, who, channel — see [Personal schedules](./schedules#integrations) |
 | `time_off_request` | A request needs approval | person, dates, working, reason, request ids |
 | `test` | **Send test** in the standup's settings | `standup` |
 

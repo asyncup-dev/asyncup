@@ -41,20 +41,21 @@ function invalidate(client: ReturnType<typeof useQueryClient>, target: ScheduleT
   ]);
 }
 
+/** A person's days on one standup, from the schedule drawer. */
 export function useSaveWeek(target: ScheduleTarget) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (workingDays: string) => api<ScheduleView>(`${base(target)}/schedule`, { method: 'PATCH', body: { workingDays } }),
+    mutationFn: ({ standupId, workingDays }: { standupId: number; workingDays: string }) => api<ScheduleView>(`${base(target)}/schedule`, { method: 'PATCH', body: { workingDays, standupId } }),
     onSuccess: () => invalidate(client, target),
   });
 }
 
-/** Someone's week, set from a standup's people grid; the standup is refetched too. */
+/** Someone's days on this standup, set from its people grid; the standup is refetched too. */
 export function useSetWeek(standupId: number) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ userName, workingDays }: { userName: string; workingDays: string }) =>
-      api<ScheduleView>(`/people/${encodeURIComponent(userName)}/schedule`, { method: 'PATCH', body: { workingDays } }),
+      api<ScheduleView>(`/people/${encodeURIComponent(userName)}/schedule`, { method: 'PATCH', body: { workingDays, standupId } }),
     onSuccess: (_d, v) => Promise.all([invalidate(client, { userName: v.userName }), client.invalidateQueries({ queryKey: ['standup', standupId] })]),
   });
 }

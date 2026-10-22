@@ -1394,6 +1394,11 @@ export class Repo {
     return result.changes;
   }
 
+  /** One person's days on one standup (null = follow the standup). */
+  async setWorkingDays(standupId: number, userName: string, workingDays: string | null): Promise<void> {
+    await this.db.run('UPDATE participants SET working_days = ? WHERE standup_id = ? AND user_name = ?', [workingDays, standupId, userName]);
+  }
+
   async getUserWorkingDays(userName: string): Promise<string | null> {
     const row = await this.db.get(
       'SELECT working_days FROM participants WHERE user_name = ? AND active = 1 AND working_days IS NOT NULL LIMIT 1',
@@ -1494,8 +1499,8 @@ export class Repo {
 
   // --- schedule change log (digested to managers) ---
 
-  async logScheduleChange(input: { userName: string; displayName: string; summary: string; byDisplayName: string; channel: ScheduleChannel; at: string }): Promise<void> {
-    await this.db.run(
+  async logScheduleChange(input: { userName: string; displayName: string; summary: string; byDisplayName: string; channel: ScheduleChannel; at: string }): Promise<number> {
+    return this.db.insert(
       'INSERT INTO schedule_changes (user_name, display_name, summary, by_display_name, channel, at) VALUES (?, ?, ?, ?, ?, ?)',
       [input.userName, input.displayName, input.summary, input.byDisplayName, input.channel, input.at],
     );
@@ -1607,14 +1612,15 @@ export class Repo {
 
   // --- runs ---
 
-  /** Creates the run and snapshots the active roster atomically. */
-  async createRun(standupId: number, date: string, threadKey: string): Promise<Run> {
+  /** Creates the run and snapshots the active roster atomically; `only` limits it to those people. */
+  async createRun(standupId: number, date: string, threadKey: string, only?: ReadonlySet<string>): Promise<Run> {
     const runId = await this.db.transaction(async () => {
       const id = await this.db.insert(
         'INSERT INTO runs (standup_id, date, thread_key) VALUES (?, ?, ?)',
         [standupId, date, threadKey],
       );
       for (const p of await this.listParticipants(standupId)) {
+        if (only && !only.has(p.userName)) continue;
         await this.db.run(
           `INSERT INTO run_participants (run_id, user_name, display_name, timezone, mandatory, on_vacation, away_reason)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,

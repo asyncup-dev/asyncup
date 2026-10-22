@@ -360,12 +360,22 @@ export const Schedule = named(
   z.strictObject({
     userName: z.string(),
     displayName: z.string(),
-    workingDays: z.string().nullable(),
-    workingDaysLabel: z.string(),
+    workingDays: z.string().nullable().describe('Deprecated: days differ per standup, so read `standups`.'),
+    workingDaysLabel: z.string().describe('Deprecated, with `workingDays`.'),
+    standups: z.array(
+      z.strictObject({
+        standupId: id,
+        name: z.string(),
+        days: z.array(Weekday).describe('The standup’s own days: the default.'),
+        workingDays: z.string().nullable(),
+        workingDaysLabel: z.string(),
+        timeOffPolicy: TimeOffPolicy,
+      }),
+    ),
     policies: z.array(z.strictObject({ standupId: id, name: z.string(), timeOffPolicy: TimeOffPolicy })),
     overrides: z.array(Override),
   }),
-  '`workingDays` is null when the person follows the standup, `adhoc`, or a comma list of weekdays.',
+  'A person’s days on each standup: `workingDays` is null when they follow the standup’s days, `adhoc`, or a comma list of weekdays. Someone else’s schedule lists only the standups the caller manages.',
 );
 
 export const ScheduleChange = named(
@@ -534,7 +544,11 @@ export const UpdateParticipant = named('UpdateParticipant', z.strictObject({ man
 export const BlockerUpdateBody = named('BlockerUpdateBody', z.strictObject({ text: text.min(1) }));
 export const SkipBody = named('SkipBody', z.strictObject({ standupId: id, reason: z.string().min(1).max(LIMITS.skipNoteMax) }), 'The reason is one line, posted in the day’s thread.');
 export const MyPatch = named('MyPatch', z.strictObject({ timezone: z.string().nullable(), onVacation: z.boolean() }).partial(), 'A null or empty timezone follows the standups’ zones again.');
-export const WorkingDaysBody = named('WorkingDaysBody', z.strictObject({ workingDays: z.string().optional() }), '"mon-thu", "mon,wed,fri", "adhoc", or "reset" (the default) to follow the standup.');
+export const WorkingDaysBody = named(
+  'WorkingDaysBody',
+  z.strictObject({ workingDays: z.string().optional(), standupId: id.optional() }),
+  '"mon-thu", "mon,wed,fri", "adhoc", or "reset" (the default) to follow the standup, on the standup `standupId`. Without `standupId` every standup changes; that form is deprecated.',
+);
 export const OverrideBody = named(
   'OverrideBody',
   z.strictObject({

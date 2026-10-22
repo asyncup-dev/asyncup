@@ -146,7 +146,7 @@ export class EventRouter {
         'When a standup is due you\'ll get a card here with a *Fill standup* button.\n' +
         'DM commands: `vacation` (pause prompts while you\'re away) · `back` (resume) · `unskip` (take back today\'s skip) · ' +
         '`off <date|range> [reason]` (a day off, e.g. `off tomorrow comp off`) · `working <date>` · `off list` · `off cancel <date>` · ' +
-        '`days mon-thu|adhoc|reset` (your own week) · ' +
+        '`days [#standup] mon-thu|adhoc|reset` (your own days) · ' +
         '`timezone <IANA>` (get your prompts at the standup time in *your* zone; `timezone reset` to follow the standup zone).\n' +
         'Team configuration happens in the team space — mention me with `help` there.',
     };
@@ -162,7 +162,11 @@ export class EventRouter {
     const zone = standups[0]?.timezone ?? 'UTC';
     const now = schedule.nowIn(zone);
     const actor = { userName: user.userName, displayName: user.displayName, admin: false };
-    if (command === 'days') return (await schedule.setWorkingDays(user, text, actor, 'chat')).message;
+    if (command === 'days') {
+      // `days #12 mon-thu` names the standup; without it, someone on several is asked which.
+      const named = /^#(\d+)\s+([\s\S]*)$/.exec(text);
+      return (await schedule.setWorkingDays(user, named ? named[2]! : text, actor, 'chat', named ? Number(named[1]) : undefined)).message;
+    }
     if (command === 'off' && /^list\b/i.test(text)) {
       const upcoming = await schedule.listUpcoming(user.userName, zone);
       if (upcoming.length === 0) return 'Nothing coming up — your usual week applies. `off <date>` to mark a day off.';

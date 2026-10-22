@@ -126,19 +126,20 @@ describe('standup settings tab', () => {
     const grid = await screen.findByRole('table', { name: 'People and their days' });
     expect(within(grid).getByText('Manager')).toBeInTheDocument();
     expect(within(grid).getByText('Away')).toBeInTheDocument();
-    expect(within(grid).getByText('Days also apply to their other standup')).toBeInTheDocument();
-    // the standup runs Mon and Tue; Bob works Tue (and Sat, which this standup never runs)
+    // the standup runs Mon and Tue; Bob works Tue and Sat, a day the standup doesn't run by default
     expect(screen.getByLabelText('Alice works Mon')).toBeChecked();
     expect(screen.getByLabelText('Bob works Mon')).not.toBeChecked();
     expect(screen.getByLabelText('Bob works Tue')).toBeChecked();
-    expect(screen.getByLabelText('Bob works Sat')).toBeDisabled();
+    expect(screen.getByLabelText('Bob works Sat')).toBeChecked();
+    expect(screen.getByLabelText('Alice works Sat')).toBeEnabled();
     expect(await screen.findByLabelText('Carol on this standup')).not.toBeChecked();
     expect(screen.getByLabelText('Carol works Mon')).toBeDisabled();
 
     await user.click(screen.getByLabelText('Bob required'));
     await waitFor(() => expect(calls).toContain('PATCH /api/v1/standups/1/participants/users%2Fbob'));
     await user.click(screen.getByLabelText('Bob works Mon'));
-    await waitFor(() => expect(weeks).toEqual([{ workingDays: 'mon,tue,sat' }]));
+    await waitFor(() => expect(weeks).toEqual([{ workingDays: 'mon,tue,sat', standupId: 1 }]));
+    expect(await within(grid).findByRole('status')).toHaveTextContent('✓ Saved');
     await user.click(screen.getByLabelText('Carol on this standup'));
     await waitFor(() => expect(calls).toContain('POST /api/v1/standups/1/participants'));
     await user.click(screen.getByLabelText('Bob on this standup'));

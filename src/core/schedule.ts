@@ -4,6 +4,7 @@ import type { Mention } from './commands.js';
 import { can, resolveAccess } from './permissions.js';
 import type { Repo } from '../db/repo.js';
 import {
+  standupDays,
   WEEKDAYS,
   type AwayReason,
   type Participant,
@@ -89,19 +90,24 @@ export type DayStatus = { expected: true } | { expected: false; reason: AwayReas
 
 /**
  * Whether a person is expected on a date. A dated override wins, then
- * vacation, then the personal week; the standup's own days are not consulted
- * because a run only exists on them.
+ * vacation, then their own days on the standup, else the standup's days.
  */
 export function dayStatus(
   participant: Pick<Participant, 'onVacation' | 'workingDays'>,
   date: string,
   override: ScheduleOverride | null | undefined,
+  standupDays: readonly string[],
 ): DayStatus {
   if (override?.status === 'active') return override.working ? { expected: true } : { expected: false, reason: 'day_off' };
   if (participant.onVacation) return { expected: false, reason: 'vacation' };
-  if (participant.workingDays === null) return { expected: true };
   if (participant.workingDays === ADHOC) return { expected: false, reason: 'off_day' };
-  return participant.workingDays.split(',').includes(weekdayOf(date)) ? { expected: true } : { expected: false, reason: 'off_day' };
+  const week = participant.workingDays === null ? standupDays : participant.workingDays.split(',');
+  return week.includes(weekdayOf(date)) ? { expected: true } : { expected: false, reason: 'off_day' };
+}
+
+/** "Mon–Fri": the standup's own days, as people read them. */
+export function standupDaysLabel(standup: Standup): string {
+  return describeWorkingDays(standupDays(standup).join(','));
 }
 
 export const AWAY_LABEL: Record<AwayReason, string> = {
@@ -267,26 +273,62 @@ export class ScheduleService {
     return { ok: true, self, governed: standups.filter((s) => !administered.has(s.id)) };
   }
 
-  async setWorkingDays(target: Mention, value: string, actor: Actor, channel: ScheduleChannel): Promise<ScheduleResult> {
+  /**
+   * Sets a person's days on one standup. Without a standup, someone on one
+   * standup sets that one and someone on several is asked which; `all` is the
+   * deprecated form that sets every standup at once.
+   */
+  async setWorkingDays(target: Mention, value: string, actor: Actor, channel: ScheduleChannel, scope?: number | 'all'): Promise<ScheduleResult> {
     const parsed = parseWorkingDays(value);
     if (!parsed.ok) return parsed;
     const standups = await this.repo.listStandupsForUser(target.userName);
     if (standups.length === 0) return { ok: false, message: notOnRoster(target, actor) };
+    if (scope === 'all') return this.setEveryWeek(target, parsed.value, actor, channel, standups);
+    if (scope === undefined && standups.length > 1) {
+      const lines = standups.map((s) => `\`days #${s.id} ${value.trim()}\` for ${s.name}`);
+      return { ok: false, message: `Which standup? Reply with one of these:\n${lines.join('\n')}` };
+    }
+    const standup = scope === undefined ? standups[0]! : standups.find((s) => s.id === scope);
+    const self = actor.userName === target.userName;
+    if (!standup) return { ok: false, message: self ? 'You’re not on that standup.' : `${target.displayName} isn’t on that standup.` };
+    const manages = actor.admin || can(await resolveAccess(this.repo, { tenantId: standup.tenantId, userName: actor.userName }, false), 'schedules.manage', standup.id);
+    if (!self && !manages) return { ok: false, message: `Only the managers of *${standup.name}* can change ${target.displayName}'s days there.` };
+    // Days have no request flow, so under approval they are the managers' call too.
+    if (self && !manages && standup.timeOffPolicy !== 'self') {
+      return { ok: false, message: `Only your managers can change your days on *${standup.name}* — ask them, or DM them the days you need.` };
+    }
+    await this.repo.setWorkingDays(standup.id, target.userName, parsed.value);
+    const days = describeWorkingDays(parsed.value);
+    const summary = parsed.value === null ? `${target.displayName} now follows ${standup.name}'s days` : `${target.displayName}'s days on ${standup.name} are now ${days}`;
+    await this.recordChange(target, summary, actor, self, channel, [standup], standups);
+    await this.applyToRuns(target.userName, [this.today(standup)], true, [standup]);
+    if (!self) {
+      const tag = standups.length > 1 ? `#${standup.id} ` : '';
+      const told = parsed.value === null ? `put you back on *${standup.name}*’s days (*${standupDaysLabel(standup)}*)` : `set your days on *${standup.name}* to *${days}*`;
+      await this.dm(target.userName, `📅 ${actor.displayName} ${told}.${parsed.value === null ? '' : ` Reply \`days ${tag}reset\` to follow the standup again.`}`);
+    }
+    const adhoc = parsed.value === ADHOC ? ' Mark working days with `working <date>`.' : '';
+    if (parsed.value === null) return { ok: true, status: 'active', message: `✅ ${self ? 'You now follow' : `${target.displayName} now follows`} *${standup.name}*’s days (*${standupDaysLabel(standup)}*).` };
+    return { ok: true, status: 'active', message: `✅ ${self ? 'Your' : `${target.displayName}'s`} days on *${standup.name}* are now *${days}*.${adhoc}` };
+  }
+
+  /** The deprecated all-standups form, kept for existing API and MCP callers. */
+  private async setEveryWeek(target: Mention, value: string | null, actor: Actor, channel: ScheduleChannel, standups: Standup[]): Promise<ScheduleResult> {
     const auth = await this.authority(target, actor, standups);
     if (!auth.ok) return auth;
     // A week has no request flow, so under approval it is the managers' call too.
     if (auth.governed.some((s) => s.timeOffPolicy !== 'self')) {
       return { ok: false, message: 'Only your managers can change your week here — ask them, or DM them the days you need.' };
     }
-    await this.repo.setWorkingDaysForUser(target.userName, parsed.value);
-    const summary = `${target.displayName}'s week is now ${describeWorkingDays(parsed.value)}`;
-    await this.recordChange(target, summary, actor, auth.self, channel, standups);
-    await this.applyToRuns(target.userName, [this.today(standups[0]!)], true);
+    await this.repo.setWorkingDaysForUser(target.userName, value);
+    const summary = `${target.displayName}'s week is now ${describeWorkingDays(value)}`;
+    await this.recordChange(target, summary, actor, auth.self, channel, standups, standups);
+    for (const standup of standups) await this.applyToRuns(target.userName, [this.today(standup)], true, [standup]);
     if (!auth.self) {
-      await this.dm(target.userName, `📅 ${actor.displayName} set your week to *${describeWorkingDays(parsed.value)}*. Reply \`days reset\` to follow the standup again, or \`days mon-thu\` to choose your own.`);
+      await this.dm(target.userName, `📅 ${actor.displayName} set your week to *${describeWorkingDays(value)}* on every standup you’re on.`);
     }
     const who = auth.self ? 'Your' : `${target.displayName}'s`;
-    return { ok: true, status: 'active', message: `✅ ${who} week is now *${describeWorkingDays(parsed.value)}* across ${plural(standups.length, 'standup')}.${parsed.value === ADHOC ? ' Mark working days with `working <date>`.' : ''}` };
+    return { ok: true, status: 'active', message: `✅ ${who} week is now *${describeWorkingDays(value)}* across ${plural(standups.length, 'standup')}.${value === ADHOC ? ' Mark working days with `working <date>`.' : ''}` };
   }
 
   async setOverride(input: OverrideRequest): Promise<ScheduleResult> {
@@ -342,7 +384,7 @@ export class ScheduleService {
       const names = [...new Set(approvers.map((s) => s.name))].join(', ');
       return { ok: true, status, message: `📨 Sent to the managers of ${names} for approval — you'll hear back here. Withdraw with \`off cancel ${dates[0]}\`.` };
     }
-    await this.recordChange(target, `${target.displayName} is ${what}`, actor, self, channel, standups);
+    await this.recordChange(target, `${target.displayName} is ${what}`, actor, self, channel, standups, standups);
     await this.applyToRuns(target.userName, dates);
     if (!self) {
       await this.dm(
@@ -398,7 +440,7 @@ export class ScheduleService {
     await this.repo.setOverrideStatus(existing.id, 'withdrawn', this.now().toISO()!);
     if (wasActive) {
       await this.applyToRuns(target.userName, [date]);
-      await this.recordChange(target, `${target.displayName} cancelled ${existing.working ? 'working' : 'off'} ${describeDates([date])}`, actor, auth.self, 'chat', standups);
+      await this.recordChange(target, `${target.displayName} cancelled ${existing.working ? 'working' : 'off'} ${describeDates([date])}`, actor, auth.self, 'chat', standups, standups);
     }
     return { ok: true, status: 'active', message: `✅ ${describeDates([date])} is back to ${auth.self ? 'your' : `${target.displayName}'s`} usual week.` };
   }
@@ -436,11 +478,15 @@ export class ScheduleService {
     return { ok: true, status: 'active', message: `${approve ? '✅ Approved' : '❌ Declined'} — ${person.displayName} has been told.${approve ? await this.leaveLine(working, 'Their') : ''}` };
   }
 
-  /** When a run opens: people whose week or overrides exclude the date start it as away. */
-  async applyToNewRun(standup: Standup, run: Run): Promise<void> {
+  /**
+   * When a run opens: people whose days or overrides exclude the date start it
+   * as away. `run now` counts the day as one of the standup's own.
+   */
+  async applyToNewRun(standup: Standup, run: Run, asStandupDay = false): Promise<void> {
     const overrides = await this.repo.listActiveOverridesOn(run.date);
+    const days = asStandupDay ? [...standupDays(standup), weekdayOf(run.date)] : standupDays(standup);
     for (const p of await this.repo.listParticipants(standup.id)) {
-      const status = dayStatus(p, run.date, overrides.get(p.userName));
+      const status = dayStatus(p, run.date, overrides.get(p.userName), days);
       if (!status.expected && status.reason !== 'vacation') await this.repo.setRunAway(run.id, p.userName, status.reason);
       if (status.expected && p.onVacation) await this.repo.setRunAway(run.id, p.userName, null);
     }
@@ -475,8 +521,8 @@ export class ScheduleService {
    * Re-evaluates the person's runs on these dates after a schedule change.
    * Only schedule-driven reasons move, and a closed run keeps anyone who submitted.
    */
-  async applyToRuns(userName: string, dates: string[], openOnly = false): Promise<void> {
-    const standups = await this.repo.listStandupsForUser(userName);
+  async applyToRuns(userName: string, dates: string[], openOnly = false, only?: Standup[]): Promise<void> {
+    const standups = only ?? (await this.repo.listStandupsForUser(userName));
     for (const date of dates) {
       const override = await this.repo.getOverride(userName, date);
       for (const standup of standups) {
@@ -486,7 +532,7 @@ export class ScheduleService {
         const rp = (await this.repo.listRunParticipants(run.id)).find((p) => p.userName === userName);
         if (!participant || !rp) continue;
         if (run.status !== 'open' && (await this.repo.getSubmission(run.id, userName))) continue;
-        const status = dayStatus(participant, date, override);
+        const status = dayStatus(participant, date, override, standupDays(standup));
         const movable = rp.awayReason === null || rp.awayReason === 'day_off' || rp.awayReason === 'off_day';
         if (!status.expected && movable && rp.awayReason !== status.reason) await this.repo.setRunAway(run.id, userName, status.reason);
         if (status.expected && rp.awayReason !== null && movable) await this.repo.setRunAway(run.id, userName, null);
@@ -503,11 +549,15 @@ export class ScheduleService {
     return this.now().setZone(standup.timezone).toISODate()!;
   }
 
-  private async recordChange(target: Mention, summary: string, actor: Actor, self: boolean, channel: ScheduleChannel, standups: Standup[]): Promise<void> {
+  /** Logs a self-service change for the managers' digest of the standups it affects, and sends their webhooks. */
+  private async recordChange(target: Mention, summary: string, actor: Actor, self: boolean, channel: ScheduleChannel, affected: Standup[], all: Standup[]): Promise<void> {
     if (self) {
-      await this.repo.logScheduleChange({ userName: target.userName, displayName: target.displayName, summary, byDisplayName: actor.displayName, channel, at: this.now().toISO()! });
+      const at = this.now().toISO()!;
+      const id = await this.repo.logScheduleChange({ userName: target.userName, displayName: target.displayName, summary, byDisplayName: actor.displayName, channel, at });
+      // The other standups' managers have nothing to review.
+      for (const standup of all) if (!affected.some((s) => s.id === standup.id)) await this.repo.markChangesDigested(standup.id, [id], at);
     }
-    for (const standup of standups) await this.webhooks?.scheduleChange(standup, { person: target, summary, by: actor.displayName, channel });
+    for (const standup of affected) await this.webhooks?.scheduleChange(standup, { person: target, summary, by: actor.displayName, channel });
   }
 
   private async dm(userName: string, text: string): Promise<void> {
