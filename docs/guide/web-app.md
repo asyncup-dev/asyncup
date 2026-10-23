@@ -30,7 +30,8 @@ detects a working Chat connection and skips straight to the standup step.
   recent runs, open blockers, schedule), **History** (every run with full
   answers, CSV export, and mood comments for people allowed to read them),
   **Insights** (participation by person, mood and blocker
-  charts) and **Settings** (schedule with time pickers, questions, mood, the
+  charts), **Polls** (polls with questions: open and closed, **New poll** for
+  managers, and each poll's results, CSV export and **Close now**) and **Settings** (schedule with time pickers, questions, mood, the
   People grid and roster group, escalation, webhook with a signed test, digest,
   and a Danger zone to archive, unarchive or delete).
 - **Blockers** — every open, acknowledged or resolved blocker across the

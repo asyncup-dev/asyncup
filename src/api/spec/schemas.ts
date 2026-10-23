@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { QUESTION_TYPES, RESULTS_VISIBILITY } from '../../core/poll-types.js';
 import { MCP_SCOPES } from '../../core/mcp-scopes.js';
 import { PERMISSIONS } from '../../core/permission-catalogue.js';
 import { AWAY_REASONS, MOODS, OVERRIDE_STATUSES, TIME_OFF_POLICIES, WEEKDAYS } from '../../core/types.js';
@@ -404,6 +405,67 @@ export const EditRequest = named(
 );
 export const EditRequests = named('EditRequests', z.strictObject({ requests: z.array(EditRequest) }));
 
+// --- polls with questions
+
+const QuestionType = named('PollQuestionType', z.enum(QUESTION_TYPES), 'short and long are text; dropdown and single take one option; multiple takes any number.');
+const ResultsFor = named('PollResultsFor', z.enum(RESULTS_VISIBILITY), 'Who sees the results: everyone asked, after it closes, or the standup’s managers only.');
+export const PollQuestion = named('PollQuestion', z.strictObject({ text: z.string(), type: QuestionType, required: z.boolean(), options: z.array(z.string()) }));
+export const PollDraft = named(
+  'PollDraft',
+  z.strictObject({
+    title: z.string(),
+    intro: z.string().nullable().optional(),
+    questions: z.array(z.strictObject({ text: z.string(), type: QuestionType, required: z.boolean().optional(), options: z.array(z.string()).optional() })),
+    closesAt: z.string().describe('Local date and time in the standup’s timezone, YYYY-MM-DDTHH:mm, from 15 minutes to 14 days ahead.'),
+    remindMinutes: z.union([z.literal(15), z.literal(60), z.literal(1440)]).nullable().optional(),
+    anonymous: z.boolean().optional(),
+    results: ResultsFor.optional(),
+  }),
+  'Up to 10 questions; choice questions have 2 to 20 options. Named or anonymous and who sees results cannot change once sent.',
+);
+const PollSummaryShape = {
+  id,
+  standupId: id,
+  title: z.string(),
+  from: z.string(),
+  createdAt: timestamp,
+  closesAt: timestamp,
+  closesLabel: z.string(),
+  closedAt: timestamp.nullable(),
+  closedLabel: z.string().nullable(),
+  open: z.boolean(),
+  anonymous: z.boolean(),
+  results: ResultsFor,
+  asked: count,
+  answered: count,
+};
+export const QuestionPollSummary = named('QuestionPollSummary', z.strictObject(PollSummaryShape));
+export const QuestionPolls = named('QuestionPolls', z.strictObject({ polls: z.array(QuestionPollSummary) }));
+export const QuestionPoll = named(
+  'QuestionPoll',
+  z.strictObject({
+    ...PollSummaryShape,
+    intro: z.string().nullable(),
+    questions: z.array(PollQuestion),
+    remindAt: timestamp.nullable(),
+    outcome: z
+      .strictObject({
+        notAnswered: z.array(z.string()).nullable(),
+        questions: z.array(
+          z.strictObject({
+            text: z.string(),
+            type: QuestionType,
+            answered: count,
+            options: z.array(z.strictObject({ text: z.string(), count, names: z.array(z.string()).nullable() })),
+            answers: z.array(z.strictObject({ name: z.string().nullable(), text: z.string() })),
+          }),
+        ),
+      })
+      .nullable()
+      .describe('Null unless the caller may see results. Names are null on an anonymous poll.'),
+  }),
+);
+
 // --- settings, verification and MCP
 
 const secret = z.strictObject({ set: z.boolean() });
@@ -682,3 +744,7 @@ export type PermissionInfo = z.infer<typeof PermissionList>['permissions'][numbe
 export type Role = z.infer<typeof Role>;
 export type Grant = z.infer<typeof Grant>;
 export type RoleAuditEntry = z.infer<typeof RoleAudit>['entries'][number];
+export type PollQuestion = z.infer<typeof PollQuestion>;
+export type PollDraft = z.infer<typeof PollDraft>;
+export type QuestionPollSummary = z.infer<typeof QuestionPollSummary>;
+export type QuestionPoll = z.infer<typeof QuestionPoll>;

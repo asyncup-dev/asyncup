@@ -1,6 +1,7 @@
 import type { PromptState } from '../../core/adapter.js';
 import { dayLabel, untilLabel, type EditRequestView } from '../../core/edit-requests.js';
 import { toCardHtml } from '../../core/format.js';
+import { POLL_LIMITS, type PollAnswer, type PollCardState, type PollCounts, type PollView } from '../../core/question-polls.js';
 import { describeDates, type TimeOffRequest } from '../../core/schedule.js';
 import { DateTime } from 'luxon';
 import { LIMITS } from '../../core/validation.js';
@@ -37,6 +38,8 @@ export const SUBMIT_EDIT_REQUEST_FN = 'submitEditRequest';
 export const APPROVE_EDIT_FN = 'approveEdit';
 export const DECLINE_EDIT_FN = 'declineEdit';
 export const SUBMIT_EDIT_DECLINE_FN = 'submitDeclineEdit';
+export const OPEN_POLL_FORM_FN = 'openPollForm';
+export const SUBMIT_POLL_FORM_FN = 'submitPollForm';
 
 function humanDate(isoDate: string): string {
   return DateTime.fromISO(isoDate).toFormat('ccc, dd LLL yyyy');
@@ -675,4 +678,88 @@ export function editApprovedCard(request: EditRequestView, endpoint: string | nu
       },
     ],
   };
+}
+
+const pollParam = (poll: PollView) => [{ key: 'pollId', value: String(poll.id) }];
+
+/** DM card for a poll: to answer, as a reminder, once answered, and once closed. */
+export function pollCardMessage(poll: PollView, state: PollCardState, endpoint: string | null = null) {
+  const time = (iso: string) => DateTime.fromISO(iso).setZone(poll.zone).toFormat('HH:mm');
+  const respond = (text: string) => ({ buttonList: { buttons: [{ text, onClick: { action: clickAction(OPEN_POLL_FORM_FN, pollParam(poll), endpoint, 'OPEN_DIALOG') } }] } });
+  const count = `${poll.questions.length} question${poll.questions.length === 1 ? '' : 's'} · closes <b>${poll.closesLabel}</b>`;
+  const privacy = poll.anonymous ? 'Anonymous: nobody sees who answered what.' : `Named: ${html(poll.from)} sees who answered what.`;
+  const widgets: any[] = [];
+  if (state.kind === 'open') {
+    if (poll.intro) widgets.push({ textParagraph: { text: html(poll.intro) } });
+    widgets.push({ textParagraph: { text: `${count}<br>${privacy}` } }, respond('Respond'));
+  } else if (state.kind === 'reminder') {
+    widgets.push({ textParagraph: { text: `You haven’t answered yet. It closes at <b>${poll.closesTime}</b>.` } }, respond('Respond'));
+  } else if (state.kind === 'answered') {
+    widgets.push({ textParagraph: { text: `✅ Answered at <b>${time(state.at)}</b>. You can change your answers until <b>${poll.closesTime}</b>.` } }, respond('Change answers'));
+  } else {
+    widgets.push({ textParagraph: { text: `🔒 Closed at ${poll.closesTime}.${state.answeredAt ? ` You answered at ${time(state.answeredAt)}.` : ''}` } });
+  }
+  return {
+    cardsV2: [
+      {
+        cardId: `question-poll-${poll.id}`,
+        card: {
+          header: { title: `${state.kind === 'reminder' ? '⏰' : '📋'} ${poll.title}`, subtitle: `From ${poll.from} · ${poll.standupName}` },
+          sections: [{ widgets }],
+        },
+      },
+    ],
+  };
+}
+
+/** The card that starts the poll's thread in the standup's space. */
+export function pollSummaryMessage(poll: PollView, counts: PollCounts, closed: boolean) {
+  const text = closed
+    ? `🔒 Closed: ${counts.answered} of ${counts.asked} answered. ${poll.results === 'everyone' ? 'Results are in the thread.' : 'Results are with the standup’s managers.'}`
+    : `${counts.answered} of ${counts.asked} answered · closes ${poll.closesLabel}<br>${poll.results === 'everyone' ? 'Everyone sees the results after it closes.' : 'Results go to the standup’s managers.'}`;
+  return {
+    cardsV2: [
+      {
+        cardId: `question-poll-summary-${poll.id}`,
+        card: {
+          header: { title: `📋 ${poll.title} · poll`, subtitle: `Sent by ${poll.from} to the people on ${poll.standupName}` },
+          sections: [{ widgets: [{ textParagraph: { text } }] }],
+        },
+      },
+    ],
+  };
+}
+
+/** The form behind Respond: one input per question, named q0..qN, filled in with earlier answers. */
+export function pollFormDialog(poll: PollView, answers: PollAnswer[] | null, endpoint: string | null = null, error?: string) {
+  const label = (i: number) => `${poll.questions[i]!.text}${poll.questions[i]!.required ? ' (required)' : ''}`;
+  const picked = (i: number) => {
+    const a = answers?.[i];
+    return Array.isArray(a) ? a : [];
+  };
+  const widgets: any[] = [
+    ...(error ? [errorLine(error)] : []),
+    { textParagraph: { text: `<b>${html(poll.title)}</b>${poll.intro ? `<br>${html(poll.intro)}` : ''}<br>Closes ${poll.closesLabel}. ${poll.anonymous ? 'Anonymous: nobody sees who answered what.' : `Named: ${html(poll.from)} sees who answered what.`}` } },
+    ...poll.questions.map((q, i) => {
+      const name = `q${i}`;
+      if (q.type === 'short' || q.type === 'long') {
+        const a = answers?.[i];
+        return {
+          textInput: {
+            name,
+            label: label(i),
+            type: q.type === 'long' ? 'MULTIPLE_LINE' : 'SINGLE_LINE',
+            value: typeof a === 'string' && a ? a : undefined,
+            hintText: `Up to ${(q.type === 'long' ? POLL_LIMITS.long : POLL_LIMITS.short).toLocaleString('en-GB')} characters.`,
+          },
+        };
+      }
+      const items = q.options.map((text, n) => ({ text, value: String(n), selected: picked(i).includes(n) }));
+      const type = q.type === 'dropdown' ? 'DROPDOWN' : q.type === 'single' ? 'RADIO_BUTTON' : 'CHECK_BOX';
+      // A dropdown always shows a choice, so an unanswered one starts on a blank entry.
+      return { selectionInput: { name, label: label(i), type, items: q.type === 'dropdown' ? [{ text: 'Choose one', value: '', selected: picked(i).length === 0 }, ...items] : items } };
+    }),
+    { buttonList: { buttons: [{ text: 'Submit', onClick: { action: clickAction(SUBMIT_POLL_FORM_FN, pollParam(poll), endpoint) } }] } },
+  ];
+  return { actionResponse: { type: 'DIALOG', dialogAction: { dialog: { body: { sections: [{ widgets }] } } } } };
 }

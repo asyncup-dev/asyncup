@@ -698,15 +698,29 @@ export class CommandHandler {
 
   private async pollList(standup: Standup): Promise<string> {
     const open = await this.repo.listOpenPolls(standup.id);
-    if (open.length === 0) {
+    const questionPolls = this.standups?.questionPolls;
+    const asked = questionPolls ? (await questionPolls.list(standup.id)).filter((p) => !questionPolls.isClosed(p)) : [];
+    if (open.length === 0 && asked.length === 0) {
       return 'No open polls. Start one with `poll Question? | Option A | Option B`.';
     }
-    const lines: string[] = [];
-    for (const poll of open) {
-      const total = (await this.repo.listPollVotes(poll.id)).length;
-      lines.push(`#${poll.id} ${poll.question} — ${total} vote${total === 1 ? '' : 's'} (by ${poll.createdDisplay})`);
+    const parts: string[] = [];
+    if (open.length) {
+      const lines: string[] = [];
+      for (const poll of open) {
+        const total = (await this.repo.listPollVotes(poll.id)).length;
+        lines.push(`#${poll.id} ${poll.question} — ${total} vote${total === 1 ? '' : 's'} (by ${poll.createdDisplay})`);
+      }
+      parts.push(`*Open polls:*\n${lines.join('\n')}\n\`poll <id> results\` · \`poll <id> close\``);
     }
-    return `*Open polls:*\n${lines.join('\n')}\n\`poll <id> results\` · \`poll <id> close\``;
+    if (asked.length) {
+      const lines: string[] = [];
+      for (const poll of asked) {
+        const people = await questionPolls!.people(poll.id);
+        lines.push(`📋 ${poll.title} — ${people.filter((p) => p.answeredAt).length} of ${people.length} answered, closes ${questionPolls!.labelOf(poll.closesAt, standup)} (by ${poll.createdDisplay})`);
+      }
+      parts.push(`*Polls with questions:*\n${lines.join('\n')}\nResults are in the web app, under ${standup.name} › Polls.`);
+    }
+    return parts.join('\n\n');
   }
 
   private exportInfo(standup: Standup): string {

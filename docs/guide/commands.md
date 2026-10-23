@@ -87,7 +87,7 @@ Quick team decisions without a meeting — a card in the space, one tap to vote:
 | Command | Effect |
 | --- | --- |
 | `poll Question? \| Option A \| Option B` | Post a poll card (2–6 options). Votes update the card live; voting again changes your vote |
-| `polls` | List open polls with vote counts |
+| `polls` | List open polls with vote counts, and open polls with questions with how many have answered |
 | `poll <id> results` | Current tallies with voter names |
 | `poll <id> close` | Close it and post final results (creator or admin) |
 

@@ -8,6 +8,7 @@ import { actorFor, displayNameOf, managedBy, managesPerson, overrideView, schedu
 import { allowed, findVisibleStandup, meView, summarise, visibleStandups } from '../api/shared.js';
 import { canSomewhere, PERMISSIONS, standupsWith, type Permission } from '../core/permissions.js';
 import * as S from '../api/spec/schemas.js';
+import { pollDetailView, pollSummaryView } from '../api/question-polls.js';
 import { BLOCKER_STATUSES, blockersView, linkedStandupsView, peopleView, runsView, runView, standupDetailView, visibleBlocker } from '../api/views.js';
 import type { ChatAdapter } from '../core/adapter.js';
 import type { BlockerService } from '../core/blocker-service.js';
@@ -172,6 +173,34 @@ export function buildMcpServer(deps: McpToolDeps, token: McpToken, p: Principal)
       return standupDetailView(repo, found.standup, deps.now(), found.manage);
     },
   );
+
+  if (deps.service) {
+    const polls = deps.service.questionPolls;
+    register(
+      'list_question_polls',
+      'read',
+      { title: 'List polls', description: 'Polls with questions sent to a standup, newest first, with how many have answered.', inputSchema: z.object({ standupId: ID }), outputSchema: S.QuestionPolls },
+      async ({ standupId }) => {
+        const found = await visible(standupId);
+        return { polls: await Promise.all((await polls.list(standupId)).map((x) => pollSummaryView(polls, x, found.standup))) };
+      },
+    );
+    register(
+      'get_question_poll_results',
+      'read',
+      {
+        title: 'Get poll results',
+        description: 'One poll with its questions and, when the owner may see them, its results. An anonymous poll never names anyone.',
+        inputSchema: z.object({ pollId: ID }),
+        outputSchema: S.QuestionPoll,
+      },
+      async ({ pollId }) => {
+        const found = await polls.get(pollId);
+        if (!found || found.standup.tenantId !== p.tenantId || !allowed(p, 'standups.view', found.standup.id)) throw new ToolRefused('No such poll.');
+        return pollDetailView(polls, found.poll, found.standup, p);
+      },
+    );
+  }
 
   register(
     'get_my_standups',

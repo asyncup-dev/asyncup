@@ -159,6 +159,16 @@ Requests to edit answers after the deadline are decided by anyone holding `stand
 | `GET` | `/edit-requests` | Pending requests the caller can decide, newest first: `standupId`, `standupName`, `date`, `userName`, `displayName`, `reason`, `askedAt`, `answeredAt` and `until` (midnight in the standup's timezone, as `23:59 Europe/London`) |
 | `POST` | `/edit-requests/:id/approve` · `/edit-requests/:id/decline` | `{ note? }` on decline goes to the person; `404` for an unknown request, `403` without `standups.configure` on its standup, `409 refused` once decided or lapsed, or for the caller's own request |
 
+Polls with questions are sent and closed by anyone holding `standups.configure` on the standup:
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/standups/:id/question-polls` | Newest first: `title`, `from`, `closesAt` and `closesLabel` (the close time in the standup's timezone), `closedAt`, `open`, `anonymous`, `results` (`everyone` or `managers`), `asked`, `answered` |
+| `POST` | `/standups/:id/question-polls` | `{ title, intro?, questions: [{ text, type, required?, options? }], closesAt: "2026-10-24T17:00", remindMinutes?: 15 \| 60 \| 1440 \| null, anonymous?, results? }`. `type` is `short`, `long`, `dropdown`, `single` or `multiple`; up to 10 questions and 20 options. `closesAt` is local to the standup, from 15 minutes to 14 days ahead. Answers `201` with the poll, or `400 invalid` naming the `field` |
+| `GET` | `/question-polls/:id` | The poll and its `questions`. `outcome` (who hasn't answered, counts per option with names, text answers) is set for the standup's managers, and for the people asked once a poll with `results: everyone` closes; otherwise `null`. Names are `null` on an anonymous poll |
+| `POST` | `/question-polls/:id/close` | Close it now; `409 closed` if it already has |
+| `GET` | `/question-polls/:id/export.csv` | One row per answer: `person,question,answer,answered_at`, without `person` on an anonymous poll. Managers only |
+
 Moods are withheld per person when the standup keeps them anonymous; only the team average is returned. A run includes `moodComments` only for callers holding `moods.comments` on the standup: each with `person`, `mood` and `comment`, or with `person: null`, sorted by mood then text, when moods are anonymous.
 
 ### Blockers

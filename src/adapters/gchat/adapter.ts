@@ -4,6 +4,7 @@ import type { SettingsService } from '../../core/settings.js';
 import { chatEndpointUrl } from './addon.js';
 import type { TimeOffRequest } from '../../core/schedule.js';
 import type { EditRequestView } from '../../core/edit-requests.js';
+import type { PollCardState, PollCounts, PollView } from '../../core/question-polls.js';
 import type { Repo } from '../../db/repo.js';
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import {
@@ -11,7 +12,9 @@ import {
   editApprovedCard,
   editRequestCard,
   timeOffRequestCard,
+  pollCardMessage,
   pollMessage,
+  pollSummaryMessage,
   promptMessage,
   reminderMessage,
   submissionMessage,
@@ -153,6 +156,26 @@ export class GoogleChatAdapter implements ChatAdapter {
     } catch {
       return false;
     }
+  }
+
+  async sendPollCard(userName: string, poll: PollView, state: PollCardState): Promise<string | null> {
+    const dm = await this.ensureDmSpace(userName);
+    const res = await (await this.getClient()).spaces.messages.create({ parent: dm, requestBody: pollCardMessage(poll, state, await this.endpoint()) });
+    return res.data.name ?? null;
+  }
+
+  async updatePollCards(messageNames: string[], poll: PollView, state: PollCardState): Promise<void> {
+    const client = await this.getClient();
+    const requestBody = pollCardMessage(poll, state, await this.endpoint());
+    for (const name of messageNames) await client.spaces.messages.update({ name, updateMask: 'cardsV2', requestBody });
+  }
+
+  async postPollSummary(standup: Standup, poll: PollView, counts: PollCounts, closed: boolean): Promise<string | null> {
+    return this.postInThread(standup.spaceName, `qpoll-${poll.id}`, pollSummaryMessage(poll, counts, closed));
+  }
+
+  async updatePollSummary(messageName: string, poll: PollView, counts: PollCounts, closed: boolean): Promise<void> {
+    await (await this.getClient()).spaces.messages.update({ name: messageName, updateMask: 'cardsV2', requestBody: pollSummaryMessage(poll, counts, closed) });
   }
 
   async postPoll(standup: Standup, poll: Poll, tallies: number[]): Promise<string | null> {

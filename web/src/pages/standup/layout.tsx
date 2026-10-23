@@ -16,6 +16,7 @@ const TABS: { to: string; label: string; need: Permission[]; exact?: true }[] = 
   { to: '/standups/$id', label: 'Overview', need: [], exact: true },
   { to: '/standups/$id/history', label: 'History', need: ['reports.view'] },
   { to: '/standups/$id/insights', label: 'Insights', need: ['reports.view'] },
+  { to: '/standups/$id/polls', label: 'Polls', need: [] },
   { to: '/standups/$id/settings', label: 'Settings', need: STANDUP_SETTINGS },
 ];
 
@@ -67,7 +68,8 @@ export function StandupLayout() {
           const href = t.to.replace('$id', String(id));
           const current = t.exact ? pathname === `/app${href}` || pathname === `${base}/` : pathname.startsWith(`/app${href}`);
           return (
-            <Link key={t.to} to={t.to} params={{ id: String(id) }} className="tab" aria-current={current ? 'page' : undefined}>{t.label}</Link>
+            // Overview is the parent route of every tab, so only an exact match makes it the current one.
+            <Link key={t.to} to={t.to} params={{ id: String(id) }} activeOptions={{ exact: !!t.exact }} className="tab" aria-current={current ? 'page' : undefined}>{t.label}</Link>
           );
         })}
       </nav>

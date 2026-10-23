@@ -1,4 +1,5 @@
 import { PostgresDriver, SqliteDriver, type Driver } from './driver.js';
+import type { PollPerson, QuestionPoll } from '../core/question-polls.js';
 import type {
   Admin,
   Answer,
@@ -468,6 +469,39 @@ CREATE TABLE edit_requests (
 );
 CREATE INDEX idx_edit_requests_status ON edit_requests(status);
 ALTER TABLE submissions ADD COLUMN edit_approved_by TEXT;
+`,  // 21 — polls with questions and a close time
+  `
+CREATE TABLE question_polls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  standup_id INTEGER NOT NULL REFERENCES standups(id),
+  title TEXT NOT NULL,
+  intro TEXT,
+  questions TEXT NOT NULL,
+  anonymous INTEGER NOT NULL DEFAULT 0,
+  results TEXT NOT NULL DEFAULT 'everyone',
+  closes_at TEXT NOT NULL,
+  remind_at TEXT,
+  reminded_at TEXT,
+  created_by TEXT NOT NULL,
+  created_display TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  closed_at TEXT,
+  space_message TEXT,
+  space_count INTEGER NOT NULL DEFAULT 0,
+  space_drawn_at TEXT
+);
+CREATE INDEX idx_question_polls_standup ON question_polls(standup_id);
+CREATE TABLE question_poll_people (
+  poll_id INTEGER NOT NULL REFERENCES question_polls(id),
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  card_messages TEXT,
+  reminded_at TEXT,
+  answers TEXT,
+  answered_at TEXT,
+  updated_at TEXT,
+  PRIMARY KEY (poll_id, user_name)
+);
 `,
 ];
 
@@ -813,8 +847,75 @@ CREATE TABLE edit_requests (
 );
 CREATE INDEX idx_edit_requests_status ON edit_requests(status);
 ALTER TABLE submissions ADD COLUMN edit_approved_by TEXT;
+`,  // 21 — polls with questions (mirrors the SQLite migration)
+  `
+CREATE TABLE question_polls (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  standup_id INTEGER NOT NULL REFERENCES standups(id),
+  title TEXT NOT NULL,
+  intro TEXT,
+  questions TEXT NOT NULL,
+  anonymous INTEGER NOT NULL DEFAULT 0,
+  results TEXT NOT NULL DEFAULT 'everyone',
+  closes_at TEXT NOT NULL,
+  remind_at TEXT,
+  reminded_at TEXT,
+  created_by TEXT NOT NULL,
+  created_display TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  closed_at TEXT,
+  space_message TEXT,
+  space_count INTEGER NOT NULL DEFAULT 0,
+  space_drawn_at TEXT
+);
+CREATE INDEX idx_question_polls_standup ON question_polls(standup_id);
+CREATE TABLE question_poll_people (
+  poll_id INTEGER NOT NULL REFERENCES question_polls(id),
+  user_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  card_messages TEXT,
+  reminded_at TEXT,
+  answers TEXT,
+  answered_at TEXT,
+  updated_at TEXT,
+  PRIMARY KEY (poll_id, user_name)
+);
 `,
 ];
+
+function toQuestionPoll(row: any): QuestionPoll {
+  return {
+    id: row.id,
+    standupId: row.standup_id,
+    title: row.title,
+    intro: row.intro ?? null,
+    questions: JSON.parse(row.questions),
+    anonymous: !!row.anonymous,
+    results: row.results,
+    closesAt: row.closes_at,
+    remindAt: row.remind_at ?? null,
+    remindedAt: row.reminded_at ?? null,
+    createdBy: row.created_by,
+    createdDisplay: row.created_display,
+    createdAt: row.created_at,
+    closedAt: row.closed_at ?? null,
+    spaceMessage: row.space_message ?? null,
+    spaceCount: Number(row.space_count ?? 0),
+    spaceDrawnAt: row.space_drawn_at ?? null,
+  };
+}
+
+function toPollPerson(row: any): PollPerson {
+  return {
+    pollId: row.poll_id,
+    userName: row.user_name,
+    displayName: row.display_name,
+    cardMessages: row.card_messages ? JSON.parse(row.card_messages) : [],
+    remindedAt: row.reminded_at ?? null,
+    answers: row.answers ? JSON.parse(row.answers) : null,
+    answeredAt: row.answered_at ?? null,
+  };
+}
 
 function toRole(row: any): CustomRole {
   return {
@@ -2153,6 +2254,77 @@ export class Repo {
     return (await this.getPollById(id))!;
   }
 
+  // --- polls with questions ---
+
+  async createQuestionPoll(
+    input: Pick<QuestionPoll, 'standupId' | 'title' | 'intro' | 'questions' | 'anonymous' | 'results' | 'closesAt' | 'remindAt' | 'createdBy' | 'createdDisplay' | 'createdAt'>,
+    people: { userName: string; displayName: string }[],
+  ): Promise<QuestionPoll> {
+    const id = await this.db.transaction(async () => {
+      const id = await this.db.insert(
+        `INSERT INTO question_polls (standup_id, title, intro, questions, anonymous, results, closes_at, remind_at, created_by, created_display, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [input.standupId, input.title, input.intro, JSON.stringify(input.questions), input.anonymous ? 1 : 0, input.results, input.closesAt, input.remindAt, input.createdBy, input.createdDisplay, input.createdAt],
+      );
+      for (const p of people) {
+        await this.db.run('INSERT INTO question_poll_people (poll_id, user_name, display_name) VALUES (?, ?, ?)', [id, p.userName, p.displayName]);
+      }
+      return id;
+    });
+    return (await this.getQuestionPoll(id))!;
+  }
+
+  async getQuestionPoll(id: number): Promise<QuestionPoll | null> {
+    const row = await this.db.get('SELECT * FROM question_polls WHERE id = ?', [id]);
+    return row ? toQuestionPoll(row) : null;
+  }
+
+  /** Newest first. */
+  async listQuestionPolls(standupId: number): Promise<QuestionPoll[]> {
+    return (await this.db.all('SELECT * FROM question_polls WHERE standup_id = ? ORDER BY id DESC', [standupId])).map(toQuestionPoll);
+  }
+
+  async listOpenQuestionPolls(): Promise<QuestionPoll[]> {
+    return (await this.db.all('SELECT * FROM question_polls WHERE closed_at IS NULL ORDER BY id')).map(toQuestionPoll);
+  }
+
+  async listQuestionPollPeople(pollId: number): Promise<PollPerson[]> {
+    return (await this.db.all('SELECT * FROM question_poll_people WHERE poll_id = ? ORDER BY display_name, user_name', [pollId])).map(toPollPerson);
+  }
+
+  async addQuestionPollCard(pollId: number, userName: string, messageName: string): Promise<void> {
+    const row = await this.db.get('SELECT card_messages FROM question_poll_people WHERE poll_id = ? AND user_name = ?', [pollId, userName]);
+    const names: string[] = row?.card_messages ? JSON.parse(row.card_messages) : [];
+    await this.db.run('UPDATE question_poll_people SET card_messages = ? WHERE poll_id = ? AND user_name = ?', [JSON.stringify([...names, messageName]), pollId, userName]);
+  }
+
+  async setQuestionPollSpace(id: number, messageName: string, count: number, at: string): Promise<void> {
+    await this.db.run('UPDATE question_polls SET space_message = ?, space_count = ?, space_drawn_at = ? WHERE id = ?', [messageName, count, at, id]);
+  }
+
+  /** The first answer's time stays as when they answered; later changes only update. */
+  async saveQuestionPollAnswers(pollId: number, userName: string, answers: unknown[], at: string): Promise<void> {
+    await this.db.run(
+      'UPDATE question_poll_people SET answers = ?, answered_at = COALESCE(answered_at, ?), updated_at = ? WHERE poll_id = ? AND user_name = ?',
+      [JSON.stringify(answers), at, at, pollId, userName],
+    );
+  }
+
+  /** False when the poll was already closed. */
+  async closeQuestionPoll(id: number, at: string): Promise<boolean> {
+    return (await this.db.run('UPDATE question_polls SET closed_at = ? WHERE id = ? AND closed_at IS NULL', [at, id])).changes > 0;
+  }
+
+  /** False when the reminder already went. */
+  async markQuestionPollReminded(id: number, at: string): Promise<boolean> {
+    return (await this.db.run('UPDATE question_polls SET reminded_at = ? WHERE id = ? AND reminded_at IS NULL', [at, id])).changes > 0;
+  }
+
+  async markQuestionPollPersonReminded(pollId: number, userName: string, at: string, messageName: string | null): Promise<void> {
+    await this.db.run('UPDATE question_poll_people SET reminded_at = ? WHERE poll_id = ? AND user_name = ?', [at, pollId, userName]);
+    if (messageName) await this.addQuestionPollCard(pollId, userName, messageName);
+  }
+
   async getPollById(id: number): Promise<Poll | null> {
     const row = await this.db.get('SELECT * FROM polls WHERE id = ?', [id]);
     return row ? toPoll(row) : null;
@@ -2304,11 +2476,13 @@ export class Repo {
       const b = await this.db.run(`DELETE FROM blockers WHERE standup_id IN (${standups})`, [tenantId]);
       await this.db.run(`DELETE FROM poll_votes WHERE poll_id IN (${polls})`, [tenantId]);
       const p = await this.db.run(`DELETE FROM polls WHERE standup_id IN (${standups})`, [tenantId]);
+      await this.db.run(`DELETE FROM question_poll_people WHERE poll_id IN (SELECT id FROM question_polls WHERE standup_id IN (${standups}))`, [tenantId]);
+      const q = await this.db.run(`DELETE FROM question_polls WHERE standup_id IN (${standups})`, [tenantId]);
       await this.db.run(`DELETE FROM edit_requests WHERE run_id IN (${runs})`, [tenantId]);
       const sub = await this.db.run(`DELETE FROM submissions WHERE run_id IN (${runs})`, [tenantId]);
       await this.db.run(`DELETE FROM run_participants WHERE run_id IN (${runs})`, [tenantId]);
       const r = await this.db.run(`DELETE FROM runs WHERE standup_id IN (${standups})`, [tenantId]);
-      return { runs: r.changes, submissions: sub.changes, blockers: b.changes, polls: p.changes };
+      return { runs: r.changes, submissions: sub.changes, blockers: b.changes, polls: p.changes + q.changes };
     });
   }
 
@@ -2327,6 +2501,8 @@ export class Repo {
       const b = await this.db.run('DELETE FROM blockers WHERE standup_id = ?', [standupId]);
       await this.db.run(`DELETE FROM poll_votes WHERE poll_id IN (${polls})`, [standupId]);
       const p = await this.db.run('DELETE FROM polls WHERE standup_id = ?', [standupId]);
+      await this.db.run('DELETE FROM question_poll_people WHERE poll_id IN (SELECT id FROM question_polls WHERE standup_id = ?)', [standupId]);
+      const q = await this.db.run('DELETE FROM question_polls WHERE standup_id = ?', [standupId]);
       await this.db.run(`DELETE FROM edit_requests WHERE run_id IN (${runs})`, [standupId]);
       const sub = await this.db.run(`DELETE FROM submissions WHERE run_id IN (${runs})`, [standupId]);
       await this.db.run(`DELETE FROM run_participants WHERE run_id IN (${runs})`, [standupId]);
@@ -2336,7 +2512,7 @@ export class Repo {
       await this.db.run('DELETE FROM role_grants WHERE standup_id = ?', [standupId]);
       await this.db.run('DELETE FROM schedule_change_digests WHERE standup_id = ?', [standupId]);
       await this.db.run('DELETE FROM standups WHERE id = ?', [standupId]);
-      return { runs: r.changes, submissions: sub.changes, blockers: b.changes, polls: p.changes };
+      return { runs: r.changes, submissions: sub.changes, blockers: b.changes, polls: p.changes + q.changes };
     });
   }
 
