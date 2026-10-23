@@ -83,6 +83,11 @@ export class Scheduler {
       this.log(`edit requests: ${err}`);
     }
     try {
+      await this.service.questionPolls.tick();
+    } catch (err) {
+      this.log(`polls: ${err}`);
+    }
+    try {
       await this.providers.leave?.sweep();
     } catch (err) {
       this.log(`leave in Chat and Calendar: ${err}`);

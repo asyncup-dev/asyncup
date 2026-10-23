@@ -1,6 +1,7 @@
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from './types.js';
 import type { TimeOffRequest } from './schedule.js';
 import type { EditRequestView, EditState } from './edit-requests.js';
+import type { PollCardState, PollCounts, PollView } from './question-polls.js';
 
 /** A space the app has been added to. */
 export interface SpaceInfo {
@@ -98,6 +99,18 @@ export interface ChatAdapter {
    * Returns the platform message id, or null.
    */
   postPoll(standup: Standup, poll: Poll, tallies: number[]): Promise<string | null>;
+
+  /** DM someone a poll card (to answer, or a reminder); returns the card's message name when known. */
+  sendPollCard(userName: string, poll: PollView, state: PollCardState): Promise<string | null>;
+
+  /** Redraw the poll cards already sent to someone, once they answer or the poll closes. */
+  updatePollCards(messageNames: string[], poll: PollView, state: PollCardState): Promise<void>;
+
+  /** Start the poll's thread in the standup's space with its summary card; returns the message name. */
+  postPollSummary(standup: Standup, poll: PollView, counts: PollCounts, closed: boolean): Promise<string | null>;
+
+  /** Redraw the summary card with a new count, or as closed. */
+  updatePollSummary(messageName: string, poll: PollView, counts: PollCounts, closed: boolean): Promise<void>;
 
   /** Spaces the app is a member of — the create-standup space picker. */
   listSpaces(): Promise<SpaceInfo[]>;

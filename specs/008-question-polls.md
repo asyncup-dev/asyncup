@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft |
+| Status | In progress |
 | Size | Cross-cutting (migration, Chat cards and dialogs, web app, API, MCP, webhook) |
 | Figma | [Specs › 008 Polls with questions](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=186-82) |
 | PR | Link once opened |
@@ -93,10 +93,11 @@ Results
       for the text answers.
     - **Managers only**: "Release retro closed: 7 of 8 answered. Results
       are with the standup's managers."
-16. The web app shows results to anyone with `answers.view` on the
+16. The web app shows results to anyone with `standups.configure` on the
     standup: answered and not answered, a bar per option, and every text
     answer. For an everyone-sees poll, people asked can also see results
-    after it closes.
+    after it closes. (Members hold `answers.view`, so that permission would
+    show results early and break **Managers only**.)
 17. An anonymous poll never shows who answered what, to anyone, anywhere:
     the web app, the space post, CSV, the API, MCP and webhooks. The web
     app still shows how many have answered.
@@ -132,7 +133,7 @@ Integrations
 | API and OpenAPI | `GET/POST /standups/:id/question-polls`, `GET /question-polls/:id` (results by permission), `POST /question-polls/:id/close`, `GET /question-polls/:id/export.csv`. New schemas for polls, questions and results |
 | MCP | `list_question_polls`, `get_question_poll_results` (read scope) |
 | Database | Migration 21, both dialects: `question_polls` (standup, title, intro, questions as JSON, named or anonymous, results visibility, close time, reminder, creator, sent and closed times, space card name) and `question_poll_people` (poll, person, DM card name, reminded at, answers as JSON, answered and updated times) |
-| Permissions | None new. Create and close: `standups.configure`. Results with names: `answers.view` |
+| Permissions | None new. Create, close, results and CSV: `standups.configure`. People asked see results after an everyone-sees poll closes |
 | Webhooks | New `poll_closed` event |
 | Docs | `user-guide.md` (answering a poll), `web-app.md` (Polls tab), `commands.md` (`polls` lists these too), `api.md`, `mcp.md`, `configuration.md` (webhook), `roles.md` |
 | Website | `site/index.html`: a few words in the features list |

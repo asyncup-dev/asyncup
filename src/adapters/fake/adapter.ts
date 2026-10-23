@@ -2,6 +2,7 @@ import type { ChatAdapter, SpaceInfo, SpaceMember, SpaceMembership, PromptState 
 import type { Blocker, Poll, Run, RunSummary, Standup, Submission } from '../../core/types.js';
 import type { TimeOffRequest } from '../../core/schedule.js';
 import type { EditRequestView } from '../../core/edit-requests.js';
+import type { PollCardState, PollCounts, PollView } from '../../core/question-polls.js';
 
 interface SentDm {
   kind: 'prompt' | 'reminder' | 'text' | 'blockerCard' | 'timeOffRequest' | 'editRequest' | 'editApproved';
@@ -17,12 +18,14 @@ interface SentDm {
 }
 
 interface PostedMessage {
-  kind: 'parent' | 'submission' | 'summary' | 'update' | 'text' | 'poll' | 'skip';
+  kind: 'parent' | 'submission' | 'summary' | 'update' | 'text' | 'poll' | 'skip' | 'pollSummary';
   spaceName: string;
   threadKey?: string;
   messageName?: string;
   text?: string;
   payload?: Submission | RunSummary | Poll;
+  counts?: PollCounts;
+  closed?: boolean;
 }
 
 /**
@@ -42,7 +45,34 @@ export class FakeAdapter implements ChatAdapter {
   membershipError: Error | null = null;
   private messageCounter = 0;
 
+  /** Poll cards sent and redrawn, and space summaries redrawn, newest last. */
+  pollCards: { userName: string; view: PollView; state: PollCardState; messageName: string }[] = [];
+  pollCardUpdates: { messageNames: string[]; view: PollView; state: PollCardState }[] = [];
+  pollSummaryUpdates: { messageName: string; counts: PollCounts; closed: boolean }[] = [];
+
   constructor(private log: ((msg: string) => void) | null = null) {}
+
+  async sendPollCard(userName: string, view: PollView, state: PollCardState): Promise<string | null> {
+    const messageName = `messages/fake-${++this.messageCounter}`;
+    this.pollCards.push({ userName, view, state, messageName });
+    this.log?.(`DM poll "${view.title}" (${state.kind}) → ${userName}`);
+    return messageName;
+  }
+
+  async updatePollCards(messageNames: string[], view: PollView, state: PollCardState): Promise<void> {
+    this.pollCardUpdates.push({ messageNames, view, state });
+  }
+
+  async postPollSummary(standup: Standup, view: PollView, counts: PollCounts, closed: boolean): Promise<string | null> {
+    const messageName = `messages/fake-${++this.messageCounter}`;
+    this.posts.push({ kind: 'pollSummary', spaceName: standup.spaceName, threadKey: `qpoll-${view.id}`, messageName, counts, closed });
+    this.log?.(`Poll "${view.title}" → ${standup.spaceName}`);
+    return messageName;
+  }
+
+  async updatePollSummary(messageName: string, _view: PollView, counts: PollCounts, closed: boolean): Promise<void> {
+    this.pollSummaryUpdates.push({ messageName, counts, closed });
+  }
 
   async sendStandupPrompt(userName: string, standup: Standup, run: Run): Promise<string | null> {
     this.dms.push({ kind: 'prompt', userName, standupId: standup.id, runId: run.id });
