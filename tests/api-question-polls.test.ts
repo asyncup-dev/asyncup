@@ -82,7 +82,7 @@ describe('poll API', () => {
     });
     expect((await as(alice, `/question-polls/${poll.id}/close`, { method: 'POST' })).status).toBe(403);
     const closed: any = await (await as(mgr, `/question-polls/${poll.id}/close`, { method: 'POST' })).json();
-    expect(closed).toMatchObject({ open: false, closedAt: expect.any(String) });
+    expect(closed).toMatchObject({ open: false, closedAt: '2026-06-10T04:30:00.000Z', closedLabel: 'Wed 10 Jun, 10:00 Asia/Kolkata' });
     expect((await as(mgr, `/question-polls/${poll.id}/close`, { method: 'POST' })).status).toBe(409);
     expect(((await (await as(alice, `/question-polls/${poll.id}`)).json()) as any).outcome.questions[1].options[0].names).toEqual(['Alice']);
   });

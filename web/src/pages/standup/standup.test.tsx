@@ -210,7 +210,7 @@ describe('a granted Viewer on a standup', () => {
     expect(screen.queryByRole('button', { name: 'Run now' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Export CSV' })).toBeInTheDocument();
     const tabs = within(screen.getByRole('navigation', { name: 'Standup sections' }));
-    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Overview', 'History', 'Insights']);
+    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Overview', 'History', 'Insights', 'Polls']);
     cleanup();
 
     renderApp('/standups/1/settings');
@@ -233,6 +233,7 @@ describe('standup history', () => {
     const user = userEvent.setup();
     expect(await screen.findByText('Runs · September')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current');
     const rows = await screen.findAllByRole('button', { name: /Sept/ });
     expect(rows).toHaveLength(3);
     expect(rows[0]).toHaveAttribute('aria-current', 'true');

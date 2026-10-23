@@ -87,3 +87,23 @@ bot, or straight away when your admins have set up the
 
 Anyone can start one in a space: `@AsyncUp poll Ship Friday? | Yes | No`. Tap an
 option to vote; tap another to change your vote.
+
+### Polls with questions
+
+A standup's managers can also send a poll with several questions from the
+web app (the standup's **Polls** tab). Everyone on the standup, except people
+on vacation, gets a DM card with **Respond**:
+
+- The form asks each question in turn: short or long text, a dropdown, one
+  choice (radio buttons) or several (checkboxes). Questions marked
+  *required* must be answered to submit.
+- After you answer, **Change answers** reopens the form with your answers
+  filled in, until the poll closes.
+- One reminder comes before the close if you haven't answered yet.
+- The close time is shown in the standup's timezone. After it, nothing is
+  accepted, and the cards say *Closed*.
+- An anonymous poll never shows who answered what, to anyone. A named poll
+  shows the managers who answered what.
+- The space gets a card with how many have answered. When the poll closes,
+  the results post in its thread, or, if the managers keep them, a line
+  saying so. Text answers stay in the web app.

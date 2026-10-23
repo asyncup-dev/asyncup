@@ -97,6 +97,7 @@ Zapier/n8n, or your own service:
 | `wrap_up` | The run closes | `standup`, `date`, `summary` (the posted wrap-up's numbers, plus `teamMood` on anonymous standups) |
 | `schedule_change` | Someone's days on the standup, or their days off, change | person, summary, who, channel — see [Personal schedules](./schedules#integrations) |
 | `time_off_request` | A request needs approval | person, dates, working, reason, request ids |
+| `poll_closed` | A poll with questions closes | `poll`: `id`, `title`, `anonymous`, `asked`, `answered` and each question's counts per option, with `names` only on a named poll |
 | `test` | **Send test** in the standup's settings | `standup` |
 
 Deliveries time out after 5 s and failures are only logged — a dead webhook

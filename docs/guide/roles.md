@@ -38,7 +38,7 @@ Built-in roles can't be changed. Copy one to start a custom role.
 | `reports.view` | See run history and insights | ✓ | ✓ | ✓ | ✓ |
 | `people.view` | See the Team directory | ✓ | ✓ | ✓ | |
 | `export` | Download answers as CSV | ✓ | ✓ | ✓ | |
-| `standups.configure` | Change the schedule, questions, mood, escalation and webhook; run now, nudge, close polls | ✓ | ✓ | | |
+| `standups.configure` | Change the schedule, questions, mood, escalation and webhook; run now, nudge, close polls; send polls with questions and read their results | ✓ | ✓ | | |
 | `standups.archive` | Archive a standup and bring it back | ✓ | ✓ | | |
 | `people.manage` | Add and remove people, mark them required, make managers, grant roles on the standup | ✓ | ✓ | | |
 | `schedules.manage` | Change people's days and days off on the standup, decide time-off requests | ✓ | ✓ | | |

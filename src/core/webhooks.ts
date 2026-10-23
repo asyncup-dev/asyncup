@@ -1,5 +1,6 @@
 import { signWebhookBody } from './crypto.js';
-import type { OptionResult, QuestionType } from './question-polls.js';
+import type { QuestionType } from './poll-types.js';
+import type { OptionResult } from './question-polls.js';
 import type { RunSummary, Standup, Submission } from './types.js';
 
 /** A closed poll's counts; option names are null on an anonymous poll. */

@@ -5,22 +5,8 @@ import type { Standup } from './types.js';
 import type { WebhookNotifier } from './webhooks.js';
 import type { Repo } from '../db/repo.js';
 
-export const QUESTION_TYPES = ['short', 'long', 'dropdown', 'single', 'multiple'] as const;
-export type QuestionType = (typeof QUESTION_TYPES)[number];
-export const RESULTS_VISIBILITY = ['everyone', 'managers'] as const;
-export type ResultsVisibility = (typeof RESULTS_VISIBILITY)[number];
-/** Minutes before the close a reminder may go: 15 minutes, 1 hour or 1 day. */
-export const REMINDER_MINUTES = [15, 60, 1440] as const;
-
-export const POLL_LIMITS = { title: 100, intro: 500, questions: 10, question: 200, options: 20, option: 80, short: 200, long: 1000 } as const;
-
-export interface PollQuestion {
-  text: string;
-  type: QuestionType;
-  required: boolean;
-  /** Choice questions only; empty for text questions. */
-  options: string[];
-}
+export { POLL_LIMITS, QUESTION_TYPES, REMINDER_MINUTES, RESULTS_VISIBILITY, type PollQuestion, type QuestionType, type ResultsVisibility } from './poll-types.js';
+import { POLL_LIMITS, QUESTION_TYPES, REMINDER_MINUTES, RESULTS_VISIBILITY, type PollQuestion, type QuestionType, type ResultsVisibility } from './poll-types.js';
 
 /** What the builder sends. `closesAt` is a local date and time in the standup's timezone. */
 export interface PollDraft {
@@ -344,6 +330,11 @@ export class QuestionPolls {
     return poll.closedAt !== null || this.now() >= DateTime.fromISO(poll.closesAt);
   }
 
+  /** "Wed 10 Jun, 17:00 Asia/Kolkata": a time as the standup reads it. */
+  labelOf(iso: string, standup: Standup): string {
+    return `${DateTime.fromISO(iso).setZone(standup.timezone).setLocale('en-GB').toFormat('ccc d LLL, HH:mm')} ${standup.timezone}`;
+  }
+
   viewOf(poll: QuestionPoll, standup: Standup): PollView {
     const closes = DateTime.fromISO(poll.closesAt).setZone(standup.timezone).setLocale('en-GB');
     return {
@@ -354,7 +345,7 @@ export class QuestionPolls {
       intro: poll.intro,
       from: poll.createdDisplay,
       questions: poll.questions,
-      closesLabel: `${closes.toFormat('ccc d LLL, HH:mm')} ${standup.timezone}`,
+      closesLabel: this.labelOf(poll.closesAt, standup),
       closesTime: `${closes.toFormat('HH:mm')} ${standup.timezone}`,
       anonymous: poll.anonymous,
       results: poll.results,

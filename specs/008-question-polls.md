@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | In progress |
+| Status | Done |
 | Size | Cross-cutting (migration, Chat cards and dialogs, web app, API, MCP, webhook) |
 | Figma | [Specs › 008 Polls with questions](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=186-82) |
 | PR | Link once opened |

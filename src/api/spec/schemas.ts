@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { QUESTION_TYPES, RESULTS_VISIBILITY } from '../../core/question-polls.js';
+import { QUESTION_TYPES, RESULTS_VISIBILITY } from '../../core/poll-types.js';
 import { MCP_SCOPES } from '../../core/mcp-scopes.js';
 import { PERMISSIONS } from '../../core/permission-catalogue.js';
 import { AWAY_REASONS, MOODS, OVERRIDE_STATUSES, TIME_OFF_POLICIES, WEEKDAYS } from '../../core/types.js';
@@ -432,6 +432,7 @@ const PollSummaryShape = {
   closesAt: timestamp,
   closesLabel: z.string(),
   closedAt: timestamp.nullable(),
+  closedLabel: z.string().nullable(),
   open: z.boolean(),
   anonymous: z.boolean(),
   results: ResultsFor,
@@ -743,3 +744,7 @@ export type PermissionInfo = z.infer<typeof PermissionList>['permissions'][numbe
 export type Role = z.infer<typeof Role>;
 export type Grant = z.infer<typeof Grant>;
 export type RoleAuditEntry = z.infer<typeof RoleAudit>['entries'][number];
+export type PollQuestion = z.infer<typeof PollQuestion>;
+export type PollDraft = z.infer<typeof PollDraft>;
+export type QuestionPollSummary = z.infer<typeof QuestionPollSummary>;
+export type QuestionPoll = z.infer<typeof QuestionPoll>;

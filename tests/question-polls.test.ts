@@ -245,6 +245,20 @@ describe('the timer', () => {
   });
 });
 
+describe('the polls command', () => {
+  it('lists open polls with questions beside quick polls', async () => {
+    const { send, router, polls } = await stack();
+    const inSpace = (text: string) => router.handle({ type: 'MESSAGE', space: { name: 'spaces/team', type: 'ROOM' }, message: { argumentText: text }, user: { name: asha.userName, displayName: asha.displayName, type: 'HUMAN' } }) as Promise<any>;
+    const poll = await send();
+    await polls.answer(poll.id, alice, ['ok', [0], [], null, null]);
+    expect((await inSpace('polls')).text).toBe('*Polls with questions:*\n📋 Release retro — 1 of 3 answered, closes Wed 10 Jun, 17:00 Asia/Kolkata (by Asha)\nResults are in the web app, under Daily Standup › Polls.');
+    await inSpace('poll Deploy? | Yes | No');
+    expect((await inSpace('polls')).text).toMatch(/^\*Open polls:\*\n#1 Deploy\? — 0 votes \(by Asha\)\n`poll <id> results` · `poll <id> close`\n\n\*Polls with questions:\*/);
+    await polls.close(poll.id, asha);
+    expect((await inSpace('polls')).text).not.toContain('Polls with questions');
+  });
+});
+
 describe('poll cards', () => {
   const view = { id: 4, standupId: 1, standupName: 'Daily Standup', title: 'Release retro', intro: 'Two <b>minutes</b>', from: 'Asha', questions: DRAFT.questions, closesLabel: 'Wed 10 Jun, 17:00 Asia/Kolkata', closesTime: '17:00 Asia/Kolkata', anonymous: false, results: 'everyone' as const, zone: 'Asia/Kolkata' };
   const text = (m: any) => JSON.stringify(m);
