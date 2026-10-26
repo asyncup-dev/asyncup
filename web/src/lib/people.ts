@@ -25,10 +25,15 @@ function invalidateRoster(client: ReturnType<typeof useQueryClient>, standupId: 
 export function useParticipantPatch() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ standupId, userName, patch }: { standupId: number; userName: string; patch: { mandatory?: boolean; onVacation?: boolean; admin?: boolean } }) =>
+    mutationFn: ({ standupId, userName, patch }: { standupId: number; userName: string; patch: { mandatory?: boolean; onVacation?: boolean; admin?: boolean; reportingManager?: string | null } }) =>
       api<unknown>(`/standups/${standupId}/participants/${encodeURIComponent(userName)}`, { method: 'PATCH', body: patch }),
     onSuccess: (_d, v) => invalidateRoster(client, v.standupId),
   });
+}
+
+/** People who can be set as a reporting manager — anyone who manages a standup. */
+export function useManagerCandidates(id: number, enabled = true) {
+  return useQuery({ queryKey: ['manager-candidates', id], queryFn: () => api<{ managers: Person[] }>(`/standups/${id}/manager-candidates`), select: (d) => d.managers, enabled });
 }
 
 export function useParticipantRemove() {

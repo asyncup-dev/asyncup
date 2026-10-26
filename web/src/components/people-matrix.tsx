@@ -6,10 +6,12 @@ export interface MatrixRow {
   onStandup: boolean;
   mandatory: boolean;
   workingDays: string | null;
+  reportingManager?: string | null;
+  reportingManagerName?: string | null;
   badges?: string[];
 }
 
-export type MatrixChange = { onStandup: boolean } | { mandatory: boolean } | { week: string };
+export type MatrixChange = { onStandup: boolean } | { mandatory: boolean } | { week: string } | { reportingManager: string | null };
 
 /** The outcome of the last change to a row: saved, or the error. */
 export interface RowStatus {
@@ -22,7 +24,7 @@ export interface RowStatus {
  * they work on it — one row per person in the space. The standup's own days
  * are the default; anyone can be given any other days.
  */
-export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, status = null, onChange }: { rows: MatrixRow[]; standupDays: readonly Weekday[]; busy?: boolean; weeks?: boolean; status?: RowStatus | null; onChange: (row: MatrixRow, change: MatrixChange) => void }) {
+export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, reportsTo = true, managers = [], status = null, onChange }: { rows: MatrixRow[]; standupDays: readonly Weekday[]; busy?: boolean; weeks?: boolean; reportsTo?: boolean; managers?: { userName: string; displayName: string }[]; status?: RowStatus | null; onChange: (row: MatrixRow, change: MatrixChange) => void }) {
   if (rows.length === 0) return <p className="t-small muted" style={{ padding: 'var(--space-3) var(--space-4)' }}>Nobody in this space yet.</p>;
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -32,6 +34,7 @@ export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, st
             <th>Person</th>
             <th>On standup</th>
             <th title="Required people are listed as missing when they don’t answer; the rest still get the prompt but never count as missing.">Required</th>
+            {reportsTo ? <th title="A manager who can approve this person’s days off, besides the standup’s own managers.">Reports to</th> : null}
             {WEEK.map((d) => (
               <th key={d} className="center">
                 {DAY_LABEL[d]}
@@ -73,6 +76,26 @@ export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, st
                 <td data-label="Required">
                   <input type="checkbox" aria-label={`${row.displayName} required`} checked={row.onStandup && row.mandatory} disabled={busy || !row.onStandup} onChange={(e) => onChange(row, { mandatory: e.target.checked })} />
                 </td>
+                {reportsTo ? (
+                <td data-label="Reports to">
+                  <select
+                    className="input"
+                    aria-label={`${row.displayName} reports to`}
+                    style={{ width: 'auto', maxWidth: 160 }}
+                    value={row.reportingManager ?? ''}
+                    disabled={busy || !row.onStandup}
+                    onChange={(e) => onChange(row, { reportingManager: e.target.value || null })}
+                  >
+                    <option value="">— none —</option>
+                    {row.reportingManager && !managers.some((m) => m.userName === row.reportingManager) ? (
+                      <option value={row.reportingManager}>{row.reportingManagerName ?? row.reportingManager}</option>
+                    ) : null}
+                    {managers.filter((m) => m.userName !== row.userName).map((m) => (
+                      <option key={m.userName} value={m.userName}>{m.displayName}</option>
+                    ))}
+                  </select>
+                </td>
+                ) : null}
                 {WEEK.map((d) => (
                   <td key={d} data-label={standupDays.includes(d) ? `${DAY_LABEL[d]} · default` : DAY_LABEL[d]} className="center">
                     <input

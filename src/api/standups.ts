@@ -176,6 +176,13 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
     res.json({ secret: ctx.webhookSecret(standup.id) });
   });
 
+  // The pool a reporting manager is picked from: anyone assigned as a manager on some standup.
+  api.get('/standups/:id/manager-candidates', async (req, res) => {
+    const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
+    if (!standup) return;
+    res.json({ managers: await repo.listManagerCandidates(standup.tenantId) });
+  });
+
   api.post('/standups/:id/participants', async (req, res) => {
     const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
     if (!standup) return;
@@ -216,6 +223,26 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
         return;
       }
     }
+    if (body.reportingManager !== undefined) {
+      const rm = body.reportingManager;
+      if (rm !== null && typeof rm !== 'string') {
+        apiError(res, 400, 'invalid', 'reportingManager must be a userName or null.', 'reportingManager');
+        return;
+      }
+      if (rm === null) {
+        await repo.setReportingManager(standup.id, userName, null);
+      } else if (rm === userName) {
+        apiError(res, 400, 'invalid', "Someone can't report to themselves.", 'reportingManager');
+        return;
+      } else {
+        const candidate = (await repo.listManagerCandidates(standup.tenantId)).find((c) => c.userName === rm);
+        if (!candidate) {
+          apiError(res, 400, 'invalid', 'A reporting manager must already be a manager on a standup.', 'reportingManager');
+          return;
+        }
+        await repo.setReportingManager(standup.id, userName, candidate);
+      }
+    }
     if (body.mandatory !== undefined) await repo.setParticipantMandatory(standup.id, userName, body.mandatory);
     if (body.onVacation !== undefined) await repo.setParticipantVacation(standup.id, userName, body.onVacation);
     if (body.admin === true) await repo.addAdmin(standup.id, userName, participant.displayName);
@@ -234,6 +261,8 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
       mandatory: fresh.mandatory,
       onVacation: fresh.onVacation,
       admin: await repo.isAdmin(standup.id, userName),
+      reportingManager: fresh.reportingManager,
+      reportingManagerName: fresh.reportingManagerName,
     });
   });
 

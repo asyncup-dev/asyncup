@@ -10,7 +10,7 @@ import { CopyRow } from '../../components/copy-row';
 import { api, type Person } from '../../lib/api';
 import { ago, shortDate } from '../../lib/format';
 import { useAccess } from '../../lib/access';
-import { useArchive, useDeleteStandup, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
+import { useArchive, useDeleteStandup, useManagerCandidates, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
 import type { Weekday } from '../../lib/roster';
 import { useGrants, useRoles } from '../../lib/roles';
 import { useSetWeek } from '../../lib/schedule';
@@ -42,6 +42,7 @@ export function StandupSettingsPage() {
   const pPatch = useParticipantPatch();
   const pRemove = useParticipantRemove();
   const pAdd = useParticipantAdd();
+  const managerCandidates = useManagerCandidates(id, may.people);
   const verifyWebhook = useVerifyMutation('webhook');
   const secret = useMutation({ mutationFn: () => api<{ secret: string }>(`/standups/${id}/webhook/secret`) });
   const s = standup.data;
@@ -125,6 +126,7 @@ export function StandupSettingsPage() {
       if (c.onStandup) void inRow(row, () => pAdd.mutateAsync({ standupId: id, person, mandatory: true }));
       else setConfirm(person);
     } else if ('mandatory' in c) void inRow(row, () => pPatch.mutateAsync({ standupId: id, userName: row.userName, patch: { mandatory: c.mandatory } }));
+    else if ('reportingManager' in c) void inRow(row, () => pPatch.mutateAsync({ standupId: id, userName: row.userName, patch: { reportingManager: c.reportingManager } }));
     else void inRow(row, () => setWeek.mutateAsync({ userName: row.userName, workingDays: c.week }));
   };
   return (
@@ -238,7 +240,7 @@ export function StandupSettingsPage() {
                   </SettingsRow>
                 ) : null}
                 {members.isError ? <div className="settings-row"><span className="alert">Could not list the space’s members: {members.error.message}. Showing the current roster only.</span></div> : null}
-                <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} weeks={may.weeks} status={rowStatus} onChange={change} />
+                <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} weeks={may.weeks} managers={managerCandidates.data ?? []} status={rowStatus} onChange={change} />
               </SectionCard>
               <SectionCard title="Roles on this standup" hint="Give someone a role here only, by email: say Viewer for a stakeholder who reads answers. Its managers and roster are under People.">
                 {roles.isError || grants.isError ? <div className="settings-row"><span className="alert">Could not load roles: {(roles.error ?? grants.error)?.message}</span></div> : null}

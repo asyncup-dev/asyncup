@@ -230,16 +230,23 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
   api.get('/requests', async (req, res) => {
     if (!schedule(res)) return;
     const p = principalOf(req);
-    if (!canSomewhere(p.access, 'schedules.manage')) {
+    const me = p.user?.userName ?? null;
+    const reports = new Set(me ? await repo.listReportsOf(me) : []);
+    if (!canSomewhere(p.access, 'schedules.manage') && reports.size === 0) {
       apiError(res, 403, 'forbidden', 'Only admins and managers see requests.');
       return;
     }
-    let names: string[] | undefined;
-    if (!allowed(p, 'schedules.manage')) {
-      names = [];
-      for (const id of standupsWith(p.access, 'schedules.manage')) for (const x of await repo.listParticipants(id)) names.push(x.userName);
+    const workspaceWide = allowed(p, 'schedules.manage');
+    const managed = new Set<string>();
+    if (!workspaceWide) {
+      for (const id of standupsWith(p.access, 'schedules.manage')) for (const x of await repo.listParticipants(id)) managed.add(x.userName);
     }
-    res.json({ requests: (await repo.listPendingOverrides(names)).map(overrideView) });
+    const names = workspaceWide ? undefined : [...new Set([...managed, ...reports])];
+    const requests = (await repo.listPendingOverrides(names))
+      // A reporting manager who doesn't manage the person only sees their days off.
+      .filter((o) => workspaceWide || managed.has(o.userName) || !o.working)
+      .map(overrideView);
+    res.json({ requests });
   });
 
   for (const decision of ['approve', 'decline'] as const) {
@@ -247,7 +254,9 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       const svc = schedule(res);
       if (!svc) return;
       const p = principalOf(req);
-      if (!canSomewhere(p.access, 'schedules.manage')) {
+      const me = p.user?.userName ?? null;
+      const hasReports = me ? (await repo.listReportsOf(me)).length > 0 : false;
+      if (!canSomewhere(p.access, 'schedules.manage') && !hasReports) {
         apiError(res, 403, 'forbidden', 'Only admins and managers decide requests.');
         return;
       }

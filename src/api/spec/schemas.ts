@@ -109,6 +109,8 @@ export const StandupDetail = named(
         workingDays: z.string().nullable(),
         otherStandups: count,
         source: z.enum(['manual', 'group']),
+        reportingManager: z.string().nullable().describe('Who approves this person’s days off on this standup, besides its managers; null when none is set.'),
+        reportingManagerName: z.string().nullable(),
       }),
     ),
     admins: z.array(Person),
@@ -225,7 +227,21 @@ export const AddedParticipant = named(
 );
 export const UpdatedParticipant = named(
   'UpdatedParticipant',
-  z.strictObject({ userName: z.string(), displayName: z.string(), mandatory: z.boolean(), onVacation: z.boolean(), admin: z.boolean() }),
+  z.strictObject({
+    userName: z.string(),
+    displayName: z.string(),
+    mandatory: z.boolean(),
+    onVacation: z.boolean(),
+    admin: z.boolean(),
+    reportingManager: z.string().nullable(),
+    reportingManagerName: z.string().nullable(),
+  }),
+);
+
+export const ManagerCandidates = named(
+  'ManagerCandidates',
+  z.strictObject({ managers: z.array(Person) }),
+  'People assigned as a manager on some standup — the pool a reporting manager is picked from.',
 );
 
 // --- blockers and people
@@ -540,7 +556,17 @@ export const CreateStandup = named(
 );
 
 export const AddParticipant = named('AddParticipant', z.strictObject({ userName: z.string().startsWith('users/'), displayName: text.min(1), mandatory: z.boolean().optional() }));
-export const UpdateParticipant = named('UpdateParticipant', z.strictObject({ mandatory: z.boolean(), onVacation: z.boolean(), admin: z.boolean() }).partial());
+export const UpdateParticipant = named(
+  'UpdateParticipant',
+  z
+    .strictObject({
+      mandatory: z.boolean(),
+      onVacation: z.boolean(),
+      admin: z.boolean(),
+      reportingManager: z.string().startsWith('users/').nullable().describe('Who approves this person’s days off; must already be a manager on a standup. null clears it.'),
+    })
+    .partial(),
+);
 export const BlockerUpdateBody = named('BlockerUpdateBody', z.strictObject({ text: text.min(1) }));
 export const SkipBody = named('SkipBody', z.strictObject({ standupId: id, reason: z.string().min(1).max(LIMITS.skipNoteMax) }), 'The reason is one line, posted in the day’s thread.');
 export const MyPatch = named('MyPatch', z.strictObject({ timezone: z.string().nullable(), onVacation: z.boolean() }).partial(), 'A null or empty timezone follows the standups’ zones again.');

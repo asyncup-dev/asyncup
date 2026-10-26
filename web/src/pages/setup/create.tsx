@@ -134,7 +134,8 @@ export function CreateStandupPage() {
     if ('onStandup' in c) {
       set({ people: c.onStandup ? [...form.people, { userName: row.userName, displayName: row.displayName, mandatory: true, week: null }] : form.people.filter((m) => m.userName !== row.userName) });
     } else if ('mandatory' in c) update({ mandatory: c.mandatory });
-    else update({ week: c.week === 'reset' ? null : c.week });
+    else if ('week' in c) update({ week: c.week === 'reset' ? null : c.week });
+    // Reporting managers are set later, in the standup's settings, once it exists.
   };
   // A space that already has a standup was usually set up with `setup` in Chat; point at it before a duplicate is made.
   const taken = spaces.data?.spaces.find((s) => s.name === form.spaceName)?.standups ?? [];
@@ -207,7 +208,7 @@ export function CreateStandupPage() {
           ) : members.isError ? (
             <span className="t-small secondary">Could not list members: {members.error.message}</span>
           ) : (
-            <PeopleMatrix rows={rows} standupDays={form.days as Weekday[]} onChange={change} />
+            <PeopleMatrix rows={rows} standupDays={form.days as Weekday[]} reportsTo={false} onChange={change} />
           )}
         </section>
 

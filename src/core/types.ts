@@ -122,6 +122,9 @@ export interface Participant {
   workingDays: string | null;
   /** "group" rows come and go with the standup's roster group; "manual" ones stay until removed. */
   source: 'manual' | 'group';
+  /** Who approves this person's days off on this standup, besides its managers; null = none set. */
+  reportingManager: string | null;
+  reportingManagerName: string | null;
   active: boolean;
 }
 

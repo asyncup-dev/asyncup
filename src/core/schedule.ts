@@ -380,6 +380,18 @@ export class ScheduleService {
             this.log(`time-off request to ${admin.userName} failed: ${err}`);
           }
         }
+        // An off-day request also reaches the person's reporting manager on this standup.
+        if (!working) {
+          const rm = await this.repo.getReportingManager(standup.id, target.userName);
+          if (rm && rm.userName !== target.userName && !told.has(rm.userName)) {
+            told.add(rm.userName);
+            try {
+              await this.adapter.sendTimeOffRequest(rm.userName, { ...request, standup });
+            } catch (err) {
+              this.log(`time-off request to ${rm.userName} failed: ${err}`);
+            }
+          }
+        }
       }
       const names = [...new Set(approvers.map((s) => s.name))].join(', ');
       return { ok: true, status, message: `📨 Sent to the managers of ${names} for approval — you'll hear back here. Withdraw with \`off cancel ${dates[0]}\`.` };
@@ -458,15 +470,18 @@ export class ScheduleService {
     if (new Set(pending.map((o) => o.userName)).size > 1) return { ok: false, message: 'Decide one person’s request at a time.' };
     const person = { userName: pending[0]!.userName, displayName: pending[0]!.displayName };
     const standups = await this.repo.listStandupsForUser(person.userName);
+    const working = pending[0]!.working;
     if (!actor.admin) {
       if (person.userName === actor.userName) return { ok: false, message: 'Your own requests go to your managers.' };
       const access = standups.length ? await resolveAccess(this.repo, { tenantId: standups[0]!.tenantId, userName: actor.userName }, false) : null;
-      if (!access || !standups.some((s) => can(access, 'schedules.manage', s.id))) return { ok: false, message: `Only ${person.displayName}'s managers can decide this.` };
+      const manages = !!access && standups.some((s) => can(access, 'schedules.manage', s.id));
+      // A reporting manager can decide a report's day off, even without managing the standup.
+      const reportsToActor = !working && (await this.repo.isReportingManagerOf(actor.userName, person.userName));
+      if (!manages && !reportsToActor) return { ok: false, message: `Only ${person.displayName}'s managers can decide this.` };
     }
     const at = this.now().toISO()!;
     for (const o of pending) await this.repo.setOverrideStatus(o.id, approve ? 'active' : 'declined', at, { byDisplayName: actor.displayName, note });
     const dates = pending.map((o) => o.date).sort();
-    const working = pending[0]!.working;
     if (approve) await this.applyToRuns(person.userName, dates);
     for (const standup of standups) await this.webhooks?.scheduleChange(standup, { person, summary: `${approve ? 'approved' : 'declined'}: ${working ? 'working' : 'off'} ${describeDates(dates)}`, by: actor.displayName, channel: 'chat' });
     await this.dm(

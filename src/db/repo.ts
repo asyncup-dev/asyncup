@@ -469,6 +469,12 @@ CREATE TABLE edit_requests (
 CREATE INDEX idx_edit_requests_status ON edit_requests(status);
 ALTER TABLE submissions ADD COLUMN edit_approved_by TEXT;
 `,
+  // 21: who each person reports to on a standup — a reporting manager who can
+  //     approve their days off without being a manager of the standup
+  `
+ALTER TABLE participants ADD COLUMN reporting_manager TEXT;
+ALTER TABLE participants ADD COLUMN reporting_manager_name TEXT;
+`,
 ];
 
 /**
@@ -814,6 +820,12 @@ CREATE TABLE edit_requests (
 CREATE INDEX idx_edit_requests_status ON edit_requests(status);
 ALTER TABLE submissions ADD COLUMN edit_approved_by TEXT;
 `,
+  // 21: who each person reports to on a standup — a reporting manager who can
+  //     approve their days off without being a manager of the standup
+  `
+ALTER TABLE participants ADD COLUMN reporting_manager TEXT;
+ALTER TABLE participants ADD COLUMN reporting_manager_name TEXT;
+`,
 ];
 
 function toRole(row: any): CustomRole {
@@ -896,6 +908,8 @@ function toParticipant(row: any): Participant {
     onVacation: !!row.on_vacation,
     workingDays: row.working_days ?? null,
     source: row.source === 'group' ? 'group' : 'manual',
+    reportingManager: row.reporting_manager ?? null,
+    reportingManagerName: row.reporting_manager_name ?? null,
     active: !!row.active,
   };
 }
@@ -1218,6 +1232,63 @@ export class Repo {
        DO UPDATE SET display_name = excluded.display_name, active = 1, kept_off = 0, left_space_at = NULL`,
       [input.standupId, input.userName, input.displayName, input.mandatory === false ? 0 : 1],
     );
+  }
+
+  // --- reporting managers ---
+
+  /** Sets (or clears, with null) who approves this participant's days off on this standup. */
+  async setReportingManager(standupId: number, userName: string, manager: { userName: string; displayName: string } | null): Promise<void> {
+    await this.db.run(
+      'UPDATE participants SET reporting_manager = ?, reporting_manager_name = ? WHERE standup_id = ? AND user_name = ?',
+      [manager?.userName ?? null, manager?.displayName ?? null, standupId, userName],
+    );
+  }
+
+  /** Who this participant reports to on this standup, or null. */
+  async getReportingManager(standupId: number, userName: string): Promise<{ userName: string; displayName: string } | null> {
+    const row = await this.db.get(
+      'SELECT reporting_manager, reporting_manager_name FROM participants WHERE standup_id = ? AND user_name = ? AND active = 1',
+      [standupId, userName],
+    );
+    return row?.reporting_manager ? { userName: row.reporting_manager, displayName: row.reporting_manager_name } : null;
+  }
+
+  /** Everyone assigned as a manager on any standup in the tenant — the pool a reporting manager is picked from. */
+  async listManagerCandidates(tenantId: string): Promise<{ userName: string; displayName: string }[]> {
+    const rows = await this.db.all(
+      `SELECT a.user_name, MIN(a.display_name) AS display_name
+       FROM standup_admins a JOIN standups s ON s.id = a.standup_id
+       WHERE s.tenant_id = ? AND s.active = 1
+       GROUP BY a.user_name ORDER BY display_name`,
+      [tenantId],
+    );
+    return rows.map((r: any) => ({ userName: r.user_name, displayName: r.display_name }));
+  }
+
+  /** Whether someone is a manager on any standup in the tenant — validates a reporting-manager pick. */
+  async isManagerAnywhere(tenantId: string, userName: string): Promise<boolean> {
+    return !!(await this.db.get(
+      `SELECT 1 FROM standup_admins a JOIN standups s ON s.id = a.standup_id
+       WHERE s.tenant_id = ? AND a.user_name = ? LIMIT 1`,
+      [tenantId, userName],
+    ));
+  }
+
+  /** The user names of everyone who reports to this manager on any active standup. */
+  async listReportsOf(managerUserName: string): Promise<string[]> {
+    const rows = await this.db.all(
+      'SELECT DISTINCT user_name FROM participants WHERE reporting_manager = ? AND active = 1',
+      [managerUserName],
+    );
+    return rows.map((r: any) => r.user_name);
+  }
+
+  /** Whether someone is the reporting manager of this person on any active standup. */
+  async isReportingManagerOf(managerUserName: string, personUserName: string): Promise<boolean> {
+    return !!(await this.db.get(
+      'SELECT 1 FROM participants WHERE user_name = ? AND reporting_manager = ? AND active = 1 LIMIT 1',
+      [personUserName, managerUserName],
+    ));
   }
 
   // --- roster from a Google Group ---
