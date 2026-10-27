@@ -30,7 +30,7 @@ jobs:
       - if: steps.key.outputs.present == 'true'
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
       - if: steps.key.outputs.present == 'true'
         run: bun install --frozen-lockfile
       - if: steps.key.outputs.present == 'true'
