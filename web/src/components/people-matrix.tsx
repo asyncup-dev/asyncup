@@ -1,3 +1,4 @@
+import type { Person } from '../lib/api';
 import { DAY_LABEL, tickedDays, WEEK, weekAfter, type Weekday } from '../lib/roster';
 
 export interface MatrixRow {
@@ -6,10 +7,11 @@ export interface MatrixRow {
   onStandup: boolean;
   mandatory: boolean;
   workingDays: string | null;
+  reportingManager?: string | null;
   badges?: string[];
 }
 
-export type MatrixChange = { onStandup: boolean } | { mandatory: boolean } | { week: string };
+export type MatrixChange = { onStandup: boolean } | { mandatory: boolean } | { week: string } | { reportsTo: string | null };
 
 /** The outcome of the last change to a row: saved, or the error. */
 export interface RowStatus {
@@ -22,7 +24,7 @@ export interface RowStatus {
  * they work on it — one row per person in the space. The standup's own days
  * are the default; anyone can be given any other days.
  */
-export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, status = null, onChange }: { rows: MatrixRow[]; standupDays: readonly Weekday[]; busy?: boolean; weeks?: boolean; status?: RowStatus | null; onChange: (row: MatrixRow, change: MatrixChange) => void }) {
+export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, status = null, managers = null, onChange }: { rows: MatrixRow[]; standupDays: readonly Weekday[]; busy?: boolean; weeks?: boolean; status?: RowStatus | null; managers?: Person[] | null; onChange: (row: MatrixRow, change: MatrixChange) => void }) {
   if (rows.length === 0) return <p className="t-small muted" style={{ padding: 'var(--space-3) var(--space-4)' }}>Nobody in this space yet.</p>;
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -32,6 +34,7 @@ export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, st
             <th>Person</th>
             <th>On standup</th>
             <th title="Required people are listed as missing when they don’t answer; the rest still get the prompt but never count as missing.">Required</th>
+            {managers ? <th title="A manager who can also approve this person’s days off on this standup.">Reports to</th> : null}
             {WEEK.map((d) => (
               <th key={d} className="center">
                 {DAY_LABEL[d]}
@@ -73,6 +76,20 @@ export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, st
                 <td data-label="Required">
                   <input type="checkbox" aria-label={`${row.displayName} required`} checked={row.onStandup && row.mandatory} disabled={busy || !row.onStandup} onChange={(e) => onChange(row, { mandatory: e.target.checked })} />
                 </td>
+                {managers ? (
+                  <td data-label="Reports to">
+                    <select
+                      className="input"
+                      aria-label={`${row.displayName} reports to`}
+                      value={(row.onStandup && row.reportingManager) || ''}
+                      disabled={busy || !row.onStandup}
+                      onChange={(e) => onChange(row, { reportsTo: e.target.value || null })}
+                    >
+                      <option value="">None</option>
+                      {managers.filter((m) => m.userName !== row.userName).map((m) => <option key={m.userName} value={m.userName}>{m.displayName}</option>)}
+                    </select>
+                  </td>
+                ) : null}
                 {WEEK.map((d) => (
                   <td key={d} data-label={standupDays.includes(d) ? `${DAY_LABEL[d]} · default` : DAY_LABEL[d]} className="center">
                     <input
@@ -92,6 +109,7 @@ export function PeopleMatrix({ rows, standupDays, busy = false, weeks = true, st
       </table>
       <p className="t-caption" style={{ padding: 'var(--space-2) var(--space-4)' }}>
         Required people are listed as missing when they don’t answer; the others still get the prompt. A person’s days apply to this standup only. “Default” follows the standup’s days under Schedule. Tick any other day and the standup also runs that day, for that person only. Each tick saves straight away. Unticked days mean no prompt, and the person is never counted missing that day.
+        {managers ? ' “Reports to” is a manager who can also approve this person’s days off on this standup, without managing it.' : null}
       </p>
     </div>
   );

@@ -101,6 +101,11 @@ someone one of the standup's admins. That gives them Manager there, and
 `status` lists them as its admins. Use a grant for access without being named
 as an admin.
 
+A **reporting manager** set under **Settings → People** is not a role. It lets
+someone who manages a standup decide one person's day-off requests on another
+standup that needs approval, with no other access there
+([Personal schedules](./schedules)).
+
 ## What each person sees
 
 - **Web app.** Navigation, settings sections, standup tabs and every button

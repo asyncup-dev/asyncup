@@ -98,8 +98,9 @@ The same object plus:
 
 - `participants`: `userName`, `displayName`, `mandatory`, `timezone`,
   `onVacation`, `workingDays` (their own days on this standup, or `null` to
-  follow its days), `otherStandups` (how many other standups they're on) and `source`
-  (`manual` or `group`);
+  follow its days), `otherStandups` (how many other standups they're on), `source`
+  (`manual` or `group`), and `reportingManager` and `reportingManagerName` (`null`
+  when none is set);
 - `admins`;
 - `keptOff`: group members taken off by hand, whom syncs keep off;
 - `roster`: `group`, `syncedAt` and `error` for either kind of roster, and
@@ -134,9 +135,10 @@ Each route needs a permission on that standup: `standups.configure` for `PATCH`,
 | `POST` | `/standups/:id/archive`, `/unarchive` | Stops or resumes prompts; history stays |
 | `DELETE` | `/standups/:id` | `{ "confirm": "<the standup's name>" }` removes an **archived** standup with every run, answer, blocker and poll, and returns the counts; `409 active` until it is archived, `400 invalid` for a wrong name. People's own weeks and days off stay; messages already posted in Chat are not touched |
 | `POST` | `/standups/:id/participants` | `{ userName: "users/…", displayName, mandatory? }` → `201` with `reachable` (can the bot DM them) |
-| `PATCH` | `/standups/:id/participants/:userName` | `{ mandatory?, onVacation?, admin? }`; `409 last_admin` guards the last admin. `:userName` is the Chat resource name URL-encoded (`users%2F123`) |
+| `PATCH` | `/standups/:id/participants/:userName` | `{ mandatory?, onVacation?, admin?, reportingManager? }`; `reportingManager` is a `users/…` name from `/manager-candidates`, or `null` to clear it, and `400 invalid` refuses anyone else or the person themselves. `409 last_admin` guards the last admin. `:userName` is the Chat resource name URL-encoded (`users%2F123`) |
 | `DELETE` | `/standups/:id/participants/:userName` | `204`. On a group roster the person is kept off: later syncs don't add them back |
 | `GET` | `/standups/:id/webhook/secret` | `{ secret }`: the key the standup's webhooks are signed with ([webhooks](./configuration#outbound-webhooks)); `503 unavailable` when the server has no signing key |
+| `GET` | `/standups/:id/manager-candidates` | `{ managers: [{ userName, displayName }] }`: everyone who manages an active standup, who a reporting manager is picked from |
 | `GET` | `/standups/:id/members` | Members of the standup's Chat space, as roster candidates; `502 chat_unavailable` carries Google's reason |
 | `POST` | `/standups/:id/roster/sync` | Sync the roster now → `{ added: [names], removed: [names], skipped: [{ email, reason }], syncedAt }`. A group roster follows the group. A roster picked from the space is checked against the space: `removed` were taken off for leaving it, `added` put back after rejoining. `502 roster_unavailable` when Google refuses or the space can't be checked (the message says why, and nobody is taken off), `503` when the server has no roster support |
 | `GET` | `/standups/:id/export.csv?days=90` | CSV download |
@@ -189,8 +191,8 @@ Schedules of others need `schedules.manage` on a standup the person is on:
 | `PATCH` | `/people/:userName/schedule` | `{ workingDays, standupId }` — needs `schedules.manage` on that standup; the person is DM'd |
 | `POST` | `/people/:userName/overrides` | Same body as `/me/overrides`; managers may set past dates and are never subject to the policy — the person is DM'd |
 | `DELETE` | `/people/:userName/overrides/:date` | Withdraw |
-| `GET` | `/requests` | Pending time-off requests: all of them with `schedules.manage` across the workspace, otherwise those of people on standups where the caller has it |
-| `POST` | `/requests/:ids/approve` · `/requests/:ids/decline` | `:ids` comma-separated (one request can span several dates); `{ note? }` on decline goes to the person; `409 refused` once decided or when the caller doesn't manage the person |
+| `GET` | `/requests` | Pending time-off requests: all of them with `schedules.manage` across the workspace, otherwise those of people on standups where the caller has it, plus the day-off requests of people the caller is reporting manager for on a standup that needs approval |
+| `POST` | `/requests/:ids/approve` · `/requests/:ids/decline` | `:ids` comma-separated (one request can span several dates); `{ note? }` on decline goes to the person; `409 refused` once decided, or when the caller neither manages the person nor is their reporting manager for a day off |
 
 ### Me
 

@@ -49,6 +49,7 @@ function server(over: Record<string, { status?: number; body: unknown }> = {}) {
       'PATCH /api/v1/standups/1/participants/users%2Fbob': { body: {} },
       'DELETE /api/v1/standups/1/participants/users%2Fbob': { status: 204, body: null },
       'POST /api/v1/standups/1/participants': { status: 201, body: { reachable: true } },
+      'GET /api/v1/standups/1/manager-candidates': { body: { managers: [{ userName: 'users/alice', displayName: 'Alice' }, { userName: 'users/neha', displayName: 'Neha' }] } },
       'GET /api/v1/standups/1/members': { body: { members: [{ userName: 'users/alice', displayName: 'Alice' }, { userName: 'users/carol', displayName: 'Carol' }] } },
       'PATCH /api/v1/people/users%2Fbob/schedule': { body: (init?: RequestInit) => { weeks.push(JSON.parse(String(init?.body))); return {}; } },
       'POST /api/v1/verify/webhook': { body: { state: 'pass', detail: 'Webhook answered 204.', checkedAt: 'x' } },
@@ -151,6 +152,26 @@ describe('standup settings tab', () => {
     await user.type(within(dialog).getByRole('textbox'), 'ARCHIVE');
     await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
     await waitFor(() => expect(calls).toContain('POST /api/v1/standups/1/archive'));
+  });
+
+  it('picks who each person reports to from the managers, and clears it with None (spec 009 criteria 1, 2, 4)', async () => {
+    const sent: unknown[] = [];
+    server({
+      'GET /api/v1/standups/1': { body: { ...ENG, participants: [ENG.participants[0], { ...ENG.participants[1], reportingManager: 'users/neha', reportingManagerName: 'Neha' }] } },
+      'PATCH /api/v1/standups/1/participants/users%2Fbob': { body: (init?: RequestInit) => { sent.push(JSON.parse(String(init?.body))); return {}; } },
+    });
+    renderApp('/standups/1/settings');
+    const user = userEvent.setup();
+    const bob = (await screen.findByLabelText('Bob reports to')) as HTMLSelectElement;
+    await waitFor(() => expect(bob).toHaveValue('users/neha'));
+    expect([...bob.options].map((o) => o.text)).toEqual(['None', 'Alice', 'Neha']);
+    expect([...(screen.getByLabelText('Alice reports to') as HTMLSelectElement).options].map((o) => o.text)).toEqual(['None', 'Neha']);
+    expect(await screen.findByLabelText('Carol reports to')).toBeDisabled();
+    await user.selectOptions(bob, 'Alice');
+    await waitFor(() => expect(sent).toEqual([{ reportingManager: 'users/alice' }]));
+    await user.selectOptions(bob, 'None');
+    await waitFor(() => expect(sent).toEqual([{ reportingManager: 'users/alice' }, { reportingManager: null }]));
+    expect(screen.getByText(/“Reports to” is a manager who can also approve this person’s days off/)).toBeInTheDocument();
   });
 
   it('follows a Google Group: shows where people came from, syncs on demand and can stop following', async () => {

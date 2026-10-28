@@ -10,7 +10,7 @@ import { CopyRow } from '../../components/copy-row';
 import { api, type Person } from '../../lib/api';
 import { ago, shortDate } from '../../lib/format';
 import { useAccess } from '../../lib/access';
-import { useArchive, useDeleteStandup, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
+import { useArchive, useDeleteStandup, useManagerCandidates, useParticipantAdd, useParticipantPatch, useParticipantRemove, useRosterSync, useStandupMembers, useStandupPatch, type RosterSynced } from '../../lib/people';
 import type { Weekday } from '../../lib/roster';
 import { useGrants, useRoles } from '../../lib/roles';
 import { useSetWeek } from '../../lib/schedule';
@@ -59,6 +59,7 @@ export function StandupSettingsPage() {
   const [rowStatus, setRowStatus] = useState<RowStatus | null>(null);
   const followsGroup = !!standup.data?.roster.group;
   const members = useStandupMembers(id, !!standup.data && !followsGroup && may.people);
+  const managers = useManagerCandidates(id, may.people);
   useEffect(() => {
     if (s && !schedule) {
       setSchedule({ promptTime: s.schedule.promptTime, deadlineTime: s.schedule.deadlineTime, timezone: s.schedule.timezone, days: s.schedule.days, reminderMinutesBefore: String(s.schedule.reminderMinutesBefore) });
@@ -125,6 +126,7 @@ export function StandupSettingsPage() {
       if (c.onStandup) void inRow(row, () => pAdd.mutateAsync({ standupId: id, person, mandatory: true }));
       else setConfirm(person);
     } else if ('mandatory' in c) void inRow(row, () => pPatch.mutateAsync({ standupId: id, userName: row.userName, patch: { mandatory: c.mandatory } }));
+    else if ('reportsTo' in c) void inRow(row, () => pPatch.mutateAsync({ standupId: id, userName: row.userName, patch: { reportingManager: c.reportsTo } }));
     else void inRow(row, () => setWeek.mutateAsync({ userName: row.userName, workingDays: c.week }));
   };
   return (
@@ -185,7 +187,7 @@ export function StandupSettingsPage() {
           ) : null}
           {may.people ? (
             <>
-              <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Tick who is prompted, who is required to answer, and which days each person works.">
+              <SectionCard title={`People · ${s.participants.length} on this standup`} hint="Tick who is prompted, who is required to answer and which days each person works on this standup, and pick who approves their days off.">
                 <SettingsRow label="Roster" hint={followsGroup ? 'Follows a Google Group: joiners get the default setup, leavers drop off, and people you untick stay off.' : 'People you pick from the space’s members. Anyone who leaves the space comes off, and comes back if they rejoin.'}>
                   <select
                     className="input"
@@ -238,7 +240,7 @@ export function StandupSettingsPage() {
                   </SettingsRow>
                 ) : null}
                 {members.isError ? <div className="settings-row"><span className="alert">Could not list the space’s members: {members.error.message}. Showing the current roster only.</span></div> : null}
-                <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} weeks={may.weeks} status={rowStatus} onChange={change} />
+                <PeopleMatrix rows={rows} standupDays={s.schedule.days as Weekday[]} busy={pAdd.isPending || pPatch.isPending || pRemove.isPending || setWeek.isPending} weeks={may.weeks} status={rowStatus} managers={managers.data ?? []} onChange={change} />
               </SectionCard>
               <SectionCard title="Roles on this standup" hint="Give someone a role here only, by email: say Viewer for a stakeholder who reads answers. Its managers and roster are under People.">
                 {roles.isError || grants.isError ? <div className="settings-row"><span className="alert">Could not load roles: {(roles.error ?? grants.error)?.message}</span></div> : null}

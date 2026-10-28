@@ -165,6 +165,12 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
     }
   });
 
+  api.get('/standups/:id/manager-candidates', async (req, res) => {
+    const standup = await loadStandup(ctx, req, res, { need: 'people.manage' });
+    if (!standup) return;
+    res.json({ managers: await repo.listManagerCandidates(standup.tenantId) });
+  });
+
   // Derived from SECRET_KEY, so it only changes when that does; managers need it to check signatures.
   api.get('/standups/:id/webhook/secret', async (req, res) => {
     const standup = await loadStandup(ctx, req, res, { need: 'standups.configure' });
@@ -216,6 +222,15 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
         return;
       }
     }
+    const rm = body.reportingManager;
+    let manager: { userName: string; displayName: string } | null | undefined;
+    if (rm === null) manager = null;
+    else if (rm !== undefined) {
+      if (rm === userName) return apiError(res, 400, 'invalid', "Someone can't report to themselves.", 'reportingManager');
+      manager = (await repo.listManagerCandidates(standup.tenantId)).find((c) => c.userName === rm);
+      if (!manager) return apiError(res, 400, 'invalid', 'A reporting manager must already be a manager on a standup.', 'reportingManager');
+    }
+    if (manager !== undefined) await repo.setReportingManager(standup.id, userName, manager);
     if (body.mandatory !== undefined) await repo.setParticipantMandatory(standup.id, userName, body.mandatory);
     if (body.onVacation !== undefined) await repo.setParticipantVacation(standup.id, userName, body.onVacation);
     if (body.admin === true) await repo.addAdmin(standup.id, userName, participant.displayName);
@@ -234,6 +249,8 @@ export function registerStandupRoutes(api: Router, ctx: ApiContext): void {
       mandatory: fresh.mandatory,
       onVacation: fresh.onVacation,
       admin: await repo.isAdmin(standup.id, userName),
+      reportingManager: fresh.reportingManager,
+      reportingManagerName: fresh.reportingManagerName,
     });
   });
 

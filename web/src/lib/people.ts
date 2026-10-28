@@ -25,7 +25,7 @@ function invalidateRoster(client: ReturnType<typeof useQueryClient>, standupId: 
 export function useParticipantPatch() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ standupId, userName, patch }: { standupId: number; userName: string; patch: { mandatory?: boolean; onVacation?: boolean; admin?: boolean } }) =>
+    mutationFn: ({ standupId, userName, patch }: { standupId: number; userName: string; patch: { mandatory?: boolean; onVacation?: boolean; admin?: boolean; reportingManager?: string | null } }) =>
       api<unknown>(`/standups/${standupId}/participants/${encodeURIComponent(userName)}`, { method: 'PATCH', body: patch }),
     onSuccess: (_d, v) => invalidateRoster(client, v.standupId),
   });
@@ -67,6 +67,11 @@ export function useRosterSync(id: number) {
 /** Members of the standup's Chat space — the rows of its people grid. */
 export function useStandupMembers(id: number, enabled = true) {
   return useQuery({ queryKey: ['standup-members', id], queryFn: () => api<{ members: Person[] }>(`/standups/${id}/members`), select: (d) => d.members, enabled });
+}
+
+/** Everyone who manages an active standup: who a reporting manager is picked from. */
+export function useManagerCandidates(id: number, enabled = true) {
+  return useQuery({ queryKey: ['manager-candidates', id], queryFn: () => api<{ managers: Person[] }>(`/standups/${id}/manager-candidates`), select: (d) => d.managers, enabled });
 }
 
 export function useStandupPatch(id: number) {

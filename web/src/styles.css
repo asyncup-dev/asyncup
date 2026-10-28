@@ -242,12 +242,13 @@ a:hover {
 .table tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover { background: var(--bg-hover); }
 .table td .row { flex-wrap: wrap; }
-.people-matrix .center { text-align: center; }
+.people-matrix .center { text-align: center; padding-inline: var(--space-1); }
 .people-matrix tr.muted td { color: var(--text-muted); }
 .people-matrix input[type='checkbox']:disabled { opacity: 0.35; }
 .people-matrix .day-default { display: block; font-size: 11px; line-height: 14px; font-weight: 400; color: var(--accent-text); }
 .people-matrix .success { color: var(--success-fg); font-weight: 500; }
 .people-matrix .danger { color: var(--danger-fg); }
+.people-matrix select { min-width: 128px; }
 .link-btn { padding: 0; border: 0; background: none; font: inherit; font-weight: 500; color: var(--text-link); cursor: pointer; }
 .link-btn:disabled { color: var(--text-muted); cursor: default; }
 
@@ -506,6 +507,7 @@ a:hover {
   .table td { padding: 2px 0; border: 0; }
   .table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 88px; color: var(--text-muted); font-size: 12px; }
   .table td:empty { display: none; }
+  .people-matrix select { width: auto; vertical-align: middle; }
 }
 /* A settings row stacks its label above the control when its card is narrow. */
 @container (max-width: 560px) {

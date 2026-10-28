@@ -227,19 +227,25 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
 
   // ---- approvals
 
+  const reportsOf = async (p: Principal) => (p.user?.userName ? repo.listReportsOf(p.tenantId, p.user.userName) : []);
+
   api.get('/requests', async (req, res) => {
     if (!schedule(res)) return;
     const p = principalOf(req);
-    if (!canSomewhere(p.access, 'schedules.manage')) {
+    const reports = await reportsOf(p);
+    if (!canSomewhere(p.access, 'schedules.manage') && reports.length === 0) {
       apiError(res, 403, 'forbidden', 'Only admins and managers see requests.');
       return;
     }
-    let names: string[] | undefined;
-    if (!allowed(p, 'schedules.manage')) {
-      names = [];
-      for (const id of standupsWith(p.access, 'schedules.manage')) for (const x of await repo.listParticipants(id)) names.push(x.userName);
+    if (allowed(p, 'schedules.manage')) {
+      res.json({ requests: (await repo.listPendingOverrides()).map(overrideView) });
+      return;
     }
-    res.json({ requests: (await repo.listPendingOverrides(names)).map(overrideView) });
+    const managed = new Set<string>();
+    for (const id of standupsWith(p.access, 'schedules.manage')) for (const x of await repo.listParticipants(id)) managed.add(x.userName);
+    const requests = await repo.listPendingOverrides([...new Set([...managed, ...reports])]);
+    // A reporting manager decides days off only, so working requests show only to the person's managers.
+    res.json({ requests: requests.filter((o) => managed.has(o.userName) || !o.working).map(overrideView) });
   });
 
   for (const decision of ['approve', 'decline'] as const) {
@@ -247,7 +253,7 @@ export function registerScheduleRoutes(api: Router, ctx: ApiContext): void {
       const svc = schedule(res);
       if (!svc) return;
       const p = principalOf(req);
-      if (!canSomewhere(p.access, 'schedules.manage')) {
+      if (!canSomewhere(p.access, 'schedules.manage') && (await reportsOf(p)).length === 0) {
         apiError(res, 403, 'forbidden', 'Only admins and managers decide requests.');
         return;
       }

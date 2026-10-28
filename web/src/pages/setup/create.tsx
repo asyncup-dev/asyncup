@@ -134,7 +134,7 @@ export function CreateStandupPage() {
     if ('onStandup' in c) {
       set({ people: c.onStandup ? [...form.people, { userName: row.userName, displayName: row.displayName, mandatory: true, week: null }] : form.people.filter((m) => m.userName !== row.userName) });
     } else if ('mandatory' in c) update({ mandatory: c.mandatory });
-    else update({ week: c.week === 'reset' ? null : c.week });
+    else if ('week' in c) update({ week: c.week === 'reset' ? null : c.week });
   };
   // A space that already has a standup was usually set up with `setup` in Chat; point at it before a duplicate is made.
   const taken = spaces.data?.spaces.find((s) => s.name === form.spaceName)?.standups ?? [];
