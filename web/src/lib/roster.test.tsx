@@ -52,6 +52,14 @@ describe('people grid', () => {
     expect(screen.getByText(/A person’s days apply to this standup only/)).toBeInTheDocument();
   });
 
+  it('shows Reports to only when given the managers, as on Settings but not Create standup (spec 009 criterion 1)', () => {
+    const { rerender } = render(<PeopleMatrix rows={rows} standupDays={WEEKDAYS} onChange={() => {}} />);
+    expect(screen.queryByRole('columnheader', { name: 'Reports to' })).not.toBeInTheDocument();
+    rerender(<PeopleMatrix rows={rows} standupDays={WEEKDAYS} managers={[{ userName: 'users/asha', displayName: 'Asha' }]} onChange={() => {}} />);
+    expect(screen.getByRole('columnheader', { name: 'Reports to' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Bob reports to')).toHaveValue('');
+  });
+
   it('shows Saved, or the error, beside the row that changed (criterion 13)', () => {
     const { rerender } = render(<PeopleMatrix rows={rows} standupDays={WEEKDAYS} status={{ userName: 'users/bob', error: null }} onChange={() => {}} />);
     expect(within(screen.getAllByRole('row')[2]!).getByRole('status')).toHaveTextContent('✓ Saved');

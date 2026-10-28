@@ -68,6 +68,7 @@ rosters](./directory)). Per person:
 | --- | --- |
 | On standup | Prompted for this standup |
 | Required | Listed as missing when they don't answer. The others still get the prompt but never count as missing |
+| Reports to | A manager who can also approve their days off on this standup, without managing it; *None* by default. Only people who manage a standup are offered. The create form doesn't show it |
 | Mon–Sun | The days they work on this standup. The standup's days are marked *default*; any other day can be ticked, and the standup then runs that day for them. Each row says *Default* or *Custom* (with *Reset to default*), and each tick saves at once and shows *Saved*. Unticked days mean no prompt, and never missing |
 
 **Roster** switches between *Picked from the space* and *Everyone in a Google

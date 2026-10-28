@@ -107,6 +107,15 @@ changing them is bound by that standup's policy only.
 
 Under *Needs approval*, the first of the person's managers to act wins;
 workspace admins can act on any request, and nobody decides their own.
+
+A person can also have a **reporting manager** on a standup, picked under
+**Settings → People** from the people who manage a standup. On a standup that
+needs approval, their day-off requests also go to that reporting manager, who
+can approve or decline them like the standup's managers, without managing the
+standup. The request's reply names them: *Sent to Neha Kapoor and the managers
+of Engineering for approval*. A reporting manager gets nothing for working
+requests, or on a *Self-service* or *Managers only* standup, and loses the say
+once they no longer manage any standup.
 Declining asks for a one-line reason, which is sent to the person. A request
 unanswered by the deadline of a standup that needs approval lapses — the
 person counts as expected for that run and is told so.

@@ -174,6 +174,8 @@ export async function standupDetailView(repo: Repo, standup: Standup, now: DateT
         onVacation: x.onVacation,
         workingDays: x.workingDays,
         source: x.source,
+        reportingManager: x.reportingManager,
+        reportingManagerName: x.reportingManagerName,
         // A personal week is the person's, so the console warns when changing it here reaches other standups too.
         otherStandups: (await repo.listStandupsForUser(x.userName)).length - 1,
       })),

@@ -369,9 +369,16 @@ export class ScheduleService {
     if (status === 'pending') {
       const request: Omit<TimeOffRequest, 'standup'> = { ids: saved.map((o) => o.id), person: target, dates, working, reason };
       const told = new Set<string>();
+      const reportingManagers: string[] = [];
       for (const standup of approvers) {
         await this.webhooks?.timeOffRequest(standup, request);
-        for (const admin of await this.repo.listAdmins(standup.id)) {
+        const recipients = await this.repo.listAdmins(standup.id);
+        const rm = working ? null : await this.repo.getReportingManager(standup.id, target.userName);
+        if (rm && rm.userName !== target.userName && !recipients.some((a) => a.userName === rm.userName) && !told.has(rm.userName)) {
+          recipients.push({ standupId: standup.id, ...rm });
+          reportingManagers.push(rm.displayName);
+        }
+        for (const admin of recipients) {
           if (told.has(admin.userName)) continue;
           told.add(admin.userName);
           try {
@@ -382,7 +389,8 @@ export class ScheduleService {
         }
       }
       const names = [...new Set(approvers.map((s) => s.name))].join(', ');
-      return { ok: true, status, message: `📨 Sent to the managers of ${names} for approval — you'll hear back here. Withdraw with \`off cancel ${dates[0]}\`.` };
+      const to = reportingManagers.length ? `${reportingManagers.join(', ')} and the managers` : 'the managers';
+      return { ok: true, status, message: `📨 Sent to ${to} of ${names} for approval — you'll hear back here. Withdraw with \`off cancel ${dates[0]}\`.` };
     }
     await this.recordChange(target, `${target.displayName} is ${what}`, actor, self, channel, standups, standups);
     await this.applyToRuns(target.userName, dates);
@@ -458,15 +466,17 @@ export class ScheduleService {
     if (new Set(pending.map((o) => o.userName)).size > 1) return { ok: false, message: 'Decide one person’s request at a time.' };
     const person = { userName: pending[0]!.userName, displayName: pending[0]!.displayName };
     const standups = await this.repo.listStandupsForUser(person.userName);
+    const working = pending[0]!.working;
     if (!actor.admin) {
       if (person.userName === actor.userName) return { ok: false, message: 'Your own requests go to your managers.' };
       const access = standups.length ? await resolveAccess(this.repo, { tenantId: standups[0]!.tenantId, userName: actor.userName }, false) : null;
-      if (!access || !standups.some((s) => can(access, 'schedules.manage', s.id))) return { ok: false, message: `Only ${person.displayName}'s managers can decide this.` };
+      const manages = !!access && standups.some((s) => can(access, 'schedules.manage', s.id));
+      const reportsTo = !manages && !working && !!access && (await this.repo.listReportsOf(standups[0]!.tenantId, actor.userName)).includes(person.userName);
+      if (!manages && !reportsTo) return { ok: false, message: `Only ${person.displayName}'s managers can decide this.` };
     }
     const at = this.now().toISO()!;
     for (const o of pending) await this.repo.setOverrideStatus(o.id, approve ? 'active' : 'declined', at, { byDisplayName: actor.displayName, note });
     const dates = pending.map((o) => o.date).sort();
-    const working = pending[0]!.working;
     if (approve) await this.applyToRuns(person.userName, dates);
     for (const standup of standups) await this.webhooks?.scheduleChange(standup, { person, summary: `${approve ? 'approved' : 'declined'}: ${working ? 'working' : 'off'} ${describeDates(dates)}`, by: actor.displayName, channel: 'chat' });
     await this.dm(

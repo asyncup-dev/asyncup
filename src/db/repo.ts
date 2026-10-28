@@ -502,6 +502,11 @@ CREATE TABLE question_poll_people (
   updated_at TEXT,
   PRIMARY KEY (poll_id, user_name)
 );
+`,  // 22 — who each person reports to on a standup, for approving their days off
+  `
+ALTER TABLE participants ADD COLUMN reporting_manager TEXT;
+ALTER TABLE participants ADD COLUMN reporting_manager_name TEXT;
+CREATE INDEX idx_participants_reporting_manager ON participants(reporting_manager);
 `,
 ];
 
@@ -880,6 +885,11 @@ CREATE TABLE question_poll_people (
   updated_at TEXT,
   PRIMARY KEY (poll_id, user_name)
 );
+`,  // 22 — who each person reports to on a standup, for approving their days off
+  `
+ALTER TABLE participants ADD COLUMN reporting_manager TEXT;
+ALTER TABLE participants ADD COLUMN reporting_manager_name TEXT;
+CREATE INDEX idx_participants_reporting_manager ON participants(reporting_manager);
 `,
 ];
 
@@ -987,6 +997,10 @@ function toStandup(row: any): Standup {
   };
 }
 
+// For a participants row `p` on standup `s`: their reporting manager still manages an active standup in that tenant.
+const MANAGES_SOMEWHERE = `EXISTS (SELECT 1 FROM standup_admins a JOIN standups m ON m.id = a.standup_id
+  WHERE a.user_name = p.reporting_manager AND m.tenant_id = s.tenant_id AND m.active = 1)`;
+
 function toParticipant(row: any): Participant {
   return {
     standupId: row.standup_id,
@@ -997,6 +1011,8 @@ function toParticipant(row: any): Participant {
     onVacation: !!row.on_vacation,
     workingDays: row.working_days ?? null,
     source: row.source === 'group' ? 'group' : 'manual',
+    reportingManager: row.reporting_manager ?? null,
+    reportingManagerName: row.reporting_manager_name ?? null,
     active: !!row.active,
   };
 }
@@ -1316,9 +1332,51 @@ export class Repo {
       `INSERT INTO participants (standup_id, user_name, display_name, mandatory, active)
        VALUES (?, ?, ?, ?, 1)
        ON CONFLICT (standup_id, user_name)
-       DO UPDATE SET display_name = excluded.display_name, active = 1, kept_off = 0, left_space_at = NULL`,
+       DO UPDATE SET display_name = excluded.display_name, active = 1, kept_off = 0, left_space_at = NULL,
+         reporting_manager = CASE WHEN participants.active = 1 THEN participants.reporting_manager END,
+         reporting_manager_name = CASE WHEN participants.active = 1 THEN participants.reporting_manager_name END`,
       [input.standupId, input.userName, input.displayName, input.mandatory === false ? 0 : 1],
     );
+  }
+
+  // --- reporting managers ---
+
+  async setReportingManager(standupId: number, userName: string, manager: { userName: string; displayName: string } | null): Promise<void> {
+    await this.db.run(
+      'UPDATE participants SET reporting_manager = ?, reporting_manager_name = ? WHERE standup_id = ? AND user_name = ? AND active = 1',
+      [manager?.userName ?? null, manager?.displayName ?? null, standupId, userName],
+    );
+  }
+
+  /** Everyone who manages an active standup in the tenant: who a reporting manager is picked from. */
+  async listManagerCandidates(tenantId: string): Promise<{ userName: string; displayName: string }[]> {
+    const rows = await this.db.all(
+      `SELECT a.user_name, MIN(a.display_name) AS display_name FROM standup_admins a JOIN standups s ON s.id = a.standup_id
+       WHERE s.tenant_id = ? AND s.active = 1 GROUP BY a.user_name ORDER BY MIN(a.display_name)`,
+      [tenantId],
+    );
+    return rows.map((r: any) => ({ userName: r.user_name, displayName: r.display_name }));
+  }
+
+  /** This person's reporting manager on a standup, only while that manager still manages an active standup. */
+  async getReportingManager(standupId: number, userName: string): Promise<{ userName: string; displayName: string } | null> {
+    const row = await this.db.get(
+      `SELECT p.reporting_manager, p.reporting_manager_name FROM participants p JOIN standups s ON s.id = p.standup_id
+       WHERE p.standup_id = ? AND p.user_name = ? AND p.active = 1 AND ${MANAGES_SOMEWHERE}`,
+      [standupId, userName],
+    );
+    return row ? { userName: row.reporting_manager, displayName: row.reporting_manager_name } : null;
+  }
+
+  /** Who this manager may decide days off for: their reports on active `approval` standups, while they still manage one. */
+  async listReportsOf(tenantId: string, managerUserName: string): Promise<string[]> {
+    const rows = await this.db.all(
+      `SELECT DISTINCT p.user_name FROM participants p JOIN standups s ON s.id = p.standup_id
+       WHERE s.tenant_id = ? AND p.reporting_manager = ? AND p.active = 1 AND s.active = 1 AND s.time_off_policy = 'approval'
+         AND ${MANAGES_SOMEWHERE} ORDER BY p.user_name`,
+      [tenantId, managerUserName],
+    );
+    return rows.map((r: any) => r.user_name);
   }
 
   // --- roster from a Google Group ---

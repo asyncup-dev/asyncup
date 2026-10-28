@@ -218,7 +218,7 @@ describe('api: roster', () => {
     expect((await patch('users/zoe', {})).status).toBe(404);
     expect((await (await patch('users/dave', { admin: 'yes' })).json() as any).error.field).toBe('admin');
     expect(await (await patch('users/dave', { mandatory: true, onVacation: true, admin: true })).json()).toEqual({
-      userName: 'users/dave', displayName: 'Dave', mandatory: true, onVacation: true, admin: true,
+      userName: 'users/dave', displayName: 'Dave', mandatory: true, onVacation: true, admin: true, reportingManager: null, reportingManagerName: null,
     });
     const last = await patch('users/dave', { admin: false });
     expect(last.status).toBe(409);

@@ -94,6 +94,7 @@ export const ROUTES: RouteSpec[] = [
   },
   { method: 'get', path: '/standups/:id/webhook/secret', summary: 'The key this standup’s webhooks are signed with', tag: 'Standups', access: 'manager', permission: 'standups.configure', params: standupId, responses: { 200: S.WebhookSecret }, errors: [403, 404, 503] },
   { method: 'get', path: '/standups/:id/members', summary: 'Members of the standup’s Chat space, as roster candidates', tag: 'Roster', access: 'manager', permission: 'people.manage', params: standupId, responses: { 200: S.SpaceMembers }, errors: [404, 502] },
+  { method: 'get', path: '/standups/:id/manager-candidates', summary: 'People who can be picked as a reporting manager', tag: 'Roster', access: 'manager', permission: 'people.manage', params: standupId, responses: { 200: S.ManagerCandidates }, errors: [404] },
   { method: 'post', path: '/standups/:id/roster/sync', summary: 'Sync the roster with its Google Group, or with its Chat space, now', tag: 'Roster', access: 'manager', permission: 'people.manage', params: standupId, responses: { 200: S.RosterSynced }, errors: [404, 502, 503] },
   { method: 'post', path: '/standups/:id/participants', summary: 'Add someone to the roster', tag: 'Roster', access: 'manager', permission: 'people.manage', params: standupId, body: S.AddParticipant, responses: { 201: S.AddedParticipant }, errors: [400, 404] },
   {
