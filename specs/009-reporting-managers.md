@@ -5,7 +5,7 @@
 | Status | Done |
 | Size | Cross-cutting (migration, API, permissions, web app) |
 | Figma | [Specs › 009 Reporting managers](https://www.figma.com/design/OQfcL61rbaGakS2FjBKasI?node-id=195-136) |
-| PR | — |
+| PR | [#114](https://github.com/asyncup-dev/asyncup/pull/114) |
 
 Proposed by @shrey-CDZ in #113; this spec carries that proposal forward with
 the review's fixes.
