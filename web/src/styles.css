@@ -467,6 +467,14 @@ a:hover {
 .insights { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: var(--space-5); align-items: start; }
 .bar-row { display: grid; grid-template-columns: 24px 130px 1fr 44px 50px 90px; gap: var(--space-3); align-items: center; }
 
+.poll-row { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border-default); }
+.poll-row .grow { flex: 1 1 260px; min-width: 0; }
+.poll-question { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface-2); }
+.poll-bar { height: 8px; border-radius: 4px; background: var(--bg-surface-2); overflow: hidden; }
+.poll-bar span { display: block; height: 100%; background: var(--accent-primary); }
+.poll-answer { padding-top: var(--space-2); border-top: 1px solid var(--border-default); display: grid; gap: 2px; }
+.preview-input { border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-surface); }
+
 /* Responsive layout. Kept last so these win over the base rules above. Pages
    follow the width of the content area; cards and rows follow their own. */
 @container content (max-width: 1100px) {

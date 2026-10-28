@@ -30,6 +30,7 @@ const standupId = { id: { schema: z.number().int().positive(), description: 'Sta
 const blockerId = { id: { schema: z.number().int().positive(), description: 'Blocker id' } };
 const userNameParam = { userName: { schema: z.string(), description: 'Chat user resource name, URL-encoded (users%2F123)' } };
 const dateParam = { date: { schema: z.iso.date(), description: 'YYYY-MM-DD' } };
+const pollId = { id: { schema: z.number().int().positive(), description: 'Poll id' } };
 
 export const ROUTES: RouteSpec[] = [
   { method: 'get', path: '/openapi.json', summary: 'This OpenAPI document', tag: 'Meta', access: 'public', responses: { 200: z.record(z.string(), z.unknown()) } },
@@ -203,6 +204,13 @@ export const ROUTES: RouteSpec[] = [
     responses: { 200: S.Decision },
     errors: [404, 409, 503],
   })),
+
+  // polls with questions
+  { method: 'get', path: '/standups/:id/question-polls', summary: 'Polls with questions sent to this standup, newest first', tag: 'Polls', access: 'any', permission: 'standups.view', params: standupId, responses: { 200: S.QuestionPolls }, errors: [404, 503] },
+  { method: 'post', path: '/standups/:id/question-polls', summary: 'Send a poll with questions to the standup’s roster', tag: 'Polls', access: 'manager', permission: 'standups.configure', params: standupId, body: S.PollDraft, responses: { 201: S.QuestionPoll }, errors: [400, 404, 503] },
+  { method: 'get', path: '/question-polls/:id', summary: 'One poll, with results when the caller may see them', tag: 'Polls', access: 'any', permission: 'standups.view', params: pollId, responses: { 200: S.QuestionPoll }, errors: [404, 503] },
+  { method: 'post', path: '/question-polls/:id/close', summary: 'Close a poll now', tag: 'Polls', access: 'manager', permission: 'standups.configure', params: pollId, responses: { 200: S.QuestionPoll }, errors: [404, 409, 503] },
+  { method: 'get', path: '/question-polls/:id/export.csv', summary: 'A poll’s answers as CSV, without names on an anonymous poll', tag: 'Polls', access: 'manager', permission: 'standups.configure', params: pollId, responses: { 200: 'csv' }, errors: [404, 503] },
 
   // settings
   { method: 'get', path: '/settings', summary: 'Workspace settings', tag: 'Settings', access: 'admin', permission: 'settings.manage', responses: { 200: S.Settings } },

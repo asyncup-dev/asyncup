@@ -46,6 +46,9 @@ import {
   SUBMIT_BLOCKER_UPDATE_FN,
   SUBMIT_DIALOG_FN,
   VOTE_POLL_FN,
+  OPEN_POLL_FORM_FN,
+  SUBMIT_POLL_FORM_FN,
+  pollFormDialog,
 } from './cards.js';
 
 /**
@@ -312,6 +315,20 @@ export class EventRouter {
       const mentions = await Promise.all(picked.map(async (userName) => ({ userName, displayName: (await this.repo.displayNameFor(userName)) ?? 'A teammate' })));
       const standup = (await this.repo.getStandupById(blocker.standupId))!;
       return dialogOk(await this.blockers.tag(standup, blocker.id, mentions, user));
+    }
+
+    if (fn === OPEN_POLL_FORM_FN || fn === SUBMIT_POLL_FORM_FN) {
+      const pollId = Number(getParameter(event, 'pollId')) || 0;
+      const polls = this.service.questionPolls;
+      const opened = await polls.form(pollId, user.userName);
+      if (!opened.ok) return dialogError(opened.message);
+      if (fn === OPEN_POLL_FORM_FN) return pollFormDialog(opened.view, opened.answers, await this.endpoint());
+      // Choices arrive as option indexes; an empty dropdown entry means no answer.
+      const raw = opened.view.questions.map((q, i) =>
+        q.type === 'short' || q.type === 'long' ? getFormValue(event, `q${i}`) : getFormValues(event, `q${i}`).filter((v) => v !== '').map(Number),
+      );
+      const result = await polls.answer(pollId, user, raw);
+      return result.ok ? dialogOk(result.message) : pollFormDialog(opened.view, raw, await this.endpoint(), result.message);
     }
 
     if (fn === VOTE_POLL_FN && this.polls) {

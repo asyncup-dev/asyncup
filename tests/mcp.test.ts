@@ -229,8 +229,8 @@ describe('mcp: tools', () => {
 
     const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: FULL })).secret);
     const MEMBER_TOOLS = [
-      'acknowledge_blocker', 'cancel_day_off', 'get_insights', 'get_me', 'get_my_standups', 'get_run', 'get_schedule', 'get_standup',
-      'list_blockers', 'list_runs', 'list_standups', 'resolve_blocker', 'set_days_off', 'set_working_days',
+      'acknowledge_blocker', 'cancel_day_off', 'get_insights', 'get_me', 'get_my_standups', 'get_question_poll_results', 'get_run', 'get_schedule', 'get_standup',
+      'list_blockers', 'list_question_polls', 'list_runs', 'list_standups', 'resolve_blocker', 'set_days_off', 'set_working_days',
       'skip_today', 'submit_answers', 'update_blocker', 'update_my_settings',
     ];
     // Tools the owner's permissions rule out everywhere aren't offered at all.
@@ -257,7 +257,7 @@ describe('mcp: tools', () => {
     );
 
     const root = await connect((await mint(cookieFor('root', true), { name: 'r' })).secret);
-    expect((await root.listTools()).tools).toHaveLength(11);
+    expect((await root.listTools()).tools).toHaveLength(13);
     expect((await call(root, 'get_team')).json.people).toHaveLength(3);
   });
 
@@ -459,7 +459,7 @@ describe('mcp: ready for Claude Code', () => {
     const { mint, cookieFor, connect } = await startServer();
     const root = await connect((await mint(cookieFor('root', true), { name: 'r', scopes: FULL })).secret);
     const tools = (await root.listTools()).tools;
-    expect(tools).toHaveLength(23);
+    expect(tools).toHaveLength(25);
     for (const t of tools) {
       expect(t.title).toBeTruthy();
       expect(t.outputSchema?.type).toBe('object');
@@ -550,5 +550,23 @@ describe('mcp: ready for Claude Code', () => {
     spyOn(blockers, 'resolve').mockResolvedValue('not_found');
     expect((await call(alice, 'update_blocker', { blockerId: id, text: 'still waiting' })).error).toBe('No such blocker.');
     expect((await call(alice, 'resolve_blocker', { blockerId: id })).error).toBe('No such blocker.');
+  });
+});
+
+describe('poll tools', () => {
+  it('lists a standup’s polls and reads results by permission (criterion 19)', async () => {
+    const { mint, cookieFor, connect, call, repo, service, clock } = await startServer();
+    const s = await seedStandup(repo);
+    await repo.addAdmin(s.id, BOB.userName, BOB.displayName);
+    clock.set('2026-06-10T10:00');
+    const sent = await service.questionPolls.create(s, { title: 'Retro', intro: null, questions: [{ text: 'Day?', type: 'single', required: true, options: ['Mon', 'Tue'] }], closesAt: '2026-06-10T17:00', remindMinutes: null, anonymous: false, results: 'everyone' }, BOB);
+    if (!sent.ok) throw new Error(sent.message);
+    await service.questionPolls.answer(sent.poll.id, ALICE, [[1]]);
+    const alice = await connect((await mint(cookieFor('alice'), { name: 'a', scopes: ['read'] })).secret);
+    const bob = await connect((await mint(cookieFor('bob'), { name: 'b', scopes: ['read'] })).secret);
+    expect((await call(alice, 'list_question_polls', { standupId: s.id })).json.polls.map((p: any) => [p.title, p.answered])).toEqual([['Retro', 1]]);
+    expect((await call(alice, 'get_question_poll_results', { pollId: sent.poll.id })).json.outcome).toBeNull();
+    expect((await call(bob, 'get_question_poll_results', { pollId: sent.poll.id })).json.outcome.questions[0].options[1]).toEqual({ text: 'Tue', count: 1, names: ['Alice'] });
+    expect((await call(bob, 'get_question_poll_results', { pollId: 999 })).error).toContain('No such poll.');
   });
 });

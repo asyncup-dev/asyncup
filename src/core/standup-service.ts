@@ -3,6 +3,7 @@ import type { ChatAdapter, PromptState } from './adapter.js';
 import type { WebhookNotifier } from './webhooks.js';
 import type { Repo } from '../db/repo.js';
 import { EditRequests } from './edit-requests.js';
+import { QuestionPolls } from './question-polls.js';
 import { runProgress } from './progress.js';
 import { roundMood } from './insights.js';
 import {
@@ -33,10 +34,12 @@ export class StandupService {
     private log: (msg: string) => void = () => {},
   ) {
     this.edits = new EditRequests(repo, adapter, this, now, (msg) => this.log(msg));
+    this.questionPolls = new QuestionPolls(repo, adapter, now, (msg) => this.log(msg), webhooks);
   }
 
   /** Asking to edit answers after the deadline. */
   readonly edits: EditRequests;
+  readonly questionPolls: QuestionPolls;
 
   /**
    * Records a dialog submission and posts it under the day's thread.

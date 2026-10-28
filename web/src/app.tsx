@@ -32,6 +32,7 @@ import { StandupLayout } from './pages/standup/layout';
 import { OverviewPage } from './pages/standup/overview';
 import { InsightsPage } from './pages/standup/insights';
 import { StandupSettingsPage } from './pages/standup/settings';
+import { NewPollPage, PollPage, PollsPage } from './pages/standup/polls';
 import { StandupsPage } from './pages/standups';
 import { Shell } from './shell/shell';
 
@@ -95,6 +96,9 @@ export function buildRouter(): AnyRouter {
     createRoute({ getParentRoute: () => standup, path: '/', component: OverviewPage }),
     createRoute({ getParentRoute: () => standup, path: '/history', component: HistoryPage }),
     createRoute({ getParentRoute: () => standup, path: '/insights', component: InsightsPage }),
+    createRoute({ getParentRoute: () => standup, path: '/polls', component: PollsPage }),
+    createRoute({ getParentRoute: () => standup, path: '/polls/new', component: NewPollPage }),
+    createRoute({ getParentRoute: () => standup, path: '/polls/$pollId', component: PollPage }),
     createRoute({ getParentRoute: () => standup, path: '/settings', component: StandupSettingsPage }),
   ];
   const blockers = createRoute({ getParentRoute: () => shell, path: '/blockers', component: BlockersPage });

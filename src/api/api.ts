@@ -14,6 +14,7 @@ import type { ScheduleService } from '../core/schedule.js';
 import type { Repo } from '../db/repo.js';
 import { registerBlockerRoutes } from './blockers.js';
 import { registerEditRequestRoutes } from './edit-requests.js';
+import { registerQuestionPollRoutes } from './question-polls.js';
 import { registerMcpRoutes } from './mcp.js';
 import { registerMemberRoutes } from './member.js';
 import { registerScheduleRoutes } from './schedule.js';
@@ -127,6 +128,7 @@ export function registerApi(app: Express, deps: ApiDeps): void {
   registerMemberRoutes(api, ctx);
   registerScheduleRoutes(api, ctx);
   registerEditRequestRoutes(api, ctx);
+  registerQuestionPollRoutes(api, ctx);
   registerSettingsRoutes(api, ctx);
   registerSpaceRoutes(api, ctx);
   registerMcpRoutes(api, ctx);

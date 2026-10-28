@@ -256,6 +256,26 @@ describe('GoogleChatAdapter', () => {
     expect(JSON.stringify(updates[0]!.params.requestBody)).toContain('⌛ Lapsed');
   });
 
+  it('DMs poll cards, redraws them, and threads the summary card in the space', async () => {
+    const { gchat, calls, state } = await makeAdapter();
+    const view = { id: 7, standupId: 1, standupName: 'Daily', title: 'Retro', intro: null, from: 'Asha', questions: [], closesLabel: 'Wed 10 Jun, 17:00 Asia/Kolkata', closesTime: '17:00 Asia/Kolkata', anonymous: false, results: 'everyone' as const, zone: 'Asia/Kolkata' };
+    expect(await gchat.sendPollCard('users/alice', view, { kind: 'open' })).toBe('spaces/x/messages/1');
+    expect(await gchat.postPollSummary(standup, view, { asked: 3, answered: 0 }, false)).toBe('spaces/x/messages/2');
+    state.createdName = () => undefined;
+    expect(await gchat.sendPollCard('users/bob', view, { kind: 'reminder' })).toBeNull();
+    await gchat.updatePollCards(['spaces/x/messages/1'], view, { kind: 'closed', answeredAt: null });
+    await gchat.updatePollSummary('spaces/x/messages/2', view, { asked: 3, answered: 2 }, true);
+    const creates = calls.filter((c) => c.method === 'create');
+    expect(creates.map((c) => [c.params.parent, c.params.requestBody.cardsV2[0].cardId, c.params.requestBody.thread?.threadKey ?? null])).toEqual([
+      ['spaces/dm-alice', 'question-poll-7', null],
+      ['spaces/team', 'question-poll-summary-7', 'qpoll-7'],
+      ['spaces/dm-bob', 'question-poll-7', null],
+    ]);
+    const updates = calls.filter((c) => c.method === 'update');
+    expect(updates.map((c) => c.params.name)).toEqual(['spaces/x/messages/1', 'spaces/x/messages/2']);
+    expect(JSON.stringify(updates[1]!.params.requestBody)).toContain('Closed: 2 of 3 answered');
+  });
+
   it('posts a poll to the space and returns the message name, or null when absent', async () => {
     const { gchat, calls, state } = await makeAdapter();
     expect(await gchat.postPoll(standup, poll, [1, 0])).toBe('spaces/x/messages/1');

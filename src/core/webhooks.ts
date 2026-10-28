@@ -1,5 +1,17 @@
 import { signWebhookBody } from './crypto.js';
+import type { QuestionType } from './poll-types.js';
+import type { OptionResult } from './question-polls.js';
 import type { RunSummary, Standup, Submission } from './types.js';
+
+/** A closed poll's counts; option names are null on an anonymous poll. */
+export interface PollClosed {
+  id: number;
+  title: string;
+  anonymous: boolean;
+  asked: number;
+  answered: number;
+  questions: { text: string; type: QuestionType; answered: number; options: OptionResult[] }[];
+}
 
 export type WebhookEvent =
   | {
@@ -36,6 +48,11 @@ export type WebhookEvent =
       working: boolean;
       reason: string;
       requestIds: number[];
+    }
+  | {
+      event: 'poll_closed';
+      standup: { id: number; name: string };
+      poll: PollClosed;
     };
 
 /**
@@ -90,6 +107,10 @@ export class WebhookNotifier {
       reason: request.reason,
       requestIds: request.ids,
     });
+  }
+
+  async pollClosed(standup: Standup, poll: PollClosed): Promise<void> {
+    await this.send(standup, { event: 'poll_closed', standup: { id: standup.id, name: standup.name }, poll });
   }
 
   /** A signed test event, reporting the outcome instead of swallowing it. */
